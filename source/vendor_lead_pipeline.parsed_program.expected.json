@@ -1,0 +1,39 @@
+{
+  "kind": "source_file",
+  "grammar_version": "spark-pipeline-v0",
+  "module": "SparkCRM.Marketing",
+  "imports": [
+    { "module_path": "SparkCRM.Types",
+      "names": ["VendorLeadParams", "VendorLeadResponse", "LeadError"] },
+    { "module_path": "SparkCRM.Steps",
+      "names": [
+        "validate_and_find_vendor",
+        "check_business_hours",
+        "query_geo_bids",
+        "build_response"
+      ]
+    }
+  ],
+  "traits": [],
+  "impls": [],
+  "contract_shapes": [],
+  "contracts": [],
+  "types": [],
+  "functions": [],
+  "pipelines": [
+    {
+      "kind": "pipeline",
+      "name": "VendorLeadIntake",
+      "in_type": "VendorLeadParams",
+      "out_type": "VendorLeadResponse",
+      "err_type": "LeadError",
+      "steps": [
+        { "kind": "step", "name": "find_vendor",       "ref": "validate_and_find_vendor" },
+        { "kind": "step", "name": "check_hours",       "ref": "check_business_hours" },
+        { "kind": "step", "name": "find_geo_bids",     "ref": "query_geo_bids" },
+        { "kind": "step", "name": "compute_response",  "ref": "build_response" }
+      ]
+    }
+  ],
+  "parse_errors": []
+}

@@ -1,0 +1,49 @@
+{
+  "kind": "source_file",
+  "grammar_version": "decimal-v0",
+  "module": "SparkCRM.Finance",
+  "imports": [],
+  "traits": [],
+  "impls": [],
+  "contract_shapes": [],
+  "types": [],
+  "functions": [],
+  "pipelines": [],
+  "contracts": [
+    {
+      "kind": "contract",
+      "name": "BidSummary",
+      "type_params": [],
+      "body": [
+        {
+          "kind": "input",
+          "name": "base_bid",
+          "type_annotation": { "kind": "type_ref", "name": "Decimal", "params": [2] }
+        },
+        {
+          "kind": "input",
+          "name": "tax_rate",
+          "type_annotation": { "kind": "type_ref", "name": "Decimal", "params": [4] }
+        },
+        {
+          "kind": "compute",
+          "name": "gross_bid",
+          "expr": {
+            "kind": "call",
+            "fn": "mul",
+            "args": [
+              { "kind": "ref", "name": "base_bid" },
+              { "kind": "ref", "name": "tax_rate" }
+            ]
+          }
+        },
+        {
+          "kind": "output",
+          "name": "gross_bid",
+          "type_annotation": { "kind": "type_ref", "name": "Decimal", "params": [2] }
+        }
+      ]
+    }
+  ],
+  "parse_errors": []
+}
