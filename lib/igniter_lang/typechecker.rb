@@ -145,6 +145,9 @@ module IgniterLang
         "declarations" => typed_decls,
         "type_errors" => dedupe_errors(type_errors)
       }
+      # PROP-033: propagate via_profile binding if present
+      via_profile = classified_contract.fetch("via_profile", nil)
+      result["via_profile"] = via_profile if via_profile
       result["assumption_refs"] = assumption_refs unless assumption_refs.empty?
       warnings = dedupe_errors(type_warnings)
       result["type_warnings"] = warnings unless warnings.empty?

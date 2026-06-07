@@ -46,7 +46,7 @@ module IgniterLang
     assumptions assumption uses
     olap_point
     invariant predicate severity label message overridable_with
-    from lifecycle using implements
+    from lifecycle using implements via
     pipeline step scoped_by cardinality schema_version tenant_free
     if else let
     true false nil
@@ -696,6 +696,8 @@ module IgniterLang
       name = name_token!(%i[ident])
       type_params = peek_type?(:lbracket) ? parse_contract_type_params : []
       implements = peek_kw?("implements") ? parse_implements_clause : nil
+      # PROP-033: optional "via <profile_name>" clause before the body brace
+      via_profile = peek_kw?("via") ? (advance; name_token!(%i[ident])) : nil
       expect_type!(:lbrace)
       body = []
       until peek_type?(:rbrace) || peek_type?(:eof)
@@ -704,6 +706,7 @@ module IgniterLang
       expect_type!(:rbrace)
       node = { "kind" => "contract", "name" => name, "modifier" => modifier || "pure", "type_params" => type_params }
       node["implements"] = implements if implements
+      node["via_profile"] = via_profile if via_profile  # PROP-033
       node["body"] = body.compact
       node
     end

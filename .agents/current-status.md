@@ -5624,7 +5624,10 @@ PROP-031   Contract modifiers            experiment-pass; parser/classifier/type
 PROP-032   Assumptions block             experiment-pass; assumptions {} + uses assumptions NAME;
                                          bounded compiler surface only; PROP-033 evidence validation
                                          and runtime receipt behavior excluded
-PROP-033   via profile binding           queued; not authored
+PROP-033   via profile binding           experiment-pass; optional "via <ident>" clause on contract
+                                         declarations; parser/classifier/typechecker/SemanticIR;
+                                         profile_binding in contract_ir; 52/52 proof 2026-06-07;
+                                         closes PROP-031 §12 via-profile deferral
 PROP-034   output evidence syntax        queued; not authored
 PROP-035   Effect Surface / IO.Capability experiment-pass; capability+effect_binding grammar
                                          in parser/classifier/typechecker; OOF-M2/M4/M5;

@@ -234,6 +234,9 @@ module IgniterLang
         "dependency_graph" => dependency_graph(declarations),
         "oof_log" => diagnostics
       }
+      # PROP-033: propagate via_profile binding if present
+      via_profile = contract.fetch("via_profile", nil)
+      result["via_profile"] = via_profile if via_profile
       result["assumption_refs"] = assumption_refs.uniq unless assumption_refs.empty?
       result
     end
