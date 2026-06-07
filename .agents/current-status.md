@@ -5626,7 +5626,12 @@ PROP-032   Assumptions block             experiment-pass; assumptions {} + uses 
                                          and runtime receipt behavior excluded
 PROP-033   via profile binding           queued; not authored
 PROP-034   output evidence syntax        queued; not authored
-PROP-035   profile declarations          queued; not authored
+PROP-035   Effect Surface / IO.Capability experiment-pass; capability+effect_binding grammar
+                                         in parser/classifier/typechecker; OOF-M2/M4/M5;
+                                         IO.Capability type sentinel; 64/64 proof 2026-06-07;
+                                         closes PROP-031 Effect Surface deferral;
+                                         numbering note: profile declarations renumbered PROP-040
+PROP-040   profile declarations          queued; not authored  [renumbered from PROP-035 slot]
 PROP-036   compiler_profile_id manifest  accepted; bounded implementation partial:
                                          source contract + finalization proof PASS;
                                          assembler manifest field landed; orchestrator
