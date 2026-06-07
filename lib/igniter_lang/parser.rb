@@ -52,6 +52,7 @@ module IgniterLang
     if else let
     true false nil
     and or not
+    for loop recursive fuel_bounded decreases
   ].freeze
 
   class Lexer
@@ -383,7 +384,7 @@ module IgniterLang
 
     # ---- Top-level declarations --------------------------------------------
 
-    CONTRACT_MODIFIERS = %w[pure observed effect privileged irreversible].freeze
+    CONTRACT_MODIFIERS = %w[pure observed effect privileged irreversible recursive fuel_bounded].freeze
 
     def parse_top_decl
       tok = peek
@@ -796,6 +797,11 @@ module IgniterLang
       when "fold_stream" then advance; parse_fold_stream_decl
       when "invariant"   then advance; parse_invariant_decl
       when "uses"        then advance; parse_uses_decl
+      # PROP-039: loop and recursion body declarations
+      when "for"         then advance; parse_for_loop
+      when "loop"        then advance; parse_budgeted_loop
+      when "decreases"   then advance; parse_decreases_decl
+      when "max_steps"   then advance; parse_max_steps_decl
       when "pipeline"
         add_parse_error(
           rule: "OOF-P2",
@@ -1282,6 +1288,67 @@ module IgniterLang
         advance
       end
       bounds
+    end
+
+    # ── PROP-039 gate 3: loop / recursion parse methods ─────────────────────
+
+    # for <LoopName> <item> in <source> { body }
+    def parse_for_loop
+      loop_name = name_token!(%i[ident])
+      item_name = name_token!(%i[ident])
+      expect_value!("in")
+      source    = name_token!(%i[ident])
+      expect_type!(:lbrace)
+      body = []
+      until peek_type?(:rbrace) || peek_type?(:eof)
+        body << parse_body_decl
+      end
+      expect_type!(:rbrace)
+      { "kind" => "for_loop", "name" => loop_name, "item" => item_name,
+        "source" => source, "body" => body.compact }
+    end
+
+    # loop <LoopName> <item> in <source> max_steps[:]? <N> { body }
+    def parse_budgeted_loop
+      loop_name = name_token!(%i[ident])
+      item_name = name_token!(%i[ident])
+      expect_value!("in")
+      source    = name_token!(%i[ident])
+      max_steps = nil
+      if peek_value?("max_steps")
+        advance                          # consume "max_steps"
+        advance if peek_type?(:colon)    # optional ":"
+        tok = expect_type!(:int_lit)
+        max_steps = tok.value
+      end
+      expect_type!(:lbrace)
+      body = []
+      until peek_type?(:rbrace) || peek_type?(:eof)
+        body << parse_body_decl
+      end
+      expect_type!(:rbrace)
+      node = { "kind" => "budgeted_loop", "name" => loop_name, "item" => item_name,
+               "source" => source, "body" => body.compact }
+      node["max_steps"] = max_steps unless max_steps.nil?
+      node
+    end
+
+    # decreases <dotted-ident-path>  (e.g. "items.remaining" or "n")
+    def parse_decreases_decl
+      parts = []
+      parts << name_token!(%i[ident])
+      while peek_type?(:dot)
+        advance
+        parts << name_token!(%i[ident])
+      end
+      { "kind" => "decreases", "variant" => parts.join(".") }
+    end
+
+    # max_steps[:]? <N>  — inside recursive/fuel_bounded contract body
+    def parse_max_steps_decl
+      advance if peek_type?(:colon)    # optional ":"
+      tok = expect_type!(:int_lit)
+      { "kind" => "max_steps", "value" => tok.value }
     end
 
     def parse_implements_clause
@@ -1773,6 +1840,15 @@ module IgniterLang
 
       # PROP-040: profile declarations
       return "profile-v0" if @ast.fetch("profiles", []).any?
+
+      # PROP-039 gate 3: loop/recursion forms
+      loop_contract_modifiers = %w[recursive fuel_bounded]
+      loop_body_kinds = %w[for_loop budgeted_loop decreases max_steps]
+      has_loop_forms = @ast.fetch("contracts", []).any? { |c|
+        loop_contract_modifiers.include?(c["modifier"]) ||
+          c.fetch("body", []).any? { |n| n.is_a?(Hash) && loop_body_kinds.include?(n["kind"]) }
+      }
+      return "loop-v0" if has_loop_forms
 
       "0.1.0"
     end
