@@ -5701,9 +5701,12 @@ PROP-038   compiler_profile_contract     accepted proposal-only by S3-R61-C3-A;
                                          public API/CLI,
                                          persisted reports, sidecars, loader/report,
                                          CompatibilityReport, and production/runtime authority remain closed
-PROP-039   managed local recursion       authored-pending-review; R251 accepts
-                                         proposal-authoring output only; not
-                                         implementation/runtime authority
+PROP-039   managed local recursion       accepted; proposal-only 2026-06-07;
+                                         vocabulary: FiniteLoop/BudgetedLocalLoop/
+                                         StructuralRecursion/FuelBoundedRecursion;
+                                         ServiceLoop → PROP-037 exclusive;
+                                         OOF-L*/OOF-R* candidates only (not registry);
+                                         implementation closed; 7 gates before impl auth
 ```
 
 → Close governance: `meta-proposals/META-EXPERT-009.1-stage2-close-decision-v0.md`
