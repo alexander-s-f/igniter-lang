@@ -206,6 +206,12 @@ module IgniterLang
             "deps" => decl.fetch("deps", []),
             "fragment" => decl.fetch("fragment_class")
           }
+        when "for_loop"
+          # PROP-039 gate 5: FiniteLoop → loop_node, termination by collection exhaustion
+          loop_node(decl, "finite", "collection_exhaustion")
+        when "budgeted_loop"
+          # PROP-039 gate 5: BudgetedLocalLoop → loop_node, termination by budget exhaustion
+          loop_node(decl, "budgeted", "budget_exhaustion")
         end
       end
     end
@@ -435,6 +441,26 @@ module IgniterLang
       when "metric" then "metric"
       else "blocks"
       end
+    end
+
+    def loop_node(decl, loop_class, termination)
+      # PROP-039 gate 5: lower for_loop / budgeted_loop to canonical loop_node IR shape.
+      # termination field encodes the termination evidence kind:
+      #   collection_exhaustion — FiniteLoop: terminates by exhausting a finite Collection[T]
+      #   budget_exhaustion     — BudgetedLocalLoop: terminates by exhausting static max_steps
+      # body is empty in v0 — body semantics are future SemanticIR work (gate 5 deferred).
+      node = {
+        "kind"        => "loop_node",
+        "loop_class"  => loop_class,
+        "name"        => decl.fetch("name"),
+        "item"        => decl.fetch("item"),
+        "source_ref"  => decl.fetch("source"),
+        "termination" => termination,
+        "body"        => [],
+        "fragment"    => decl.fetch("fragment_class", "core")
+      }
+      node["max_steps"] = decl.fetch("max_steps") if decl.key?("max_steps")
+      node
     end
 
     def stream_input_node(decl, declarations)

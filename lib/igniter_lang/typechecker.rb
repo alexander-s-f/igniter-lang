@@ -140,11 +140,20 @@ module IgniterLang
               decl.fetch("name")
             )
           end
-          typed_decls << typed_decl(decl, type_ir("Unit"), nil, decl.fetch("deps", []))
+          # PROP-039 gate 5: pass loop-specific fields to typed_decl for SemanticIR lowering
+          td = typed_decl(decl, type_ir("Unit"), nil, decl.fetch("deps", []))
+          td["source"] = source_name
+          td["item"]   = decl.fetch("item")
+          typed_decls << td
         when "budgeted_loop"
           # PROP-039 gate 4: BudgetedLocalLoop — max_steps is static (enforced by parser);
           # source validated at classify time. TypeChecker just passes through.
-          typed_decls << typed_decl(decl, type_ir("Unit"), nil, decl.fetch("deps", []))
+          # PROP-039 gate 5: pass loop-specific fields to typed_decl for SemanticIR lowering
+          td = typed_decl(decl, type_ir("Unit"), nil, decl.fetch("deps", []))
+          td["source"]    = decl.fetch("source")
+          td["item"]      = decl.fetch("item")
+          td["max_steps"] = decl.fetch("max_steps") if decl.key?("max_steps")
+          typed_decls << td
         end
       end
 
