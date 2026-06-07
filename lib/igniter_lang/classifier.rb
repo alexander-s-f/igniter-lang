@@ -72,6 +72,8 @@ module IgniterLang
       compute_exprs = {}
       window_declarations = []
       fold_stream_stream_refs = Hash.new { |refs, stream_name| refs[stream_name] = [] }
+      capability_declarations = {}  # PROP-035: cap_name => node
+      effect_bindings = []          # PROP-035: cap_refs that have effect bindings
       parsed_program.fetch("olap_points", []).each do |point|
         symbol_fragments[point.fetch("name")] = "escape"
         symbol_kinds[point.fetch("name")] = "olap_point"
@@ -89,6 +91,27 @@ module IgniterLang
           symbol_fragments[node.fetch("name")] = "escape"
           symbol_kinds[node.fetch("name")] = "stream"
           declarations << classified_decl(node, "escape", [], [])
+        when "capability"
+          # PROP-035: capability <name>: <CapType>
+          symbol_fragments[node.fetch("name")] = "escape"
+          symbol_kinds[node.fetch("name")] = "capability"
+          capability_declarations[node.fetch("name")] = node
+          declarations << classified_decl(node, "escape", [], [])
+        when "effect_binding"
+          # PROP-035: effect <name> using <cap_ref>
+          cap_ref = node.fetch("capability_ref")
+          effect_bindings << cap_ref
+          unless capability_declarations.key?(cap_ref)
+            diagnostics << oof(
+              "OOF-M4",
+              "effect binding '#{node.fetch("name")}' references undeclared capability '#{cap_ref}'",
+              node.fetch("name")
+            )
+          end
+          symbol_fragments[node.fetch("name")] = "escape"
+          symbol_kinds[node.fetch("name")] = "effect_binding"
+          deps = capability_declarations.key?(cap_ref) ? [cap_ref] : []
+          declarations << classified_decl(node, "escape", deps, [])
         when "read"
           fragment = temporal_type?(node["type_annotation"]) ? "temporal" : "escape"
           symbol_fragments[node.fetch("name")] = fragment == "temporal" ? "core" : "escape"
@@ -164,6 +187,28 @@ module IgniterLang
       diagnostics.concat(evidence_gate_oofs(contract, sample_input))
 
       modifier = contract.fetch("modifier", "pure")
+
+      # PROP-035: OOF-M2 — pure contract with capability declaration
+      if modifier == "pure" && capability_declarations.any?
+        diagnostics << oof(
+          "OOF-M2",
+          "pure contract '#{contract.fetch("name")}' cannot declare IO capabilities; " \
+          "use 'effect' modifier",
+          contract.fetch("name")
+        )
+      end
+
+      # PROP-035: OOF-M5 — capability declared but has no effect binding
+      capability_declarations.each_key do |cap_name|
+        unless effect_bindings.include?(cap_name)
+          diagnostics << oof(
+            "OOF-M5",
+            "capability '#{cap_name}' declared but has no effect...using binding",
+            cap_name
+          )
+        end
+      end
+
       if modifier == "pure"
         escape_decl = declarations.find { |decl| decl.fetch("fragment_class") == "escape" }
         if escape_decl

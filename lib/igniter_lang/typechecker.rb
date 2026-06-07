@@ -85,6 +85,19 @@ module IgniterLang
           type = decl.key?("type_annotation") ? type_ir(decl.fetch("type_annotation")) : type_ir("Unknown")
           symbol_types[decl.fetch("name")] = type
           typed_decls << typed_decl(decl, type, nil, [])
+        when "capability"
+          # PROP-035: IO capability declarations — type is opaque to the compiler
+          raw_type = decl.fetch("type_annotation", "IO.Capability")
+          # Normalise all IO.* capability types to the IO.Capability sentinel
+          type_name_str = raw_type.is_a?(Hash) ? (raw_type["name"] || "IO.Capability") : raw_type.to_s
+          resolved_type = type_name_str.start_with?("IO.") ? type_ir("IO.Capability") : type_ir(type_name_str)
+          symbol_types[decl.fetch("name")] = resolved_type
+          typed_decls << typed_decl(decl, resolved_type, nil, [])
+        when "effect_binding"
+          # PROP-035: effect surface binding — structurally typed as Unit
+          type = type_ir("Unit")
+          symbol_types[decl.fetch("name")] = type
+          typed_decls << typed_decl(decl, type, nil, decl.fetch("deps", []))
         when "window"
           typed_decls << typed_decl(decl, type_ir("Window"), nil, [])
         when "fold_stream"

@@ -767,8 +767,10 @@ module IgniterLang
       when "read"     then advance; parse_read_decl
       when "snapshot" then advance; parse_snapshot_decl
       when "window"   then advance; parse_window_decl
-      when "escape"   then advance; parse_escape_decl
-      when "stream"   then advance; parse_stream_decl
+      when "escape"      then advance; parse_escape_decl
+      when "capability"  then advance; parse_capability_decl
+      when "effect"      then advance; parse_effect_binding_decl
+      when "stream"      then advance; parse_stream_decl
       when "fold_stream" then advance; parse_fold_stream_decl
       when "invariant"   then advance; parse_invariant_decl
       when "uses"        then advance; parse_uses_decl
@@ -964,6 +966,22 @@ module IgniterLang
     def parse_escape_decl
       name = name_token!(%i[ident])
       { "kind" => "escape", "name" => name }
+    end
+
+    # PROP-035: capability <name>: <CapType>
+    def parse_capability_decl
+      name = name_token!(%i[ident])
+      expect_type!(:colon)
+      type_ref = parse_type_ref
+      { "kind" => "capability", "name" => name, "type_annotation" => type_ref }
+    end
+
+    # PROP-035: effect <name> using <cap_ref>
+    def parse_effect_binding_decl
+      name = name_token!(%i[ident])
+      expect_kw!("using")
+      cap_ref = name_token!(%i[ident])
+      { "kind" => "effect_binding", "name" => name, "capability_ref" => cap_ref }
     end
 
     # PINV-3: parse invariant declaration
