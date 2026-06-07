@@ -604,7 +604,7 @@ intent" — not "the compiler verified this policy".
 | 6, 20 | ch10 (Modifiers §10.5) | PROP-031, PROP-033 | PROP-031 ✅ | `planned PROP` (PROP-033) |
 | 8 | ch12 (receipt field) | PROP-035 | pending | `planned PROP` |
 | 9 | ch12 (authority field) | PROP-035 | pending | `planned PROP` |
-| 10 | ch11 (Profile System) | PROP-033 ✅ (binding), PROP-040 (declarations, in-design) | PROP-033 ✅ | `in-design` (PROP-040; OOF-M7/M8 pending) |
+| 10 | ch11 (Profile System) | PROP-033 ✅, PROP-040 ✅ | PROP-033 ✅ PROP-040 ✅ | `experiment-pass` (binding + declarations + OOF-M7/M8) |
 | 11 | ch10 (observed modifier) | PROP-031 | ✅ | `planned PROP` (PROP-035 required-field enforcement) |
 | 12 | ch10 (observed modifier) | PROP-031 | ✅ | `planned PROP` (PROP-035 receipt type enforcement) |
 | 13 | ch10 (observed modifier) | PROP-031 | ✅ | `enforced` (classifier fragment class) |

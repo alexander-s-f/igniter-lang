@@ -5634,11 +5634,13 @@ PROP-035   Effect Surface / IO.Capability experiment-pass; capability+effect_bin
                                          IO.Capability type sentinel; 64/64 proof 2026-06-07;
                                          closes PROP-031 Effect Surface deferral;
                                          numbering note: profile declarations renumbered PROP-040
-PROP-040   profile declarations          in-design; proposal authored 2026-06-07;
-                                         grammar: module-level "profile <name> { authority: modifier }";
-                                         closes PROP-033 profile_binding open hook;
-                                         OOF-M7 (modifier/authority mismatch), OOF-M8 (unknown profile);
-                                         implementation gate: pending Compiler/Grammar Expert review;
+PROP-040   profile declarations          experiment-pass; module-level profile declarations
+                                         "profile <name> { authority: <modifier> }";
+                                         parser/classifier (OOF-M7/M8)/typechecker/SemanticIR;
+                                         profile_authority propagated through all stages;
+                                         closes PROP-033 profile_binding open hook (CR-003);
+                                         63/63 proof 2026-06-07; grammar_version: profile-v0;
+                                         via_profile_proof fixtures updated (+profile decls);
                                          [renumbered from PROP-035 slot]
 PROP-036   compiler_profile_id manifest  accepted; bounded implementation partial:
                                          source contract + finalization proof PASS;

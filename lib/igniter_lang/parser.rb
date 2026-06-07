@@ -47,6 +47,7 @@ module IgniterLang
     olap_point
     invariant predicate severity label message overridable_with
     from lifecycle using implements via
+    profile authority
     pipeline step scoped_by cardinality schema_version tenant_free
     if else let
     true false nil
@@ -270,6 +271,7 @@ module IgniterLang
                   "traits" => [], "impls" => [], "contract_shapes" => [],
                   "contracts" => [], "types" => [], "functions" => [],
                   "pipelines" => [], "olap_points" => [], "assumptions" => [],
+                  "profiles" => [],  # PROP-040
                   "parse_errors" => [] }
 
       # optional module declaration
@@ -297,6 +299,7 @@ module IgniterLang
         when "pipeline"       then program["pipelines"]       << decl
         when "olap_point"     then program["olap_points"]     << decl
         when "assumptions"    then program["assumptions"].concat(decl.fetch("assumptions", []))
+        when "profile"        then program["profiles"]   << decl  # PROP-040
         end
       end
 
@@ -404,11 +407,27 @@ module IgniterLang
       when "pipeline"       then advance; parse_pipeline_decl
       when "olap_point"     then advance; parse_olap_point_decl
       when "assumptions"    then advance; parse_assumptions_block
+      when "profile"        then advance; parse_profile_decl  # PROP-040
       else
         @errors << { "message" => "Unexpected token: #{tok.value}", "line" => tok.line }
         advance
         nil
       end
+    end
+
+    # PROP-040: profile declarations
+    def parse_profile_decl
+      name = name_token!(%i[ident])
+      expect_type!(:lbrace)
+      authority = nil
+      until peek_type?(:rbrace) || peek_type?(:eof)
+        field_name = name_token!(%i[ident keyword])
+        expect_type!(:colon)
+        field_val  = name_token!(%i[ident keyword])
+        authority  = field_val if field_name == "authority"
+      end
+      expect_type!(:rbrace)
+      { "kind" => "profile", "name" => name, "authority" => authority }
     end
 
     def parse_assumptions_block
@@ -1715,6 +1734,7 @@ module IgniterLang
         "pipelines"       => @ast.fetch("pipelines", []),
         "olap_points"     => @ast.fetch("olap_points", []),
         "assumptions"     => @ast.fetch("assumptions", []),
+        "profiles"        => @ast.fetch("profiles", []),  # PROP-040
         "parse_errors"    => @errors
       }
     end
@@ -1750,6 +1770,9 @@ module IgniterLang
                                  @ast.fetch("impls", []).any? ||
                                  @ast.fetch("contract_shapes", []).any? ||
                                  @ast.fetch("contracts", []).any? { |contract| contract.fetch("type_params", []).any? }
+
+      # PROP-040: profile declarations
+      return "profile-v0" if @ast.fetch("profiles", []).any?
 
       "0.1.0"
     end

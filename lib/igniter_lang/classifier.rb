@@ -12,8 +12,11 @@ module IgniterLang
 
     def classify(parsed_program, sample_input:)
       assumption_registry = assumption_registry(parsed_program)
+      # PROP-040: build profile index for OOF-M7/M8 validation
+      profile_index = parsed_program.fetch("profiles", [])
+                                    .each_with_object({}) { |p, h| h[p.fetch("name")] = p }
       contracts = parsed_program.fetch("contracts").map do |contract|
-        classify_contract(parsed_program, contract, sample_input, assumption_registry)
+        classify_contract(parsed_program, contract, sample_input, assumption_registry, profile_index)
       end
 
       result = {
@@ -63,7 +66,7 @@ module IgniterLang
       "classifier_pass/#{Digest::SHA256.hexdigest(seed)[0, 16]}"
     end
 
-    def classify_contract(parsed_program, contract, sample_input, assumption_registry)
+    def classify_contract(parsed_program, contract, sample_input, assumption_registry, profile_index = {})
       diagnostics = []
       declarations = []
       assumption_refs = []
@@ -221,6 +224,37 @@ module IgniterLang
         end
       end
 
+      # PROP-040: OOF-M7/M8 — profile binding validation (must precede contract_fragment_for)
+      via_profile = contract.fetch("via_profile", nil)
+      profile_authority = nil
+      if via_profile
+        if profile_index.key?(via_profile)
+          resolved = profile_index.fetch(via_profile)
+          profile_authority = resolved.fetch("authority", nil)
+          # OOF-M7: contract modifier authority below profile declared authority
+          modifier_rank = { "pure" => 0, "observed" => 1, "effect" => 2,
+                            "privileged" => 3, "irreversible" => 4 }
+          mod_rank  = modifier_rank.fetch(modifier, 0)
+          prof_rank = modifier_rank.fetch(profile_authority.to_s, 0)
+          if mod_rank < prof_rank
+            diagnostics << oof(
+              "OOF-M7",
+              "contract '#{contract.fetch("name")}' (#{modifier}) cannot bind profile " \
+              "'#{via_profile}' which requires '#{profile_authority}' or higher",
+              contract.fetch("name")
+            )
+          end
+        else
+          # OOF-M8: profile name not declared in module
+          diagnostics << oof(
+            "OOF-M8",
+            "contract '#{contract.fetch("name")}' binds unknown profile '#{via_profile}'; " \
+            "declare 'profile #{via_profile}' in this module",
+            contract.fetch("name")
+          )
+        end
+      end
+
       contract_fragment = contract_fragment_for(declarations, diagnostics, modifier: modifier)
 
       result = {
@@ -234,10 +268,10 @@ module IgniterLang
         "dependency_graph" => dependency_graph(declarations),
         "oof_log" => diagnostics
       }
-      # PROP-033: propagate via_profile binding if present
-      via_profile = contract.fetch("via_profile", nil)
-      result["via_profile"] = via_profile if via_profile
-      result["assumption_refs"] = assumption_refs.uniq unless assumption_refs.empty?
+      # PROP-033/040: propagate via_profile and resolved profile_authority
+      result["via_profile"]       = via_profile       if via_profile
+      result["profile_authority"] = profile_authority  if profile_authority
+      result["assumption_refs"]   = assumption_refs.uniq unless assumption_refs.empty?
       result
     end
 

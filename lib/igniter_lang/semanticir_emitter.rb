@@ -150,9 +150,11 @@ module IgniterLang
         "nodes" => typed_nodes(contract),
         "escape_boundaries" => typed_escape_boundaries(contract)
       }
-      # PROP-033: emit profile_binding when via_profile is present
-      via_profile = contract.fetch("via_profile", nil)
-      contract_ir["profile_binding"] = via_profile if via_profile
+      # PROP-033/040: emit profile_binding and profile_authority when via_profile is present
+      via_profile       = contract.fetch("via_profile", nil)
+      profile_authority = contract.fetch("profile_authority", nil)
+      contract_ir["profile_binding"]   = via_profile       if via_profile
+      contract_ir["profile_authority"] = profile_authority if profile_authority
       assumption_refs = contract.fetch("assumption_refs", [])
       contract_ir["assumption_refs"] = assumption_refs unless assumption_refs.empty?
       contract_ir["contract_ref"] = contract_ref(contract_ir)
