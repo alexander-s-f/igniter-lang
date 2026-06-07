@@ -186,6 +186,36 @@ module IgniterLang
           # PROP-034: track outputs with evidence refs for post-loop OOF-M9 check
           evidence_output_names << name if node.key?("evidence") && !node.fetch("evidence").empty?
           declarations << classified_decl(node, fragment, [name], missing)
+        when "for_loop"
+          # PROP-039 gate 4: FiniteLoop — classify loop node with source dep
+          source = node.fetch("source")
+          source_missing = symbol_fragments.key?(source) ? [] : [source]
+          source_missing.each do |s|
+            diagnostics << oof("OOF-P1", "for loop source '#{s}' is not declared", node.fetch("name"))
+          end
+          src_frag = source_missing.empty? ? symbol_fragments.fetch(source, "core") : "oof"
+          decl = classified_decl(node, source_missing.empty? ? src_frag : "oof", [source], source_missing)
+          decl["source"] = source
+          decl["item"]   = node.fetch("item")
+          # body semantics are future work (gate 5) — not recursed here
+          declarations << decl
+        when "budgeted_loop"
+          # PROP-039 gate 4: BudgetedLocalLoop — classify loop node with source dep
+          source = node.fetch("source")
+          source_missing = symbol_fragments.key?(source) ? [] : [source]
+          source_missing.each do |s|
+            diagnostics << oof("OOF-P1", "budgeted loop source '#{s}' is not declared", node.fetch("name"))
+          end
+          src_frag = source_missing.empty? ? symbol_fragments.fetch(source, "core") : "oof"
+          decl = classified_decl(node, source_missing.empty? ? src_frag : "oof", [source], source_missing)
+          decl["source"] = source
+          decl["item"]   = node.fetch("item")
+          decl["max_steps"] = node.fetch("max_steps") if node.key?("max_steps")
+          declarations << decl
+        when "decreases", "max_steps"
+          # PROP-039 gate 4: structural meta-declarations — no named symbol produced.
+          # Used only for OOF-R2/R4 post-body checks below; not added to declarations.
+          nil
         end
       end
 
@@ -235,6 +265,44 @@ module IgniterLang
           "(#{evidence_output_names.join(", ")}); use 'observed' or higher modifier",
           contract.fetch("name")
         )
+      end
+
+      # PROP-039 gate 4: OOF-R2 — recursive contract must declare a decreases variant
+      if modifier == "recursive"
+        has_decreases = contract.fetch("body").any? { |n| n.fetch("kind") == "decreases" }
+        unless has_decreases
+          diagnostics << oof(
+            "OOF-R2",
+            "recursive contract '#{contract.fetch("name")}' requires a 'decreases' declaration",
+            contract.fetch("name")
+          )
+        end
+        # OOF-R4: recursive + decreases fuel requires a static max_steps
+        fuel_shorthand = contract.fetch("body").any? do |n|
+          n.fetch("kind") == "decreases" && n.fetch("variant", "") == "fuel"
+        end
+        if fuel_shorthand
+          has_max_steps = contract.fetch("body").any? { |n| n.fetch("kind") == "max_steps" }
+          unless has_max_steps
+            diagnostics << oof(
+              "OOF-R4",
+              "recursive contract '#{contract.fetch("name")}' with 'decreases fuel' requires static max_steps",
+              contract.fetch("name")
+            )
+          end
+        end
+      end
+
+      # PROP-039 gate 4: OOF-R4 — fuel_bounded contract must declare a static max_steps
+      if modifier == "fuel_bounded"
+        has_max_steps = contract.fetch("body").any? { |n| n.fetch("kind") == "max_steps" }
+        unless has_max_steps
+          diagnostics << oof(
+            "OOF-R4",
+            "fuel_bounded contract '#{contract.fetch("name")}' requires a static max_steps declaration",
+            contract.fetch("name")
+          )
+        end
       end
 
       # PROP-040: OOF-M7/M8 — profile binding validation (must precede contract_fragment_for)

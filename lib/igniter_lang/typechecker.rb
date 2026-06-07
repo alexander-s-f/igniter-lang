@@ -128,6 +128,23 @@ module IgniterLang
           end
           # TINV-4: propagate invariant output effects to output nodes
           typed_decls << typed_decl_output(decl, expected, invariant_effects)
+        when "for_loop"
+          # PROP-039 gate 4: FiniteLoop — source must be Collection[T]
+          source_name = decl.fetch("source")
+          source_type = symbol_types.fetch(source_name, type_ir("Unknown"))
+          unless type_name(source_type) == "Collection" || type_name(source_type) == "Unknown"
+            type_errors << oof(
+              "OOF-L1",
+              "for loop '#{decl.fetch("name")}' source '#{source_name}' must be " \
+              "Collection[T], got #{type_name(source_type)}",
+              decl.fetch("name")
+            )
+          end
+          typed_decls << typed_decl(decl, type_ir("Unit"), nil, decl.fetch("deps", []))
+        when "budgeted_loop"
+          # PROP-039 gate 4: BudgetedLocalLoop — max_steps is static (enforced by parser);
+          # source validated at classify time. TypeChecker just passes through.
+          typed_decls << typed_decl(decl, type_ir("Unit"), nil, decl.fetch("deps", []))
         end
       end
 
