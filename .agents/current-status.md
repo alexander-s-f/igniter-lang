@@ -5628,7 +5628,10 @@ PROP-033   via profile binding           experiment-pass; optional "via <ident>"
                                          declarations; parser/classifier/typechecker/SemanticIR;
                                          profile_binding in contract_ir; 52/52 proof 2026-06-07;
                                          closes PROP-031 §12 via-profile deferral
-PROP-034   output evidence syntax        queued; not authored
+PROP-034   output evidence syntax        experiment-pass; optional "evidence [ref1, ref2]"
+                                         suffix on output declarations; parser already had
+                                         parse_evidence_list; classifier (OOF-M9: pure+evidence),
+                                         typechecker, SemanticIR passthrough; 51/51 proof 2026-06-07
 PROP-035   Effect Surface / IO.Capability experiment-pass; capability+effect_binding grammar
                                          in parser/classifier/typechecker; OOF-M2/M4/M5;
                                          IO.Capability type sentinel; 64/64 proof 2026-06-07;

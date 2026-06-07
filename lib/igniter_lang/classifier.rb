@@ -77,6 +77,7 @@ module IgniterLang
       fold_stream_stream_refs = Hash.new { |refs, stream_name| refs[stream_name] = [] }
       capability_declarations = {}  # PROP-035: cap_name => node
       effect_bindings = []          # PROP-035: cap_refs that have effect bindings
+      evidence_output_names = []    # PROP-034: output names that carry evidence refs
       parsed_program.fetch("olap_points", []).each do |point|
         symbol_fragments[point.fetch("name")] = "escape"
         symbol_kinds[point.fetch("name")] = "olap_point"
@@ -182,6 +183,8 @@ module IgniterLang
           confidence_oof = confidence_as_bool_oof(node, compute_exprs[name])
           diagnostics << confidence_oof if confidence_oof
           fragment = "oof" if confidence_oof
+          # PROP-034: track outputs with evidence refs for post-loop OOF-M9 check
+          evidence_output_names << name if node.key?("evidence") && !node.fetch("evidence").empty?
           declarations << classified_decl(node, fragment, [name], missing)
         end
       end
@@ -222,6 +225,16 @@ module IgniterLang
             contract.fetch("name")
           )
         end
+      end
+
+      # PROP-034: OOF-M9 — pure contract with evidence refs on output (must precede contract_fragment_for)
+      if modifier == "pure" && evidence_output_names.any?
+        diagnostics << oof(
+          "OOF-M9",
+          "pure contract '#{contract.fetch("name")}' cannot declare output evidence refs " \
+          "(#{evidence_output_names.join(", ")}); use 'observed' or higher modifier",
+          contract.fetch("name")
+        )
       end
 
       # PROP-040: OOF-M7/M8 — profile binding validation (must precede contract_fragment_for)
@@ -326,7 +339,7 @@ module IgniterLang
         result["expr_kind"] = node.fetch("expr").fetch("kind")
         result["expr"] = node.fetch("expr")
       end
-      %w[bound options].each do |key|
+      %w[bound options evidence].each do |key|  # PROP-034: evidence passthrough
         result[key] = node.fetch(key) if node.key?(key)
       end
       result

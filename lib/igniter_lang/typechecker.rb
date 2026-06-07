@@ -822,6 +822,8 @@ module IgniterLang
       result["warnings_from"]  = warnings_from  unless warnings_from.empty?
       result["uncertain_from"] = uncertain_from unless uncertain_from.empty?
       result["metrics_from"]   = metrics_from   unless metrics_from.empty?
+      # PROP-034: evidence refs passthrough
+      result["evidence"] = decl.fetch("evidence") if decl.key?("evidence")
       result
     end
 

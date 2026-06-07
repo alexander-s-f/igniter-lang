@@ -172,6 +172,7 @@ module IgniterLang
           port["warnings_from"] = decl.fetch("warnings_from") if decl.key?("warnings_from")
           port["uncertain_from"] = decl.fetch("uncertain_from") if decl.key?("uncertain_from")
           port["metrics_from"] = decl.fetch("metrics_from") if decl.key?("metrics_from")
+          port["evidence"] = decl.fetch("evidence") if decl.key?("evidence")  # PROP-034
         end
         port
       end
