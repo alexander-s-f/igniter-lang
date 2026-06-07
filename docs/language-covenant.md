@@ -508,7 +508,92 @@ compensation path, and with a complete receipt trail. It does not fail silently.
 
 ---
 
-## Cross-Reference to Spec
+## Canon Boundary Rules
+
+Canon Boundary Rules (CR-*) are explicit firewall rules that define what the
+igniter-lang canon grammar may and may not do with respect to external systems,
+labs, and runtime surfaces. Each rule has a unique identifier, a formal statement,
+and a rationale. Rules are adopted when a new grammar surface creates a boundary
+that has historically been implicit.
+
+CR rules are distinct from Postulates (language semantics) and OOF codes (compiler
+diagnostics). They govern the **compiler boundary itself** — what the compiler is
+allowed to know, import, or validate.
+
+### CR-001 — Canon Type Opacity
+
+**Adopted:** 2026-06-07 (PROP-035/PROP-033 cluster; MFN-001)
+
+**Rule:**
+> The igniter-lang canon grammar may accept external type names (e.g.
+> `IO.NetworkCapability`, `IO.FileCapability`) as opaque string identifiers.
+> The compiler normalizes all `IO.*` names to the `"IO.Capability"` sentinel
+> in the typed IR. The canon must not import, validate, or generate behavior
+> that depends on the internal schema, field list, or delegation semantics of
+> any type whose schema is defined outside igniter-lang itself (igniter-lab,
+> igniter-ruby, or any third-party gem). Type schema promotion to canon requires
+> a cross-repo PROP with explicit governance review.
+
+**Rationale:** The IO.Capability grammar surface (PROP-035) names types from the
+lab (IO.NetworkCapability, IO.FileCapability). Treating them as opaque prevents
+the canon from importing Rack, HTTP, or gem-specific schemas. The boundary is
+enforced structurally: the TypeChecker normalizes all IO.* to a single sentinel.
+
+**Scope:**
+- All `capability` body declarations in `effect`/`privileged`/`irreversible` contracts
+- Any future `IO.*` type references in canon grammar
+- Does NOT apply to igniter-lab proofs (lab may know full schemas)
+
+---
+
+### CR-002 — Lab Diagnostic Boundary
+
+**Adopted:** 2026-06-07 (MFN-001)
+
+**Rule:**
+> E-NET-* codes, LAB-STDLIB-* codes, and any diagnostic codes authored inside
+> igniter-lab proofs are lab-local identifiers. They inform the design of OOF-*
+> canon codes but are not OOF-* canon codes themselves. Promoting a lab diagnostic
+> code to canon OOF status requires a formal PROP reviewed by the Compiler/Grammar
+> Expert with classifier and grammar impact assessed.
+
+**Rationale:** The LAB-STDLIB-NET proof chain proved 10 E-NET-* codes covering
+delegation algebra, FFI surface, and policy enforcement. These are valuable design
+signals. But admitting them directly to the canon OOF registry would import
+lab-specific vocabulary (delegation chains, bind-address, glob semantics) into the
+compiler without a grammar surface to support them.
+
+**Scope:**
+- E-NET-* codes from LAB-STDLIB-NET-P4/P5
+- Any future lab-authored diagnostic codes
+- Canon OOF codes (OOF-M*, OOF-L*, OOF-F*) may REFERENCE lab findings in their rationale but are independently defined
+
+---
+
+### CR-003 — Profile Binding Is an Intent Record
+
+**Adopted:** 2026-06-07 (PROP-033; MFN-001)
+
+**Rule:**
+> The `profile_binding` field in `contract_ir` (produced by PROP-033) is a
+> source-level intent record. The presence of `profile_binding` does not grant,
+> validate, or enforce any runtime authority. A contract with `profile_binding`
+> referencing a non-existent or authority-mismatched profile is a compile-time
+> error (OOF-M8/M7, defined in PROP-040) — it is not a silent grant. No consumer
+> of `contract_ir` may treat `profile_binding` as validated authority without a
+> PROP-040 schema check having been run in the compilation pipeline.
+
+**Rationale:** `profile_binding` appears in `contract_ir` before PROP-040 closes
+the profile declaration surface. During this gap, consumers must not treat the
+field as evidence of validated policy. The field means "the source declared this
+intent" — not "the compiler verified this policy".
+
+**Scope:**
+- All `contract_ir` consumers (assembler, manifest, runtime loaders)
+- Applies until PROP-040 (profile declarations) reaches `experiment-pass` and
+  OOF-M7/M8 are active in the classification pipeline
+
+---
 
 | Postulate | Spec chapter | PROP | Spec status | Enforcement status |
 |-----------|-------------|------|-------------|-------------------|
@@ -519,7 +604,7 @@ compensation path, and with a complete receipt trail. It does not fail silently.
 | 6, 20 | ch10 (Modifiers §10.5) | PROP-031, PROP-033 | PROP-031 ✅ | `planned PROP` (PROP-033) |
 | 8 | ch12 (receipt field) | PROP-035 | pending | `planned PROP` |
 | 9 | ch12 (authority field) | PROP-035 | pending | `planned PROP` |
-| 10 | ch11 (Profile System) | PROP-034 | pending | `planned PROP` |
+| 10 | ch11 (Profile System) | PROP-033 ✅ (binding), PROP-040 (declarations, in-design) | PROP-033 ✅ | `in-design` (PROP-040; OOF-M7/M8 pending) |
 | 11 | ch10 (observed modifier) | PROP-031 | ✅ | `planned PROP` (PROP-035 required-field enforcement) |
 | 12 | ch10 (observed modifier) | PROP-031 | ✅ | `planned PROP` (PROP-035 receipt type enforcement) |
 | 13 | ch10 (observed modifier) | PROP-031 | ✅ | `enforced` (classifier fragment class) |
