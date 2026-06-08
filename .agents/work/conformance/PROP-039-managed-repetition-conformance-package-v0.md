@@ -213,16 +213,17 @@ PROP-039. It is permitted to:
 - Lab must not widen `igc run`, `.igbin`, or any public API surface for
   recursive/fuel_bounded contract execution without separate authorization.
 
-### 3.3 Lab conformance status (2026-06-07)
+### 3.3 Lab conformance status (2026-06-08)
 
 | Conformance item | Lab status |
 |------------------|-----------|
-| BudgetedLocalLoop `loop Name item in source` | ✅ G1 closed — verify_g1_canon_loop.rb PASS |
-| `recursive`/`fuel_bounded` contract modifiers | ✅ G2 closed — verify_loops.rb PASS |
-| FiniteLoop `for Name item in source` | ❌ not yet implemented in Rust parser |
-| OOF-L1 (Collection source check) | ❌ lab OOF-L1 has different semantics (lab-local) |
-| OOF-R2/R4 | ❌ not yet in Rust classifier |
-| SemanticIR loop_node shape | ⚠️ lab emits `kind="loop"` (different from canon `kind="loop_node"`) |
+| BudgetedLocalLoop `loop Name item in source` | ✅ G1 closed 2026-06-07 — verify_g1_canon_loop.rb PASS |
+| `recursive`/`fuel_bounded` contract modifiers | ✅ G2 closed 2026-06-07 — verify_loops.rb PASS |
+| FiniteLoop `for Name item in source` | ✅ G3b closed 2026-06-08 — parser.rs + VM fuel sentinel; verify_g3_conformance.rb PASS |
+| OOF-R2 (recursive missing decreases) | ✅ G3a closed 2026-06-08 — classifier.rs; 5/5 diagnostic cases PASS |
+| OOF-R4 (fuel_bounded/decreases-fuel missing max_steps) | ✅ G3a closed 2026-06-08 — classifier.rs; PASS |
+| SemanticIR loop_node shape | ✅ G3c closed 2026-06-08 — emitter.rs emits kind="loop_node", loop_class, termination, source_ref |
+| OOF-L1 (Collection source check) | ⚠️ lab OOF-L1 = "unbounded loop" (parser-level); canon OOF-L1 = "source not Collection[T]" (TypeChecker) — G6 future alignment pass |
 | body execution | ✅ lab VM executes loop body; canon body=[] deferred |
 
 Lab is ahead of canon on execution; canon is ahead of lab on diagnostic
