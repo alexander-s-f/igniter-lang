@@ -196,7 +196,7 @@ obligations for alternate implementations at this time.
 | OOF-L5/L7/L8 | ✅ experiment-pass — gate 8 closed 2026-06-08 | loop body scope rules; see §1.2 |
 | OOF-R1/R5/R6/R7 | ✅ experiment-pass — gate 5 closed 2026-06-08 | recur() context + arg + output validation; see §1.2 |
 | OOF-R3 | ✅ experiment-pass — OOF-R3 gate closed 2026-06-08 | syntactic decrease check at recur() call site; dotted-path variant fail-closed; see §1.2 |
-| `recur()` primitive — G5 | ✅ gate 5 closed 2026-06-08 — recursive_body_proof 100/100 PASS. OOF-R1/R5/R6/R7 experiment-pass. SemanticIR `recur_call` sub-expr. Termination (OOF-R3), named args, multi-output, execution: all deferred. |
+| `recur()` primitive — G5 | ✅ gate 5 closed 2026-06-08 — recursive_body_proof 100/100 PASS. OOF-R1/R5/R6/R7 experiment-pass. SemanticIR `recur_call` sub-expr. OOF-R3 syntactic_v0 experiment-pass (see §1.2). Full termination proof beyond syntactic_v0, named args, multi-output, execution: all deferred. |
 | `ConvergentLoop` | vocabulary only | metric/threshold/budget form; future proof |
 | loop body semantics | ✅ gate 8 closed 2026-06-08 — `lead_node` + `compute_node`; OOF-L5/L7/L8 active; scope rules proven. See PROP-039 §"Local Loop Body Semantics (Gate 8 Design)". |
 | `for` with optional max_steps cap | open question | deferred per §for/loop split |
