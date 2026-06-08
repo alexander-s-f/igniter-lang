@@ -302,3 +302,4 @@ The following surfaces remain closed for PROP-039:
 | Canon Gate 8 | `igniter-lang/experiments/loop_body_semantics_proof/` | 100/100 PASS — 2026-06-08 |
 | Lab Gate 8 (Rust symmetry) | `igniter-lab/igniter-compiler/verify_g4_body_semantics.rb` | 18/18 PASS — 2026-06-08 (incl. non-literal OOF-L5, clean OOF-L8 fixture) |
 | Canon Gate 5 | `igniter-lang/experiments/recursive_body_proof/` | 100/100 PASS — 2026-06-08 |
+| Lab Gate 5 (Rust symmetry) | `igniter-lab/igniter-compiler/verify_g5_recur.rb` | 18/18 PASS — 2026-06-08 |
