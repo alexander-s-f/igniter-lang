@@ -23,7 +23,24 @@ out_run.log
 /.agents/work/**
 !/.agents/work/
 !/.agents/work/*/
-!/.agents/work/*/README.md
+# Living governance surfaces — tracked in full
+!/.agents/work/proposals/
+!/.agents/work/proposals/**
+!/.agents/work/gates/
+!/.agents/work/gates/**
+!/.agents/work/meta/
+!/.agents/work/meta/**
+!/.agents/work/meta-proposals/
+!/.agents/work/meta-proposals/**
+!/.agents/work/conformance/
+!/.agents/work/conformance/**
+# Historical debris — directory stubs only, content ignored
+!/.agents/work/tracks/
+!/.agents/work/tracks/README.md
+!/.agents/work/discussions/
+!/.agents/work/discussions/README.md
+!/.agents/work/cards/
+!/.agents/work/cards/README.md
 
 .idea/
 .rubocop_cache/
