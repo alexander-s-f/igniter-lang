@@ -294,4 +294,4 @@ The following surfaces remain closed for PROP-039:
 | Lab G3 (G3a/G3b/G3c/G6) | `igniter-lab/igniter-compiler/verify_g3_conformance.rb` | 14/14 PASS — 2026-06-08 |
 | Lab G3 Rust tests | `igniter-lab/igniter-compiler/tests/loop_conformance_tests.rs` | 14/14 PASS — 2026-06-08 |
 | Canon Gate 8 | `igniter-lang/experiments/loop_body_semantics_proof/` | 100/100 PASS — 2026-06-08 |
-| Lab Gate 8 (Rust symmetry) | `igniter-lab/igniter-compiler/verify_g4_body_semantics.rb` | 16/16 PASS — 2026-06-08 |
+| Lab Gate 8 (Rust symmetry) | `igniter-lab/igniter-compiler/verify_g4_body_semantics.rb` | 18/18 PASS — 2026-06-08 (incl. non-literal OOF-L5, clean OOF-L8 fixture) |
