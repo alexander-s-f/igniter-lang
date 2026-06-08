@@ -5704,12 +5704,17 @@ PROP-038   compiler_profile_contract     accepted proposal-only by S3-R61-C3-A;
                                          public API/CLI,
                                          persisted reports, sidecars, loader/report,
                                          CompatibilityReport, and production/runtime authority remain closed
-PROP-039   managed local recursion       accepted; proposal-only 2026-06-07;
+PROP-039   managed local recursion       experiment-pass compiler surface 2026-06-07;
+                                         gates 1+3+4+5+6+7 closed;
                                          vocabulary: FiniteLoop/BudgetedLocalLoop/
                                          StructuralRecursion/FuelBoundedRecursion;
+                                         active OOF: OOF-L1 (tc), OOF-R2/R4 (classifier);
+                                         SemanticIR: loop_node (loop_class/termination/body=[]);
+                                         grammar_version="loop-v0" through all 4 stages;
+                                         lab G1+G2 closed (verify_loops.rb PASS);
+                                         OOF-R namespace: Ch13 service-loop codes → OOF-SL* (PROP-037);
                                          ServiceLoop → PROP-037 exclusive;
-                                         OOF-L*/OOF-R* candidates only (not registry);
-                                         implementation closed; 7 gates before impl auth
+                                         runtime/body-semantics/recur/igc-run/production closed
 ```
 
 → Close governance: `meta-proposals/META-EXPERT-009.1-stage2-close-decision-v0.md`
