@@ -72,7 +72,7 @@ Stmt          := "let" Name "=" Expr
 ExternalDecl  := "external" LangId Name "{" ExternalOpt* "}"
 LangId        := "ruby" | "rust" | "js" | "wasm"
 
-TypeRef       := "Integer"|"Float"|"String"|"Bool"|"Timestamp"|"Date"|"Symbol"
+TypeRef       := "Integer"|"Float"|"String"|"Bool"|"Text"|"Timestamp"|"Date"|"Symbol"
                | Name
                | "Collection[" TypeRef "]"
                | "Option["     TypeRef "]"

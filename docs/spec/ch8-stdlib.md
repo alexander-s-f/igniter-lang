@@ -8,6 +8,12 @@ Proof: experiments/stdlib_execution_kernel_stage1/ — PASS (12 cases):
   RuntimeMachine igapp-style evaluate with stdlib.integer.add
 Note: stdlib not yet connected to the full RuntimeMachine evaluate path via .igapp/ (pending Slice A)
 
+**String core update (2026-06-08):**
+§8.1 `string.ig` surface is superseded by `stdlib.text.*` (§8.10).
+Canonical type is `Text` (not `String`). The old ambiguous `length` function
+is held/legacy — prefer explicit unit-qualified ops (`byte_length`, `rune_length`,
+`grapheme_length`). See §8.10 for the full experiment-pass surface.
+
 ---
 
 ## 8.1 Stdlib Module Structure (PROP-013 §Stdlib Module Map)
@@ -22,7 +28,7 @@ stdlib/
     integer.ig      — stdlib.integer.add, sub, mul, div, neg, compare
     float.ig        — stdlib.float.add, ...
     decimal.ig      — stdlib.decimal.add (scale-aware), mul
-    string.ig       — length, concat, trim, split, contains, starts_with
+    string.ig       — SUPERSEDED by stdlib.text.* (§8.10); old `length` held/legacy; see §8.10
   temporal/
     date.ig         — add_days, diff_days, day_of_week, beginning_of, end_of
     datetime.ig     — add_duration, diff, as_of (CORE); now() → OOF
@@ -174,3 +180,135 @@ olap_slice      → PROP-024 (Stage 2)
 ```
 
 Stage 1 compilers must treat these as OOF if encountered.
+
+---
+
+## 8.10 Text / String Core (experiment-pass, 2026-06-08)
+
+**Track:** `igniter-lang/.agents/work/tracks/string-core-units-pure-stdlib-boundary-v0.md`
+**Proof:** `igniter-lang/experiments/string_core_proof/string_core_proof.rb` — 60/60 PASS
+**Supersedes:** §8.1 `string.ig` entry (PROP-013)
+
+### 8.10.1 Canonical type: `Text`
+
+`Text` is the canonical Igniter type for text values in contracts.
+String literals from the parser carry `type_tag: "String"` and are
+accepted as `Text` arguments without a type error (v0 compatibility rule).
+`String` remains an internal metadata type for assumption schema fields only.
+
+### 8.10.2 Grammar form (v0): bare function calls
+
+```igniter
+pure contract ConcatExample {
+  input first: Text
+  input second: Text
+  compute result: Text = concat(first, second)
+  output result: Text
+}
+```
+
+Method syntax (`text.concat(other)`) is deferred.
+
+### 8.10.3 Text unit model
+
+Three explicit, non-ambiguous unit families.
+The old `length` function from PROP-013 `string.ig` is **held/legacy** —
+prefer the explicit unit-qualified ops below.
+
+| Unit | Description | Depends on |
+|------|-------------|------------|
+| Byte | UTF-8 encoded bytes | encoding only |
+| Rune | Unicode scalar values (code points) | encoding only |
+| Grapheme | User-perceived characters (grapheme clusters, Unicode UAX #29) | Unicode algorithm dependency |
+
+Grapheme operations are provable at the type-signature level.
+Runtime implementation requires a Unicode grapheme cluster algorithm;
+that implementation is a separate runtime gate.
+
+### 8.10.4 v0 stdlib surface (14 operations)
+
+| Source fn | SemanticIR fn | Arg types | Return type | Notes |
+|-----------|--------------|-----------|-------------|-------|
+| `concat` | `stdlib.text.concat` | (Text, Text) | Text | |
+| `trim` | `stdlib.text.trim` | (Text) | Text | both ends, whitespace |
+| `contains` | `stdlib.text.contains` | (Text, Text) | Bool | |
+| `starts_with` | `stdlib.text.starts_with` | (Text, Text) | Bool | |
+| `ends_with` | `stdlib.text.ends_with` | (Text, Text) | Bool | |
+| `split` | `stdlib.text.split` | (Text, Text) | Collection[Text] | literal delimiter |
+| `replace` | `stdlib.text.replace` | (Text, Text, Text) | Text | literal pattern; first match |
+| `replace_all` | `stdlib.text.replace_all` | (Text, Text, Text) | Text | literal pattern; all matches |
+| `byte_length` | `stdlib.text.byte_length` | (Text) | Integer | UTF-8 byte count |
+| `rune_length` | `stdlib.text.rune_length` | (Text) | Integer | Unicode scalar values |
+| `grapheme_length` | `stdlib.text.grapheme_length` | (Text) | Integer | grapheme clusters (UAX #29) |
+| `byte_slice` | `stdlib.text.byte_slice` | (Text, Integer, Integer) | Text | \[start, end) bytes |
+| `rune_slice` | `stdlib.text.rune_slice` | (Text, Integer, Integer) | Text | \[start, end) runes |
+| `grapheme_slice` | `stdlib.text.grapheme_slice` | (Text, Integer, Integer) | Text | \[start, end) graphemes |
+
+**v0 compat rule:** `Text` parameter positions accept `String`-typed string
+literals (parser type_tag) without a type error.
+
+### 8.10.5 OOF diagnostics
+
+No new OOF codes. `OOF-TY0` fires for:
+- Arity mismatch: `stdlib.text.<fn>: expected N argument(s), got M`
+- Type mismatch: `stdlib.text.<fn> arg N: expected <Type>, got <ActualType>`
+
+### 8.10.6 SemanticIR shape
+
+Text stdlib calls emit as `kind: "call"` — same shape as integer ops.
+No special IR kind for text operations.
+
+```json
+{
+  "kind": "call",
+  "fn": "stdlib.text.concat",
+  "args": [
+    { "kind": "ref", "name": "first",  "resolved_type": {"name": "Text", "params": []} },
+    { "kind": "ref", "name": "second", "resolved_type": {"name": "Text", "params": []} }
+  ],
+  "resolved_type": {"name": "Text", "params": []}
+}
+```
+
+`split` return carries the full parameterised type:
+
+```json
+{
+  "kind": "call",
+  "fn": "stdlib.text.split",
+  "resolved_type": {"name": "Collection", "params": [{"name": "Text", "params": []}]}
+}
+```
+
+### 8.10.7 Closed surface
+
+The following are outside the v0 surface. Calling them produces `OOF-TY0`
+(unknown function) and blocks SIR emission.
+
+| Surface | Status |
+|---------|--------|
+| `regex_match`, `regex_find`, `regex_replace` | Closed — regex deferred |
+| `locale_fold_case`, `upcase`, `downcase` | Closed — locale-sensitive case folding deferred |
+| `tokenize`, tokenizer framework | Closed — deferred |
+| `TextEngine`, streaming text | Closed — deferred |
+| Parser combinators | Closed — deferred |
+| Source-level method syntax (`text.concat(other)`) | Closed — forms/method sugar deferred |
+| `trim_start`, `trim_end` | Closed — directional trim deferred |
+| File I/O | Closed — not part of stdlib.text |
+| Runtime execution, `igc run`, `.igbin` | Closed — runtime gate not open |
+| Unicode algorithm authority, UAX #29 impl | Closed — runtime/impl gate |
+| Bounds policy for slice (out-of-bounds semantics) | Closed — value-semantics proof required |
+| Stable public stdlib.text API | Closed — experiment-pass only; no stability guarantee |
+
+### 8.10.8 Future deferred items
+
+| Item | Notes |
+|------|-------|
+| `trim_start` / `trim_end` | v0 has `trim` (both ends) only |
+| Non-locale `upcase` / `downcase` | Needs case-folding model |
+| Bounds error handling | out-of-bounds slice: `Result[Text, BoundsError]` or runtime panic — deferred |
+| `Collection[Text]` parametric depth check | Typechecker v0 compares only top-level type name |
+| Method syntax | `text.concat(other)` — after forms route |
+| OOF-STR* dedicated namespace | v0 reuses `OOF-TY0`; dedicated codes deferred |
+| Lab Rust symmetry | `Lab STR-CORE` gate — not yet authorized |
+| Value-semantics proof | UTF-8 byte slicing fail-closed vs replacement, rune reference impl |

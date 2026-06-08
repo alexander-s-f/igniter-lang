@@ -12,6 +12,7 @@ Proof: experiments/typechecker_proof/ — PASS (includes `boundary.classified_pr
 ```
 Type :=
     Integer | Float | String | Bool | Timestamp | Date | Symbol
+  | Text                          -- canonical text type (experiment-pass; see §8.10 stdlib)
   | Decimal[N]                    -- fixed-point, N decimal places
   | Record { f₁: T₁, ..., fₙ: Tₙ }
   | Variant { case₁: T₁ | ... | caseₙ: Tₙ }
@@ -33,7 +34,11 @@ Type :=
 ```
 
 **Stage 1 subset** (what the TypeChecker v0 handles):
-`Integer, Float, String, Bool, Decimal[N], Record{}, Collection[T], Option[T], Result[T,E]`
+`Integer, Float, String, Bool, Text, Decimal[N], Record{}, Collection[T], Option[T], Result[T,E]`
+
+Note: `Text` is the experiment-pass canonical type for text stdlib operations (§8.10).
+`String` literals (`⊢ "x" : String`) are accepted as `Text` arguments at call sites
+via the v0 compat rule — no explicit coercion needed.
 
 `History[T]`, `BiHistory[T]`, `OLAPPoint[T,Dims]`, `~T` → **Stage 2** (reserved, OOF if used in Stage 1).
 
@@ -56,6 +61,7 @@ Ref invariant:            Ref[T] <: Ref[U]  only if T = U
 
 ```
 Rule 1 Literal:        ⊢ 42 : Integer;  ⊢ "x" : String;  ⊢ true : Bool
+                       (v0 compat: String literal accepted as Text arg in stdlib.text.* calls)
 Rule 2 Variable:       Γ(x) = T  ⊢  x : T
 Rule 3 Field access:   e : { f: T, ... }  ⊢  e.f : T
 Rule 4 Built-in call:  fn : (T₁..Tₙ → U)  e₁:T₁..eₙ:Tₙ  ⊢  fn(e₁..eₙ) : U
