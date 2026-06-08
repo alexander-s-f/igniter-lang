@@ -110,6 +110,7 @@ These codes are active in the canon classifier/typechecker pipeline.
 | OOF-L8 | `lead` binding shadows outer contract symbol or loop item variable | TypeChecker | loop_body_semantics_proof (100/100) |
 | OOF-R1 | Invalid `recur()` context — `recur()` outside `recursive`/`fuel_bounded` contract (incl. loop body, regular contract) | TypeChecker | recursive_body_proof (100/100) |
 | OOF-R2 | `recursive` contract missing `decreases` declaration | Classifier | loop_typechecker_proof (49/49) |
+| OOF-R3 | Variant-position arg does not syntactically decrease declared variant; dotted-path variant fail-closed in v0 | TypeChecker | oof_r3_syntactic_variant_decrease_proof (33/33) |
 | OOF-R4 | `fuel_bounded` (or `recursive + decreases fuel`) missing static `max_steps` | Classifier | loop_typechecker_proof (49/49) |
 | OOF-R5 | `recur()` arity mismatch — arg count ≠ input count | TypeChecker | recursive_body_proof (100/100) |
 | OOF-R6 | `recur()` argument type mismatch — arg type ≠ corresponding input type | TypeChecker | recursive_body_proof (100/100) |
@@ -194,7 +195,7 @@ obligations for alternate implementations at this time.
 | OOF-L2/L3/L4 | candidate | dynamic max_steps, unnamed loop, break — not yet proven |
 | OOF-L5/L7/L8 | ✅ experiment-pass — gate 8 closed 2026-06-08 | loop body scope rules; see §1.2 |
 | OOF-R1/R5/R6/R7 | ✅ experiment-pass — gate 5 closed 2026-06-08 | recur() context + arg + output validation; see §1.2 |
-| OOF-R3 | candidate | variant not proven to decrease (future TypeChecker proof — NOT gate 5) |
+| OOF-R3 | ✅ experiment-pass — OOF-R3 gate closed 2026-06-08 | syntactic decrease check at recur() call site; dotted-path variant fail-closed; see §1.2 |
 | `recur()` primitive — G5 | ✅ gate 5 closed 2026-06-08 — recursive_body_proof 100/100 PASS. OOF-R1/R5/R6/R7 experiment-pass. SemanticIR `recur_call` sub-expr. Termination (OOF-R3), named args, multi-output, execution: all deferred. |
 | `ConvergentLoop` | vocabulary only | metric/threshold/budget form; future proof |
 | loop body semantics | ✅ gate 8 closed 2026-06-08 — `lead_node` + `compute_node`; OOF-L5/L7/L8 active; scope rules proven. See PROP-039 §"Local Loop Body Semantics (Gate 8 Design)". |
@@ -317,3 +318,4 @@ The following surfaces remain closed for PROP-039:
 | Lab Gate 8 (Rust symmetry) | `igniter-lab/igniter-compiler/verify_g4_body_semantics.rb` | 18/18 PASS — 2026-06-08 (incl. non-literal OOF-L5, clean OOF-L8 fixture) |
 | Canon Gate 5 | `igniter-lang/experiments/recursive_body_proof/` | 100/100 PASS — 2026-06-08 |
 | Lab Gate 5 (Rust symmetry) | `igniter-lab/igniter-compiler/verify_g5_recur.rb` | 18/18 PASS — 2026-06-08 |
+| OOF-R3 gate | `igniter-lang/experiments/oof_r3_syntactic_variant_decrease_proof/verify_oof_r3.rb` | 33/33 PASS — 2026-06-08 |

@@ -344,6 +344,17 @@ module IgniterLang
 
       contract_fragment = contract_fragment_for(declarations, diagnostics, modifier: modifier)
 
+      # PROP-039 OOF-R3: extract named decreases variant for TypeChecker gate.
+      # Only applies to recursive contracts; fuel variant is exempt (auto-managed).
+      decreases_variant_name = nil
+      if modifier == "recursive"
+        dv_node = contract.fetch("body").find { |n| n.fetch("kind") == "decreases" }
+        if dv_node
+          v = dv_node.fetch("variant", "")
+          decreases_variant_name = v unless v == "fuel" || v.empty?
+        end
+      end
+
       result = {
         "kind" => "classified_contract",
         "contract_id" => contract_id(parsed_program, contract),
@@ -355,6 +366,7 @@ module IgniterLang
         "dependency_graph" => dependency_graph(declarations),
         "oof_log" => diagnostics
       }
+      result["decreases_variant"] = decreases_variant_name if decreases_variant_name
       # PROP-033/040: propagate via_profile and resolved profile_authority
       result["via_profile"]       = via_profile       if via_profile
       result["profile_authority"] = profile_authority  if profile_authority

@@ -561,7 +561,7 @@ OOF-L1..L5 do not collide with OOF-L6 (Ch8 `now()` prohibition; Ch8 authority on
 | --- | --- | --- | --- |
 | `OOF-R1` | Invalid `recur()` context — `recur()` appears outside a `recursive` or `fuel_bounded` contract (incl. regular contract, loop body, service_loop) | error | **experiment-pass** — typechecker.rb; recursive_body_proof 100/100 |
 | `OOF-R2` | `recursive` contract missing a `decreases` declaration | error | **experiment-pass** — classifier.rb; loop_typechecker_proof 49/49 |
-| `OOF-R3` | Structural variant not proven to decrease at a `recur()` site | error | candidate — future TypeChecker proof (not gate 5) |
+| `OOF-R3` | Structural variant not proven to decrease at a `recur()` site; also fires when `decreases` variant is a dotted-path (fail-closed in v0) | error | **experiment-pass** — typechecker.rb; oof_r3_syntactic_variant_decrease_proof 33/33 PASS 2026-06-08 |
 | `OOF-R4` | `fuel_bounded` (or `recursive + decreases fuel`) missing static `max_steps` | error | **experiment-pass** — classifier.rb; loop_typechecker_proof 49/49 |
 | `OOF-R5` | `recur()` arity mismatch — arg count does not match contract input count | error | **experiment-pass** — typechecker.rb; recursive_body_proof 100/100 |
 | `OOF-R6` | `recur()` argument type mismatch — arg type does not match corresponding input type | error | **experiment-pass** — typechecker.rb; recursive_body_proof 100/100 |

@@ -157,6 +157,14 @@ module IgniterLang
       contract_ir["profile_authority"] = profile_authority if profile_authority
       assumption_refs = contract.fetch("assumption_refs", [])
       contract_ir["assumption_refs"] = assumption_refs unless assumption_refs.empty?
+      # PROP-039 OOF-R3: emit termination evidence when syntactic variant decrease is proven
+      decreases_variant = contract.fetch("decreases_variant", nil)
+      if contract_ir["modifier"] == "recursive" && decreases_variant
+        contract_ir["termination"] = {
+          "decreases"     => decreases_variant,
+          "variant_check" => "syntactic_v0"
+        }
+      end
       contract_ir["contract_ref"] = contract_ref(contract_ir)
       contract_ir
     end

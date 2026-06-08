@@ -95,16 +95,30 @@ module IgniterLang
 
       # PROP-039 gate 5: recur() context for validation
       contract_modifier = classified_contract.fetch("modifier", "pure")
+      contract_name_str = classified_contract.fetch("name")
       recur_authorized  = %w[recursive fuel_bounded].include?(contract_modifier)
       all_decls = classified_contract.fetch("declarations")
       recur_inputs = all_decls.select { |d| d.fetch("kind","") == "input" }
       recur_outputs = all_decls.select { |d| d.fetch("kind","") == "output" }
+
+      # PROP-039 OOF-R3: decreases_variant — extracted by classifier, nil for fuel/fuel_bounded
+      decreases_variant = classified_contract.fetch("decreases_variant", nil)
+      # OOF-R3 (contract level): dotted-path variants are fail-closed in v0
+      if decreases_variant && decreases_variant.include?(".")
+        type_errors << oof("OOF-R3",
+          "contract '#{contract_name_str}' — decreases variant '#{decreases_variant}' is a dotted-path; " \
+          "structural decrease proof for dotted-path variants not supported in v0 (use simple identifier variant)",
+          contract_name_str)
+        decreases_variant = nil
+      end
+
       @recur_context = {
-        authorized:   recur_authorized,
-        modifier:     contract_modifier,
-        input_names:  recur_inputs.map { |d| d.fetch("name") },
-        output_count: recur_outputs.length,
-        output_type:  recur_outputs.length == 1 ? type_ir(recur_outputs.first.fetch("type_annotation", "Unknown")) : type_ir("Unknown"),
+        authorized:         recur_authorized,
+        modifier:           contract_modifier,
+        input_names:        recur_inputs.map { |d| d.fetch("name") },
+        output_count:       recur_outputs.length,
+        output_type:        recur_outputs.length == 1 ? type_ir(recur_outputs.first.fetch("type_annotation", "Unknown")) : type_ir("Unknown"),
+        decreases_variant:  decreases_variant,
       }
 
       classified_contract.fetch("declarations").each do |decl|
@@ -237,6 +251,9 @@ module IgniterLang
       result["assumption_refs"] = assumption_refs unless assumption_refs.empty?
       warnings = dedupe_errors(type_warnings)
       result["type_warnings"] = warnings unless warnings.empty?
+      # PROP-039 OOF-R3: propagate clean (non-dotted) decreases variant for SemanticIR evidence
+      clean_variant = @recur_context.fetch(:decreases_variant, nil)
+      result["decreases_variant"] = clean_variant if clean_variant
       result
     end
 
@@ -1064,6 +1081,52 @@ module IgniterLang
       %w[Text String].include?(actual)
     end
 
+    # ── PROP-039 OOF-R3: syntactic decrease helpers ────────────────────────────
+
+    # Returns true if the expression syntactically proves the variant decreases.
+    # Accepted patterns (v0 whitelist):
+    #   variant - positive_integer_literal   (arithmetic decrease)
+    #   variant.tail                          (structural: Collection tail)
+    #   variant.rest                          (structural: Collection rest)
+    # All other forms → OOF-R3 fires.
+    def syntactic_decrease?(expr, variant_name)
+      return false unless expr.is_a?(Hash)
+      case expr.fetch("kind", "")
+      when "binary_op"
+        op    = expr.fetch("op", "")
+        left  = expr.fetch("left", {})
+        right = expr.fetch("right", {})
+        op == "-" &&
+          left.is_a?(Hash)  && left.fetch("kind", "")    == "ref"     && left.fetch("name", "")     == variant_name &&
+          right.is_a?(Hash) && right.fetch("kind", "")   == "literal" && right.fetch("type_tag", "") == "Integer"    &&
+          right.fetch("value", 0).to_i > 0
+      when "field_access"
+        obj   = expr.fetch("object", {})
+        field = expr.fetch("field", "")
+        %w[tail rest].include?(field) &&
+          obj.is_a?(Hash) && obj.fetch("kind", "") == "ref" && obj.fetch("name", "") == variant_name
+      else
+        false
+      end
+    end
+
+    # Human-readable description of an expression for OOF-R3 messages.
+    def syntactic_arg_desc(expr)
+      return "unknown" unless expr.is_a?(Hash)
+      case expr.fetch("kind", "")
+      when "ref"           then expr.fetch("name", "?")
+      when "literal"       then expr.fetch("value", "?").to_s
+      when "binary_op"
+        left  = syntactic_arg_desc(expr.fetch("left",  {}))
+        right = syntactic_arg_desc(expr.fetch("right", {}))
+        "#{left} #{expr.fetch("op", "?")} #{right}"
+      when "field_access"
+        "#{syntactic_arg_desc(expr.fetch("object", {}))}.#{expr.fetch("field", "?")}"
+      else
+        expr.fetch("kind", "expr")
+      end
+    end
+
     # ── PROP-039 gate 5: recur() helpers ───────────────────────────────────────
 
     def infer_recur_call(expr, symbol_types, type_errors, type_warnings, node_name)
@@ -1098,6 +1161,23 @@ module IgniterLang
           expected = type_name(expected_type)
           if actual != "Unknown" && expected != "Unknown" && actual != expected
             type_errors << oof("OOF-R6", "recur() arg #{idx + 1} type mismatch in '#{node_name}' — expected #{expected}, got #{actual}", node_name)
+          end
+        end
+
+        # OOF-R3: variant-position arg must syntactically decrease the declared decreases variant
+        dv = ctx[:decreases_variant]
+        if dv && !dv.include?(".")
+          variant_pos = input_names.index(dv)
+          if variant_pos && variant_pos < args.length
+            variant_arg = args[variant_pos]
+            unless syntactic_decrease?(variant_arg, dv)
+              arg_desc = syntactic_arg_desc(variant_arg)
+              type_errors << oof("OOF-R3",
+                "recur() in '#{node_name}' — variant '#{dv}' (position #{variant_pos + 1}) " \
+                "does not syntactically decrease: #{arg_desc}; " \
+                "expected '#{dv} - N', '#{dv}.tail', or '#{dv}.rest'",
+                node_name)
+            end
           end
         end
       end
