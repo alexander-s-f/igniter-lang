@@ -110,8 +110,10 @@ These codes are active in the canon classifier/typechecker pipeline.
 | OOF-L8 | `lead` binding shadows outer contract symbol or loop item variable | TypeChecker | loop_body_semantics_proof (100/100) |
 | OOF-R1 | Invalid `recur()` context — `recur()` outside `recursive`/`fuel_bounded` contract (incl. loop body, regular contract) | TypeChecker | recursive_body_proof (100/100) |
 | OOF-R2 | `recursive` contract missing `decreases` declaration | Classifier | loop_typechecker_proof (49/49) |
-| OOF-R3 | Variant-position arg does not syntactically decrease declared variant; dotted-path variant fail-closed in v0 | TypeChecker | oof_r3_syntactic_variant_decrease_proof (33/33) |
+| OOF-R3 | Variant-position arg does not syntactically decrease declared variant; numeric dotted-path fail-closed | TypeChecker | oof_r3_syntactic_variant_decrease_proof (33/33); PROP-041 T2 update: non-numeric dotted-path without registration now fires OOF-R8 instead |
 | OOF-R4 | `fuel_bounded` (or `recursive + decreases fuel`) missing static `max_steps` | Classifier | loop_typechecker_proof (49/49) |
+| OOF-R8 | Missing structural size relation — dotted-path `decreases T.accessor` with no registered `size_relation T accessor` and accessor not numeric | TypeChecker | verify_prop041_t2_production.rb (48/48) — PROP-041 T2 production |
+| OOF-R9 | Structural size call-site mismatch — registered relation present but `recur()` argument at variant position is not `subject.accessor` | TypeChecker | verify_prop041_t2_production.rb (48/48) — PROP-041 T2 production |
 | OOF-R5 | `recur()` arity mismatch — arg count ≠ input count | TypeChecker | recursive_body_proof (100/100) |
 | OOF-R6 | `recur()` argument type mismatch — arg type ≠ corresponding input type | TypeChecker | recursive_body_proof (100/100) |
 | OOF-R7 | `recur()` return type unavailable or ambiguous — contract ≠ exactly one output | TypeChecker | recursive_body_proof (100/100) |

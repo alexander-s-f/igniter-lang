@@ -54,6 +54,7 @@ module IgniterLang
     and or not
     for loop recursive fuel_bounded decreases
     lead
+    size_relation
   ].freeze
 
   class Lexer
@@ -273,7 +274,8 @@ module IgniterLang
                   "traits" => [], "impls" => [], "contract_shapes" => [],
                   "contracts" => [], "types" => [], "functions" => [],
                   "pipelines" => [], "olap_points" => [], "assumptions" => [],
-                  "profiles" => [],  # PROP-040
+                  "profiles" => [],        # PROP-040
+                  "size_relations" => [],  # PROP-041
                   "parse_errors" => [] }
 
       # optional module declaration
@@ -301,7 +303,8 @@ module IgniterLang
         when "pipeline"       then program["pipelines"]       << decl
         when "olap_point"     then program["olap_points"]     << decl
         when "assumptions"    then program["assumptions"].concat(decl.fetch("assumptions", []))
-        when "profile"        then program["profiles"]   << decl  # PROP-040
+        when "profile"        then program["profiles"]        << decl  # PROP-040
+        when "size_relation"  then program["size_relations"]  << decl  # PROP-041
         end
       end
 
@@ -409,7 +412,8 @@ module IgniterLang
       when "pipeline"       then advance; parse_pipeline_decl
       when "olap_point"     then advance; parse_olap_point_decl
       when "assumptions"    then advance; parse_assumptions_block
-      when "profile"        then advance; parse_profile_decl  # PROP-040
+      when "profile"        then advance; parse_profile_decl         # PROP-040
+      when "size_relation"  then advance; parse_size_relation_decl   # PROP-041
       else
         @errors << { "message" => "Unexpected token: #{tok.value}", "line" => tok.line }
         advance
@@ -430,6 +434,14 @@ module IgniterLang
       end
       expect_type!(:rbrace)
       { "kind" => "profile", "name" => name, "authority" => authority }
+    end
+
+    # PROP-041: size_relation TypeName accessor
+    # Module-level declaration; order-independent with respect to contract bodies.
+    def parse_size_relation_decl
+      type_name    = name_token!(%i[ident])
+      accessor     = name_token!(%i[ident])
+      { "kind" => "size_relation", "type" => type_name, "accessor" => accessor }
     end
 
     def parse_assumptions_block
@@ -1815,7 +1827,8 @@ module IgniterLang
         "pipelines"       => @ast.fetch("pipelines", []),
         "olap_points"     => @ast.fetch("olap_points", []),
         "assumptions"     => @ast.fetch("assumptions", []),
-        "profiles"        => @ast.fetch("profiles", []),  # PROP-040
+        "profiles"        => @ast.fetch("profiles", []),        # PROP-040
+        "size_relations"  => @ast.fetch("size_relations", []),  # PROP-041
         "parse_errors"    => @errors
       }
     end

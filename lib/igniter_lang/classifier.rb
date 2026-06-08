@@ -35,6 +35,9 @@ module IgniterLang
       result["assumption_registry"] = assumption_registry.values unless assumption_registry.empty?
       olap_points = parsed_program.fetch("olap_points", [])
       result["olap_points"] = olap_points unless olap_points.empty?
+      # PROP-041: pass size_relation declarations through to TypeChecker
+      size_relations = parsed_program.fetch("size_relations", [])
+      result["size_relations"] = size_relations unless size_relations.empty?
       result
     end
 

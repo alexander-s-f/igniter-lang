@@ -29,6 +29,19 @@ module IgniterLang
       "grapheme_slice"  => { arg_types: %w[Text Integer Integer],   return_type: "Text" },
     }.freeze
 
+    # ── PROP-041: T2 structural-size relation registry ─────────────────────────
+    # Stdlib-certified entries: hardcoded, trust = stdlib_certified.
+    # source = "compiler_builtin" is the canonical source string for stdlib entries.
+    STDLIB_SIZE_REGISTRY = {
+      ["Collection", "tail"] => { "trust" => "stdlib_certified", "source" => "compiler_builtin" },
+      ["Collection", "rest"] => { "trust" => "stdlib_certified", "source" => "compiler_builtin" }
+    }.freeze
+
+    # Accessors that indicate numeric measures (T3 territory).
+    # When a dotted-path variant uses one of these, route to OOF-R3, not OOF-R8.
+    # Closed list in v1; not user-extensible.
+    NUMERIC_ACCESSORS = %w[count length size total_count num_items num_elements].freeze
+
     def initialize(typechecker_version: DEFAULT_VERSION)
       @typechecker_version = typechecker_version
     end
@@ -37,6 +50,9 @@ module IgniterLang
       @type_shapes = type_shapes(classified_program)
       @assumption_registry = classified_program.fetch("assumption_registry", [])
       @type_shapes["Assumption"] = assumption_shape if assumptions_present?(classified_program)
+      # PROP-041: build T2 size-relation registry (stdlib + user-declared)
+      @size_registry = build_size_registry(classified_program)
+      @t2_context    = nil
       @assumption_errors = assumption_errors_by_name(@assumption_registry)
       @olap_env = olap_env(classified_program.fetch("olap_points", []))
       @olap_errors = olap_declaration_errors(@olap_env)
@@ -101,15 +117,16 @@ module IgniterLang
       recur_inputs = all_decls.select { |d| d.fetch("kind","") == "input" }
       recur_outputs = all_decls.select { |d| d.fetch("kind","") == "output" }
 
-      # PROP-039 OOF-R3: decreases_variant — extracted by classifier, nil for fuel/fuel_bounded
+      # PROP-039 OOF-R3 / PROP-041 T2: decreases_variant — extracted by classifier,
+      # nil for fuel/fuel_bounded. Dotted-path is dispatched through T2 registry.
+      @t2_context       = nil
       decreases_variant = classified_contract.fetch("decreases_variant", nil)
-      # OOF-R3 (contract level): dotted-path variants are fail-closed in v0
       if decreases_variant && decreases_variant.include?(".")
-        type_errors << oof("OOF-R3",
-          "contract '#{contract_name_str}' — decreases variant '#{decreases_variant}' is a dotted-path; " \
-          "structural decrease proof for dotted-path variants not supported in v0 (use simple identifier variant)",
-          contract_name_str)
-        decreases_variant = nil
+        # PROP-041: T2 structural-size dispatch (numeric → OOF-R3; registered → T2;
+        # missing → OOF-R8). Returns nil to clear variant from @recur_context.
+        decreases_variant = handle_t2_variant(
+          decreases_variant, classified_contract, type_errors, contract_name_str
+        )
       end
 
       @recur_context = {
@@ -254,6 +271,11 @@ module IgniterLang
       # PROP-039 OOF-R3: propagate clean (non-dotted) decreases variant for SemanticIR evidence
       clean_variant = @recur_context.fetch(:decreases_variant, nil)
       result["decreases_variant"] = clean_variant if clean_variant
+      # PROP-041 T2: propagate structural-size evidence for SemanticIR structural_size_v1 emission
+      if @t2_context&.fetch(:kind) == :t2_pass
+        result["decreases_variant_t2"]   = @t2_context[:dv]
+        result["size_relation_evidence"] = @t2_context[:entry]
+      end
       result
     end
 
@@ -329,6 +351,30 @@ module IgniterLang
         type_errors << oof("OOF-P1", "Unresolved symbol: #{name}", node_name) if type_name(type) == "Unknown" && !rule_present?(type_errors, "OOF-P1")
         typed_expr("ref", type, [name], "name" => name)
       when "field_access"
+        # PROP-041 T2: suppress OOF-P1 for stdlib-certified and user-registered structural accessors
+        field = expr.fetch("field", "")
+        obj_node = expr.fetch("object", {})
+        if obj_node.is_a?(Hash) && obj_node.fetch("kind", "") == "ref"
+          obj_name    = obj_node.fetch("name", "")
+          obj_type_ir = symbol_types.fetch(obj_name, nil)
+          if obj_type_ir
+            obj_type = type_name(obj_type_ir)
+            # Collection.tail / Collection.rest — stdlib_certified; no OOF-P1
+            if obj_type == "Collection" && %w[tail rest].include?(field)
+              obj_typed = typed_expr("ref", obj_type_ir, [obj_name], "name" => obj_name)
+              return typed_expr("field_access", obj_type_ir, [obj_name],
+                               "object" => obj_typed, "field" => field)
+            end
+            # T2 registered accessor — suppress OOF-P1 for the subject's accessor
+            if @t2_context&.fetch(:kind) == :t2_pass &&
+               obj_name == @t2_context[:subject] &&
+               field    == @t2_context[:accessor]
+              obj_typed = typed_expr("ref", obj_type_ir, [obj_name], "name" => obj_name)
+              return typed_expr("field_access", obj_type_ir, [obj_name],
+                               "object" => obj_typed, "field" => field)
+            end
+          end
+        end
         object = infer_expr(expr.fetch("object"), symbol_types, type_errors, type_warnings, node_name)
         object_type = type_name(object.fetch("resolved_type"))
         field_type = @type_shapes.fetch(object_type, {})[expr.fetch("field")] || type_ir("Unknown")
@@ -1180,6 +1226,11 @@ module IgniterLang
             end
           end
         end
+
+        # PROP-041 T2: call-site structural-size check → OOF-R9
+        if @t2_context&.fetch(:kind) == :t2_pass
+          t2_call_site_check(expr, type_errors, node_name, @t2_context)
+        end
       end
 
       typed_args = args.map { |a| infer_expr(a, symbol_types, [], [], node_name) }
@@ -1282,6 +1333,115 @@ module IgniterLang
       end
 
       errors
+    end
+
+    # ── PROP-041 T2: structural-size relation helpers ────────────────────────────
+
+    # Build the per-typecheck-run size registry: STDLIB entries + user module entries.
+    # Keys are [TypeName, accessor] pairs; values are trust/source hashes.
+    # source for user entries = module name (mirrors proof-local T2Pipeline#build_registry).
+    def build_size_registry(classified_program)
+      registry   = STDLIB_SIZE_REGISTRY.dup
+      mod_name   = classified_program.fetch("module", "unknown")
+      classified_program.fetch("size_relations", []).each do |decl|
+        key = [decl.fetch("type"), decl.fetch("accessor")]
+        registry[key] = { "trust" => "user_assumed", "source" => mod_name }
+      end
+      registry
+    end
+
+    # Handle a dotted-path decreases_variant for T2.
+    # Sets @t2_context and fires OOF-R3 / OOF-R8 as appropriate.
+    # Returns nil in all cases (dotted-path is never kept as a raw variant).
+    # NOT a full termination proof — structural evidence with trust metadata only.
+    def handle_t2_variant(dv, classified_contract, type_errors, contract_name_str)
+      parts    = dv.split(".", 2)
+      subject  = parts[0]
+      accessor = parts[1]
+
+      # Numeric dotted-path → OOF-R3 (original behavior, explicitly numeric-excluded)
+      if NUMERIC_ACCESSORS.include?(accessor)
+        type_errors << oof("OOF-R3",
+          "recur() decreases variant '#{dv}' in '#{contract_name_str}' — " \
+          "numeric accessor '#{accessor}' is not a structural-size relation; " \
+          "use a simple numeric identifier as the decreases variant",
+          contract_name_str)
+        @t2_context = { kind: :t2_r3 }
+        return nil
+      end
+
+      # Resolve subject's declared type from input declarations
+      # classified_contract uses "declarations" (not a separate "inputs" key)
+      all_decls  = classified_contract.fetch("declarations", [])
+      input_decl = all_decls.find { |d| d.fetch("kind", "") == "input" && d.fetch("name", "") == subject }
+      type_name_str = if input_decl
+        raw = input_decl.fetch("type_annotation", "Unknown")
+        # In the production pipeline type_annotation is a type_ir hash:
+        # { "kind" => "type_ref", "name" => "Collection", "params" => [...] }
+        # In the proof-local pipeline it may be a plain string.
+        if raw.is_a?(Hash)
+          raw.fetch("name", "Unknown")
+        else
+          raw.to_s.split("[", 2).first.strip
+        end
+      else
+        "Unknown"
+      end
+
+      # Registry lookup: [TypeName, accessor]
+      entry = @size_registry[[type_name_str, accessor]]
+
+      if entry
+        # T2 pass — store context for infer_expr whitelist + emitter propagation
+        @t2_context = {
+          kind:     :t2_pass,
+          dv:       dv,
+          subject:  subject,
+          accessor: accessor,
+          entry:    entry
+        }
+      else
+        # OOF-R8: registered relation missing
+        type_errors << oof("OOF-R8",
+          "Missing structural size relation for '#{dv}' in '#{contract_name_str}' — " \
+          "no size_relation declaration for #{type_name_str}.#{accessor}; " \
+          "add 'size_relation #{type_name_str} #{accessor}' at module level",
+          contract_name_str)
+        @t2_context = { kind: :t2_r8 }
+      end
+      nil
+    end
+
+    # Call-site check for T2 recur() calls: variant-position arg must be subject.accessor.
+    # Fires OOF-R9 on mismatch.
+    def t2_call_site_check(expr, type_errors, node_name, ctx)
+      recur_ctx = @recur_context
+      return unless recur_ctx
+
+      input_names = recur_ctx[:input_names]
+      subject_pos = input_names.index(ctx[:subject])
+      return unless subject_pos
+
+      args = expr.fetch("args", [])
+      return if subject_pos >= args.length
+
+      variant_arg = args[subject_pos]
+      unless t2_structural_arg?(variant_arg, ctx[:subject], ctx[:accessor])
+        arg_desc = syntactic_arg_desc(variant_arg)
+        type_errors << oof("OOF-R9",
+          "recur() in '#{node_name}' — structural size call-site mismatch: " \
+          "expected '#{ctx[:subject]}.#{ctx[:accessor]}' at argument position #{subject_pos + 1}, " \
+          "got: #{arg_desc}; the recur() argument must be the declared structural accessor",
+          node_name)
+      end
+    end
+
+    # True when expr is exactly `subject.accessor` (field_access on a ref).
+    def t2_structural_arg?(expr, subject, accessor)
+      return false unless expr.is_a?(Hash) && expr.fetch("kind", "") == "field_access"
+      return false unless expr.fetch("field", "") == accessor
+      obj = expr.fetch("object", {})
+      obj.is_a?(Hash) && obj.fetch("kind", "") == "ref" && obj.fetch("name", "") == subject
     end
 
     # Produce typed body array for SemanticIR lowering.

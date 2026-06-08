@@ -157,9 +157,24 @@ module IgniterLang
       contract_ir["profile_authority"] = profile_authority if profile_authority
       assumption_refs = contract.fetch("assumption_refs", [])
       contract_ir["assumption_refs"] = assumption_refs unless assumption_refs.empty?
-      # PROP-039 OOF-R3: emit termination evidence when syntactic variant decrease is proven
-      decreases_variant = contract.fetch("decreases_variant", nil)
-      if contract_ir["modifier"] == "recursive" && decreases_variant
+      # PROP-041 T2 / PROP-039 OOF-R3: emit termination evidence
+      # T2 path (structural_size_v1) takes precedence when typechecker set decreases_variant_t2.
+      # T1 path (syntactic_v0) is byte-for-byte preserved.
+      # NOTE: T2 is structural evidence with trust metadata — NOT a full termination proof.
+      decreases_variant    = contract.fetch("decreases_variant", nil)
+      decreases_variant_t2 = contract.fetch("decreases_variant_t2", nil)
+      if contract_ir["modifier"] == "recursive" && decreases_variant_t2
+        evidence = contract.fetch("size_relation_evidence", {})
+        contract_ir["termination"] = {
+          "decreases"     => decreases_variant_t2,
+          "variant_check" => "structural_size_v1",
+          "size_relation" => {
+            "accessor" => decreases_variant_t2.split(".", 2).last,
+            "trust"    => evidence.fetch("trust", "user_assumed"),
+            "source"   => evidence.fetch("source", "unknown")
+          }
+        }
+      elsif contract_ir["modifier"] == "recursive" && decreases_variant
         contract_ir["termination"] = {
           "decreases"     => decreases_variant,
           "variant_check" => "syntactic_v0"
