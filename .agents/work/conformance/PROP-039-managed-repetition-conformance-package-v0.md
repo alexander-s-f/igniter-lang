@@ -223,7 +223,7 @@ PROP-039. It is permitted to:
 | OOF-R2 (recursive missing decreases) | ✅ G3a closed 2026-06-08 — classifier.rs; 5/5 diagnostic cases PASS |
 | OOF-R4 (fuel_bounded/decreases-fuel missing max_steps) | ✅ G3a closed 2026-06-08 — classifier.rs; PASS |
 | SemanticIR loop_node shape | ✅ G3c closed 2026-06-08 — emitter.rs emits kind="loop_node", loop_class, termination, source_ref |
-| OOF-L1 (Collection source check) | ⚠️ lab OOF-L1 = "unbounded loop" (parser-level); canon OOF-L1 = "source not Collection[T]" (TypeChecker) — G6 future alignment pass |
+| OOF-L1 (Collection source check) | ✅ G6 closed 2026-06-08 — TypeChecker emits OOF-L1 for FiniteLoop source not Collection[T] (canon meaning). Parser-level OOF-L1 ("unbounded loop") remains as lab-local diagnostic for `loop` without max_steps — lab delta, does not collide in practice (different trigger context). |
 | body execution | ✅ lab VM executes loop body; canon body=[] deferred |
 
 Lab is ahead of canon on execution; canon is ahead of lab on diagnostic
@@ -291,3 +291,5 @@ The following surfaces remain closed for PROP-039:
 | 7 — conformance pkg | this document | spine defined |
 | Lab G1 | `igniter-lab/igniter-compiler/verify_g1_canon_loop.rb` | PASS |
 | Lab G2 | `igniter-lab/igniter-compiler/verify_loops.rb` | PASS |
+| Lab G3 (G3a/G3b/G3c/G6) | `igniter-lab/igniter-compiler/verify_g3_conformance.rb` | 14/14 PASS — 2026-06-08 |
+| Lab G3 Rust tests | `igniter-lab/igniter-compiler/tests/loop_conformance_tests.rs` | 14/14 PASS — 2026-06-08 |
