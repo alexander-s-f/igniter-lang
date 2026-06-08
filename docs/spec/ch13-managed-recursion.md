@@ -179,22 +179,54 @@ append is `lifecycle: :audit` by default.
 
 ## § 13.7 OOF Rules
 
-The following codes are deferred design vocabulary for managed recursion and
-service-loop wording. They are not a newly accepted OOF registry namespace.
-Source-level `now()` prohibition cross-references Ch8 `OOF-L6`; this chapter
-does not mint a replacement OOF code.
+**Updated: PROP-039 Gate 6 (2026-06-07)**
 
-| Code | Condition | Severity |
-|------|-----------|----------|
-| OOF-R1 | `recur()` outside recursive or fuel_bounded context | error |
-| OOF-R2 | Service loop step blocks heartbeat window | error |
-| OOF-R3 | Service loop step provably exceeds `max_step_latency` | warn |
-| OOF-R4 | `on_exhaustion: :suspend` without a suspension point | error |
-| OOF-R5 | Unbounded loop (no `max_steps`, no structural proof) | error |
+### Managed Local Recursion (PROP-039 authority)
 
-Future proof fixtures must include unnamed-loop robustness for Postulate 28
-(the R246/R247 `OOF-L3` pressure item), but this chapter does not claim that
-enforcement is proven. Source-level `break` remains deferred.
+The following codes are PROP-039 canon. OOF-R1 is a candidate; OOF-R2 and
+OOF-R4 are `experiment-pass compiler surface` (proven in gate 4,
+`loop_typechecker_proof` 49/49 PASS; active in `classifier.rb`).
+
+| Code | Condition | Severity | Status |
+|------|-----------|----------|--------|
+| OOF-R1 | `recur()` outside recursive or fuel_bounded context | error | candidate |
+| OOF-R2 | `recursive` contract missing a `decreases` declaration | error | **experiment-pass** |
+| OOF-R3 | Structural variant not proven to decrease at a `recur()` site | error | candidate |
+| OOF-R4 | `fuel_bounded` (or `recursive + decreases fuel`) missing static `max_steps` | error | **experiment-pass** |
+| OOF-R5 | Recursive step changes output/parameter shape incompatibly | error | candidate |
+
+OOF-R1..R5 are managed local recursion codes owned by PROP-039.
+
+### Service Loop Obligations (PROP-037 territory — migration pending)
+
+The service-loop conditions previously listed here under the OOF-R namespace
+(heartbeat, latency, suspension) are PROP-037 territory. They will be
+assigned to the `OOF-SL*` namespace when PROP-037 service liveness
+implementation is authorized. Until then, they are deferred:
+
+| Deferred code | Condition | Future namespace |
+|---------------|-----------|-----------------|
+| *(was R2)* | Service loop step blocks heartbeat window | OOF-SL* (PROP-037) |
+| *(was R3)* | Service loop step exceeds `max_step_latency` | OOF-SL* (PROP-037) |
+| *(was R4)* | `on_exhaustion: :suspend` without suspension point | OOF-SL* (PROP-037) |
+| *(was R5)* | Unbounded loop without proof | OOF-SL* or OOF-R5 (pending) |
+
+### Local Loop (PROP-039 OOF-L*)
+
+| Code | Condition | Severity | Status |
+|------|-----------|----------|--------|
+| OOF-L1 | `for_loop` source is not `Collection[T]` | error | **experiment-pass** |
+| OOF-L2 | `max_steps` is dynamic where v0 requires static literal | error | candidate |
+| OOF-L3 | Semantic loop block is unnamed (Postulate 28) | error | candidate |
+| OOF-L4 | `break` in a PROP-039 v0 loop | error | candidate |
+| OOF-L5 | Loop body contains unsupported local-repetition form | error | candidate |
+
+OOF-L6 is Ch8 authority (ambient-clock / `now()` refusal). PROP-039 does not
+own or modify OOF-L6.
+
+Source-level `break` remains deferred. Future proof fixtures must include
+unnamed-loop robustness for Postulate 28 (the R246/R247 `OOF-L3` pressure
+item), but enforcement is not yet proven.
 
 ---
 

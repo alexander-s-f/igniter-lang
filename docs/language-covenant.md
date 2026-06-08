@@ -608,7 +608,7 @@ intent" — not "the compiler verified this policy".
 | 11 | ch10 (observed modifier) | PROP-031 | ✅ | `planned PROP` (PROP-035 required-field enforcement) |
 | 12 | ch10 (observed modifier) | PROP-031 | ✅ | `planned PROP` (PROP-035 receipt type enforcement) |
 | 13 | ch10 (observed modifier) | PROP-031 | ✅ | `enforced` (classifier fragment class) |
-| 14 | ch13 (Managed Recursion) | PROP-039+ or later; PROP-037 for service liveness | pending | `planned PROP` |
+| 14 | ch13 (Managed Recursion) | PROP-039 ✅ | gates 1+3+4+5+6 closed | `experiment-pass compiler surface` (parse→classify→tc→SIR; OOF-L1/R2/R4 active; runtime closed) |
 | 15 | ch12 (failure taxonomy) | PROP-035 | pending | `planned PROP` |
 | 18 | ch10 (pure/irreversible separation) | PROP-031 | ✅ | `enforced` |
 | 21 | ch12 (Effect Surface, all fields) | PROP-035 | pending | `planned PROP` |
@@ -669,7 +669,7 @@ a formal status to every postulate and defines the rule for new additions.
 | P11 | Uncertainty is a required typed field, not silently dropped | `planned PROP` | PROP-035 — required-field enforcement on observation types; PROP-031 ✅ classifies modifier |
 | P12 | Simulated receipts are a different type from real receipts | `planned PROP` | PROP-031 ✅ classifies fragment; PROP-035 enforces type incompatibility at contract boundaries |
 | P13 | Real / model / human observations are distinct types | `enforced` | PROP-031 ✅ — classifier assigns fragment class; modifier system enforces distinction at classification |
-| P14 | Every repetition belongs to a loop class with a compiler-verified contract | `planned PROP` | PROP-039+ or later for managed local recursion / loop classes; PROP-037 owns service-liveness progression descriptors |
+| P14 | Every repetition belongs to a loop class with a compiler-verified contract | `experiment-pass` | PROP-039 ✅ — gates 1+3+4+5+6 closed; FiniteLoop/BudgetedLocalLoop/StructuralRecursion/FuelBoundedRecursion vocabulary + parse→SIR pipeline; OOF-L1/R2/R4 active; PROP-037 owns service-liveness |
 | P15 | Timeout is `UnknownExternalOutcome`, not `ObservedFailure` | `planned PROP` | PROP-035 — failure taxonomy with distinct types |
 | P16 | Non-idempotent operations under retry are a compile error | `planned PROP` | PROP-035 — idempotency key requirement on retry-enabled profiles |
 | P17 | Irreversible contracts name their compensation or declare `no_compensation` | `planned PROP` | PROP-035 — `compensation:` required field on irreversible contracts |
