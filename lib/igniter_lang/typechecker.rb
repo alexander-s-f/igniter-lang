@@ -70,6 +70,20 @@ module IgniterLang
       typed_decls = []
       invariant_effects = []  # [{"name" => ..., "effect" => "warns"|"uncertain"|"metric"}] for output propagation
 
+      # PROP-039 gate 5: recur() context for validation
+      contract_modifier = classified_contract.fetch("modifier", "pure")
+      recur_authorized  = %w[recursive fuel_bounded].include?(contract_modifier)
+      all_decls = classified_contract.fetch("declarations")
+      recur_inputs = all_decls.select { |d| d.fetch("kind","") == "input" }
+      recur_outputs = all_decls.select { |d| d.fetch("kind","") == "output" }
+      @recur_context = {
+        authorized:   recur_authorized,
+        modifier:     contract_modifier,
+        input_names:  recur_inputs.map { |d| d.fetch("name") },
+        output_count: recur_outputs.length,
+        output_type:  recur_outputs.length == 1 ? type_ir(recur_outputs.first.fetch("type_annotation", "Unknown")) : type_ir("Unknown"),
+      }
+
       classified_contract.fetch("declarations").each do |decl|
         case decl.fetch("kind")
         when "input"
@@ -312,6 +326,8 @@ module IgniterLang
         infer_bihistory_at(fn, args, symbol_types, type_errors, type_warnings, node_name)
       when "olap_rollup"
         infer_olap_rollup(fn, args, symbol_types, type_errors, type_warnings, node_name)
+      when "recur"
+        infer_recur_call(expr, symbol_types, type_errors, type_warnings, node_name)
       else
         type_errors << oof("OOF-TY0", "Unknown function: #{fn}", node_name)
         typed_expr("call", type_ir("Unknown"), [], "fn" => fn, "args" => [])
@@ -962,6 +978,58 @@ module IgniterLang
       errors.uniq { |entry| [entry.fetch("rule"), entry.fetch("message"), entry.fetch("node"), entry.fetch("line")] }
     end
 
+    # ── PROP-039 gate 5: recur() helpers ───────────────────────────────────────
+
+    def infer_recur_call(expr, symbol_types, type_errors, type_warnings, node_name)
+      ctx = @recur_context
+
+      # OOF-R1: invalid context
+      unless ctx && ctx[:authorized]
+        type_errors << oof("OOF-R1", "recur() in '#{node_name}' — invalid recur context: recur() is only valid inside a recursive or fuel_bounded contract", node_name)
+        return typed_expr("call", type_ir("Unknown"), [], "fn" => "recur", "args" => [])
+      end
+
+      # OOF-R7: not single-output
+      if ctx[:output_count] != 1
+        type_errors << oof("OOF-R7", "recur() in '#{node_name}' — contract must have exactly one output (has #{ctx[:output_count]}); multi-output recur() deferred to v1", node_name)
+        return typed_expr("call", type_ir("Unknown"), [], "fn" => "recur", "args" => [])
+      end
+
+      input_names = ctx[:input_names]
+      args = expr.fetch("args", [])
+
+      # OOF-R5: arity mismatch
+      if args.length != input_names.length
+        type_errors << oof("OOF-R5", "recur() arity mismatch in '#{node_name}' — #{args.length} arg(s) given, #{input_names.length} input(s) expected", node_name)
+        # still try to lower args for partial IR
+      else
+        # OOF-R6: type mismatch per arg
+        args.each_with_index do |arg, idx|
+          input_name = input_names[idx]
+          expected_type = symbol_types.fetch(input_name, type_ir("Unknown"))
+          arg_typed = infer_expr(arg, symbol_types, type_errors, type_warnings, node_name)
+          actual   = type_name(arg_typed.fetch("resolved_type"))
+          expected = type_name(expected_type)
+          if actual != "Unknown" && expected != "Unknown" && actual != expected
+            type_errors << oof("OOF-R6", "recur() arg #{idx + 1} type mismatch in '#{node_name}' — expected #{expected}, got #{actual}", node_name)
+          end
+        end
+      end
+
+      typed_args = args.map { |a| infer_expr(a, symbol_types, [], [], node_name) }
+      output_type = ctx[:output_type] || type_ir("Unknown")
+      typed_expr("call", output_type, [], "fn" => "recur", "args" => typed_args, "__recur" => true)
+    end
+
+    def expr_contains_recur?(expr)
+      return false unless expr.is_a?(Hash)
+      return true if expr.fetch("kind", "") == "call" && expr.fetch("fn", "") == "recur"
+      expr.any? { |_k, v|
+        v.is_a?(Hash) ? expr_contains_recur?(v) :
+        v.is_a?(Array) ? v.any? { |item| expr_contains_recur?(item) } : false
+      }
+    end
+
     # ── PROP-039 gate 8: loop body helpers ─────────────────────────────────────
 
     # Return element type T from a Collection[T] type_ir value.
@@ -1017,6 +1085,10 @@ module IgniterLang
           lead_names << name
         when "compute"
           target = b.fetch("name")
+          # PROP-039 gate 5: recur() in loop body is OOF-R1 (loop is not a recursive context)
+          if expr_contains_recur?(b.fetch("expr", nil))
+            errors << oof("OOF-R1", "recur() in loop body '#{loop_name}' — loop body is not a recursive or fuel_bounded context", loop_name)
+          end
           # compute must target a lead binding — not outer symbols, not item
           if target == item_name
             errors << oof("OOF-L7",

@@ -176,7 +176,7 @@ obligations for alternate implementations at this time.
 | OOF-R1 | candidate | recur() outside context (recur() not in v0) |
 | OOF-R3 | candidate | variant not proven to decrease (future TypeChecker proof) |
 | OOF-R5 | candidate | recursive step shape change (future type proof) |
-| `recur()` primitive — G5 | design locked 2026-06-08; proof pending | Context: `recursive`+`fuel_bounded` only. Positional args. Single-output. OOF-R1/R5/R6/R7. SemanticIR: `recur_call` sub-expr. Termination proof (OOF-R3), named args, multi-output: all deferred. |
+| `recur()` primitive — G5 | ✅ gate 5 closed 2026-06-08 — recursive_body_proof 100/100 PASS. OOF-R1/R5/R6/R7 experiment-pass. SemanticIR `recur_call` sub-expr. Termination (OOF-R3), named args, multi-output, execution: all deferred. |
 | `ConvergentLoop` | vocabulary only | metric/threshold/budget form; future proof |
 | loop body semantics | ✅ gate 8 closed 2026-06-08 — `lead_node` + `compute_node`; OOF-L5/L7/L8 active; scope rules proven. See PROP-039 §"Local Loop Body Semantics (Gate 8 Design)". |
 | `for` with optional max_steps cap | open question | deferred per §for/loop split |
@@ -295,3 +295,4 @@ The following surfaces remain closed for PROP-039:
 | Lab G3 Rust tests | `igniter-lab/igniter-compiler/tests/loop_conformance_tests.rs` | 14/14 PASS — 2026-06-08 |
 | Canon Gate 8 | `igniter-lang/experiments/loop_body_semantics_proof/` | 100/100 PASS — 2026-06-08 |
 | Lab Gate 8 (Rust symmetry) | `igniter-lab/igniter-compiler/verify_g4_body_semantics.rb` | 18/18 PASS — 2026-06-08 (incl. non-literal OOF-L5, clean OOF-L8 fixture) |
+| Canon Gate 5 | `igniter-lang/experiments/recursive_body_proof/` | 100/100 PASS — 2026-06-08 |

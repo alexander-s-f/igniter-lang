@@ -249,6 +249,13 @@ module IgniterLang
       when Hash
         if expr.fetch("kind", nil) == "if_expr"
           semantic_if_expr(expr)
+        # PROP-039 gate 5: recur() call → recur_call sub-expression node
+        elsif expr.fetch("kind", nil) == "call" && expr.fetch("fn", nil) == "recur"
+          {
+            "kind"        => "recur_call",
+            "args"        => (expr.fetch("args", []) || []).map { |a| semantic_expr(a) },
+            "return_type" => (expr.fetch("resolved_type", {}) || {}).fetch("name", "Unknown")
+          }
         else
           expr.each_with_object({}) do |(key, value), result|
             next if key == "deps"

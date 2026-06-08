@@ -4,7 +4,7 @@ Status: experiment-pass compiler surface
 Date: 2026-06-05
 Accepted: 2026-06-07 (Portfolio Architect Supervisor)
 Gates closed: 1+3+4+5+6+7 (2026-06-07) · 8 (2026-06-08)
-Gate 5 (recur() semantics): design locked 2026-06-08 — proof pending
+Gate 5 (recur() semantics): design locked 2026-06-08 · proof closed 2026-06-08
 Acceptance receipt: proposals/accepted/PROP-039-acceptance-receipt-2026-06-07.md
 Author: `[Igniter-Lang Compiler / Grammar Expert]`
 Stage: 3 — experiment-pass
@@ -13,7 +13,7 @@ Authoring card: S3-R251-C2-I
 Surface open: parse → classify → typecheck → SemanticIR; OOF-L1/R2/R4 active
 Surface closed: runtime, igc run, public/stable/production
 Surface open (gate 8): loop body semantics — TypeChecker scope rules, lead/compute body IR, SemanticIR typed body nodes (experiment-pass 2026-06-08)
-Surface gate 5 (design locked): recur() syntax + context validation + positional arg typecheck + return type inference — proof pending
+Surface gate 5: recur() syntax + context validation + positional arg typecheck + return type inference — experiment-pass 2026-06-08
 Depends on:
 - PROP-037 external progression and service liveness semantics
 - Chapter 13 managed recursion draft
@@ -559,13 +559,13 @@ OOF-L1..L5 do not collide with OOF-L6 (Ch8 `now()` prohibition; Ch8 authority on
 
 | Code | Condition | Severity | Status (gate 6) |
 | --- | --- | --- | --- |
-| `OOF-R1` | `recur()` appears outside `recursive` or `fuel_bounded` contract context (incl. loop body, regular contract, service_loop) | error | candidate → gate 5 proof pending |
+| `OOF-R1` | Invalid `recur()` context — `recur()` appears outside a `recursive` or `fuel_bounded` contract (incl. regular contract, loop body, service_loop) | error | **experiment-pass** — typechecker.rb; recursive_body_proof 100/100 |
 | `OOF-R2` | `recursive` contract missing a `decreases` declaration | error | **experiment-pass** — classifier.rb; loop_typechecker_proof 49/49 |
 | `OOF-R3` | Structural variant not proven to decrease at a `recur()` site | error | candidate — future TypeChecker proof (not gate 5) |
 | `OOF-R4` | `fuel_bounded` (or `recursive + decreases fuel`) missing static `max_steps` | error | **experiment-pass** — classifier.rb; loop_typechecker_proof 49/49 |
-| `OOF-R5` | `recur()` called with wrong number of arguments (arity ≠ input count) | error | candidate → gate 5 proof pending |
-| `OOF-R6` | `recur()` argument type does not match corresponding `input` type | error | candidate → gate 5 proof pending |
-| `OOF-R7` | `recur()` in contract with ≠ 1 output (multi-output recur() deferred to v1) | error | candidate → gate 5 proof pending |
+| `OOF-R5` | `recur()` arity mismatch — arg count does not match contract input count | error | **experiment-pass** — typechecker.rb; recursive_body_proof 100/100 |
+| `OOF-R6` | `recur()` argument type mismatch — arg type does not match corresponding input type | error | **experiment-pass** — typechecker.rb; recursive_body_proof 100/100 |
+| `OOF-R7` | `recur()` return type unavailable or ambiguous — contract does not have exactly one output | error | **experiment-pass** — typechecker.rb; recursive_body_proof 100/100 |
 
 **Namespace conflict resolved (gate 6):** Ch13 §13.7 previously listed deferred
 service-loop vocabulary under OOF-R2/R4 codes. Those are PROP-037 territory and
@@ -833,7 +833,8 @@ should close:
 
 9. `recur()` call semantics — context validation (OOF-R1), positional arg typecheck
    (OOF-R5/R6), single-output constraint (OOF-R7), return type inference, SemanticIR
-   `recur_call` sub-expression node. **Design locked 2026-06-08.** Proof pending.
+   `recur_call` sub-expression node. ✅ DONE (2026-06-08)
+   Evidence: experiments/recursive_body_proof/ — 100/100 PASS
 
    Design decisions locked (2026-06-08):
    - `recur()` valid in `recursive contract` and `fuel_bounded contract` only.
