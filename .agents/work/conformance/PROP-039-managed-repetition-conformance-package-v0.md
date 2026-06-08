@@ -224,10 +224,10 @@ PROP-039. It is permitted to:
 | OOF-R4 (fuel_bounded/decreases-fuel missing max_steps) | ✅ G3a closed 2026-06-08 — classifier.rs; PASS |
 | SemanticIR loop_node shape | ✅ G3c closed 2026-06-08 — emitter.rs emits kind="loop_node", loop_class, termination, source_ref |
 | OOF-L1 (Collection source check) | ✅ G6 closed 2026-06-08 — TypeChecker emits OOF-L1 for FiniteLoop source not Collection[T] (canon meaning). Parser-level OOF-L1 ("unbounded loop") remains as lab-local diagnostic for `loop` without max_steps — lab delta, does not collide in practice (different trigger context). |
-| body execution | ✅ lab VM executes loop body; canon body=[] deferred |
+| body execution | ✅ lab VM executes loop body; body_nodes = compute-only execution field (VM compat) |
+| Gate 8 — loop body semantics | ✅ G8 closed 2026-06-08 — `lead` keyword in parser.rs, OOF-L5/L7/L8 in classifier.rs + typechecker.rs, `body=[lead_node*,compute_node*]` + `item_type` in emitter.rs; two-track: `body_nodes` VM exec / `body` canon; verify_g4_body_semantics.rb 16/16 PASS |
 
-Lab is ahead of canon on execution; canon is ahead of lab on diagnostic
-alignment and IR shape naming.
+Lab is now symmetric with canon on gate 8 body semantics.
 
 ---
 
@@ -294,3 +294,4 @@ The following surfaces remain closed for PROP-039:
 | Lab G3 (G3a/G3b/G3c/G6) | `igniter-lab/igniter-compiler/verify_g3_conformance.rb` | 14/14 PASS — 2026-06-08 |
 | Lab G3 Rust tests | `igniter-lab/igniter-compiler/tests/loop_conformance_tests.rs` | 14/14 PASS — 2026-06-08 |
 | Canon Gate 8 | `igniter-lang/experiments/loop_body_semantics_proof/` | 100/100 PASS — 2026-06-08 |
+| Lab Gate 8 (Rust symmetry) | `igniter-lab/igniter-compiler/verify_g4_body_semantics.rb` | 16/16 PASS — 2026-06-08 |
