@@ -448,7 +448,9 @@ module IgniterLang
       # termination field encodes the termination evidence kind:
       #   collection_exhaustion — FiniteLoop: terminates by exhausting a finite Collection[T]
       #   budget_exhaustion     — BudgetedLocalLoop: terminates by exhausting static max_steps
-      # body is empty in v0 — body semantics are future SemanticIR work (gate 5 deferred).
+      # PROP-039 gate 8: body now carries typed lead_node + compute_node (was always []).
+      raw_body = decl.fetch("body", [])
+      body_nodes = raw_body.filter_map { |b| lower_body_node(b) }
       node = {
         "kind"        => "loop_node",
         "loop_class"  => loop_class,
@@ -456,11 +458,33 @@ module IgniterLang
         "item"        => decl.fetch("item"),
         "source_ref"  => decl.fetch("source"),
         "termination" => termination,
-        "body"        => [],
+        "body"        => body_nodes,
         "fragment"    => decl.fetch("fragment_class", "core")
       }
-      node["max_steps"] = decl.fetch("max_steps") if decl.key?("max_steps")
+      node["max_steps"]  = decl.fetch("max_steps")  if decl.key?("max_steps")
+      node["item_type"]  = decl.fetch("item_type")  if decl.key?("item_type")
       node
+    end
+
+    # PROP-039 gate 8: lower a typed body declaration to a SemanticIR body node.
+    def lower_body_node(b)
+      case b.fetch("kind", "")
+      when "lead"
+        type_ann  = b.fetch("type_annotation", "Unknown")
+        type_str  = type_ann.is_a?(Hash) ? (type_ann["name"] || "Unknown") : type_ann.to_s
+        {
+          "kind"    => "lead_node",
+          "name"    => b.fetch("name"),
+          "type"    => type_str,
+          "initial" => semantic_expr(b.fetch("initial", nil))
+        }
+      when "compute"
+        {
+          "kind" => "compute_node",
+          "name" => b.fetch("name"),
+          "expr" => semantic_expr(b.fetch("expr", nil))
+        }
+      end
     end
 
     def stream_input_node(decl, declarations)

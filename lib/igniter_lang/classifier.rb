@@ -186,6 +186,9 @@ module IgniterLang
           # PROP-034: track outputs with evidence refs for post-loop OOF-M9 check
           evidence_output_names << name if node.key?("evidence") && !node.fetch("evidence").empty?
           declarations << classified_decl(node, fragment, [name], missing)
+        when "lead"
+          # PROP-039 gate 8: lead at contract level — pass through so TypeChecker can emit OOF-L5
+          declarations << classified_decl(node, "oof", [], [])
         when "for_loop"
           # PROP-039 gate 4: FiniteLoop — classify loop node with source dep
           source = node.fetch("source")
@@ -197,7 +200,8 @@ module IgniterLang
           decl = classified_decl(node, source_missing.empty? ? src_frag : "oof", [source], source_missing)
           decl["source"] = source
           decl["item"]   = node.fetch("item")
-          # body semantics are future work (gate 5) — not recursed here
+          # PROP-039 gate 8: pass loop body through for TypeChecker body scope validation
+          decl["body"]   = node.fetch("body", [])
           declarations << decl
         when "budgeted_loop"
           # PROP-039 gate 4: BudgetedLocalLoop — classify loop node with source dep
@@ -211,6 +215,8 @@ module IgniterLang
           decl["source"] = source
           decl["item"]   = node.fetch("item")
           decl["max_steps"] = node.fetch("max_steps") if node.key?("max_steps")
+          # PROP-039 gate 8: pass loop body through for TypeChecker body scope validation
+          decl["body"]   = node.fetch("body", [])
           declarations << decl
         when "decreases", "max_steps"
           # PROP-039 gate 4: structural meta-declarations — no named symbol produced.

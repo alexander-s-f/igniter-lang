@@ -3,7 +3,7 @@
 Status: experiment-pass compiler surface
 Date: 2026-06-05
 Accepted: 2026-06-07 (Portfolio Architect Supervisor)
-Gates closed: 1+3+4+5+6+7 (2026-06-07) · Gate 8 pending (2026-06-08)
+Gates closed: 1+3+4+5+6+7 (2026-06-07) · 8 (2026-06-08)
 Acceptance receipt: proposals/accepted/PROP-039-acceptance-receipt-2026-06-07.md
 Author: `[Igniter-Lang Compiler / Grammar Expert]`
 Stage: 3 — experiment-pass
@@ -11,7 +11,7 @@ Authoring card: S3-R251-C2-I
 
 Surface open: parse → classify → typecheck → SemanticIR; OOF-L1/R2/R4 active
 Surface closed: runtime, recur(), igc run, public/stable/production
-Surface pending (gate 8): loop body semantics — TypeChecker scope rules, lead/compute body IR, SemanticIR typed body nodes
+Surface open (gate 8): loop body semantics — TypeChecker scope rules, lead/compute body IR, SemanticIR typed body nodes (experiment-pass 2026-06-08)
 Depends on:
 - PROP-037 external progression and service liveness semantics
 - Chapter 13 managed recursion draft
@@ -650,18 +650,29 @@ should close:
    contract, PROP-039/PROP-037 boundary, runtime hold.
 
 8. Loop body semantics — TypeChecker scope rules, `lead`/`compute` body declarations,
-   SemanticIR typed body nodes. **PENDING** (Meta-Architect authorization: 2026-06-08)
+   SemanticIR typed body nodes. ✅ DONE (2026-06-08)
+   Evidence: experiments/loop_body_semantics_proof/ — 100/100 PASS
 
    Design decisions locked (2026-06-08):
    - `lead` is explicit (not inferred from first outer `compute`).
    - Body scope: `item` + `lead` + outer read-only; no outer mutation; no shadowing.
    - SemanticIR v0 body kinds: `lead_node` + `compute_node` only.
    - `recur()` in body, nested loops, break, effects: all closed in v0.
-   - Lab VM conformance update: separate pass after canon gate 8 proof.
+   - Lab VM conformance update: separate pass (gate 8 lab conformance).
 
-   Proof plan: experiments/loop_body_semantics_proof/ — Ruby proof, ~100 checks.
-   Route: canon TypeChecker + SemanticIR emitter update; OOF-L5 + scope codes to
-   experiment-pass via gate 8 OOF registry sub-step.
+   Canon changes (gate 8):
+   - parser.rb: `lead` keyword added; `parse_lead_decl` method; dispatch in `parse_body_decl`.
+   - classifier.rb: `when "lead"` (pass-through OOF at contract level); body array forwarded in for_loop/budgeted_loop classified decls.
+   - typechecker.rb: `check_loop_body`, `typed_loop_body`, `element_type_from_collection`, `literal_expr?` helpers; `when "for_loop"/"budgeted_loop"` extended; `when "lead"` emits OOF-L5 at contract level.
+   - semanticir_emitter.rb: `loop_node` lowers body; `lower_body_node` produces `lead_node`/`compute_node`.
+
+   Active diagnostics (gate 8, experiment-pass):
+   - OOF-L1: FiniteLoop source not Collection[T] — existing, unchanged.
+   - OOF-L5: unsupported body form / lead at contract level / non-literal initial / undefined target / nested loop.
+   - OOF-L7: body compute targets outer contract symbol (mutation attempt).
+   - OOF-L8: lead binding shadows outer contract symbol or loop item.
+
+   Regression: loop_typechecker_proof 49/49 · loop_semanticir_proof 49/49 · loop_class_parser_proof 60/60 · loop_class_semantics_proof 66/66 — all PASS.
 
 Runtime execution, `igc run`, `.igbin`, RuntimeSmoke, Reference Runtime,
 production, release, performance, certification, and portability gates remain

@@ -53,6 +53,7 @@ module IgniterLang
     true false nil
     and or not
     for loop recursive fuel_bounded decreases
+    lead
   ].freeze
 
   class Lexer
@@ -802,6 +803,8 @@ module IgniterLang
       when "loop"        then advance; parse_budgeted_loop
       when "decreases"   then advance; parse_decreases_decl
       when "max_steps"   then advance; parse_max_steps_decl
+      # PROP-039 gate 8: loop body declarations (valid inside loop body only; TypeChecker rejects at contract level)
+      when "lead"        then advance; parse_lead_decl
       when "pipeline"
         add_parse_error(
           rule: "OOF-P2",
@@ -1331,6 +1334,17 @@ module IgniterLang
                "source" => source, "body" => body.compact }
       node["max_steps"] = max_steps unless max_steps.nil?
       node
+    end
+
+    # PROP-039 gate 8: lead <name> : <Type> = <initial-literal>
+    # Explicit loop-carried binding; valid inside loop body only.
+    def parse_lead_decl
+      name = name_token!(%i[ident])
+      expect_type!(:colon)
+      type_ref = parse_type_ref
+      expect_type!(:assign)
+      initial  = parse_expr
+      { "kind" => "lead", "name" => name, "type_annotation" => type_ref, "initial" => initial }
     end
 
     # decreases <dotted-ident-path>  (e.g. "items.remaining" or "n")

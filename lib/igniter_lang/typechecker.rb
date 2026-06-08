@@ -140,20 +140,41 @@ module IgniterLang
               decl.fetch("name")
             )
           end
-          # PROP-039 gate 5: pass loop-specific fields to typed_decl for SemanticIR lowering
+          # PROP-039 gate 8: body scope validation
+          item_type = element_type_from_collection(source_type)
+          item_name = decl.fetch("item")
+          type_errors.concat(check_loop_body(decl, symbol_types, item_name, item_type))
+          # Pass loop-specific fields + typed body to typed_decl for SemanticIR lowering
           td = typed_decl(decl, type_ir("Unit"), nil, decl.fetch("deps", []))
-          td["source"] = source_name
-          td["item"]   = decl.fetch("item")
+          td["source"]    = source_name
+          td["item"]      = item_name
+          td["item_type"] = type_name(item_type)
+          td["body"]      = typed_loop_body(decl, symbol_types, item_name, item_type)
           typed_decls << td
         when "budgeted_loop"
           # PROP-039 gate 4: BudgetedLocalLoop — max_steps is static (enforced by parser);
           # source validated at classify time. TypeChecker just passes through.
-          # PROP-039 gate 5: pass loop-specific fields to typed_decl for SemanticIR lowering
+          # PROP-039 gate 8: body scope validation
+          source_name = decl.fetch("source")
+          source_type = symbol_types.fetch(source_name, type_ir("Unknown"))
+          item_type   = element_type_from_collection(source_type)
+          item_name   = decl.fetch("item")
+          type_errors.concat(check_loop_body(decl, symbol_types, item_name, item_type))
+          # Pass loop-specific fields + typed body to typed_decl for SemanticIR lowering
           td = typed_decl(decl, type_ir("Unit"), nil, decl.fetch("deps", []))
-          td["source"]    = decl.fetch("source")
-          td["item"]      = decl.fetch("item")
+          td["source"]    = source_name
+          td["item"]      = item_name
+          td["item_type"] = type_name(item_type)
           td["max_steps"] = decl.fetch("max_steps") if decl.key?("max_steps")
+          td["body"]      = typed_loop_body(decl, symbol_types, item_name, item_type)
           typed_decls << td
+        when "lead"
+          # PROP-039 gate 8: lead is only valid inside a loop body; here it is at contract level
+          type_errors << oof(
+            "OOF-L5",
+            "lead declaration '#{decl.fetch("name")}' is only valid inside a loop body",
+            decl.fetch("name")
+          )
         end
       end
 
@@ -939,6 +960,112 @@ module IgniterLang
 
     def dedupe_errors(errors)
       errors.uniq { |entry| [entry.fetch("rule"), entry.fetch("message"), entry.fetch("node"), entry.fetch("line")] }
+    end
+
+    # ── PROP-039 gate 8: loop body helpers ─────────────────────────────────────
+
+    # Return element type T from a Collection[T] type_ir value.
+    # Returns type_ir("Unknown") for non-parameterised or non-Collection types.
+    def element_type_from_collection(collection_type)
+      return type_ir("Unknown") unless collection_type.is_a?(Hash)
+      params = collection_type.fetch("params", [])
+      first  = params.first
+      return type_ir("Unknown") unless first
+      first.is_a?(Hash) ? first : type_ir(first.to_s)
+    end
+
+    # True when expr is a static literal (Integer, Float, String, Bool, Nil).
+    def literal_expr?(expr)
+      return false unless expr.is_a?(Hash)
+      expr.fetch("kind", "") == "literal"
+    end
+
+    # Validate loop body scope rules (gate 8).
+    # Returns an array of OOF type_error hashes; empty if all valid.
+    #   OOF-L5 — unsupported body form (nested loop, decreases, max_steps, etc.)
+    #   OOF-L7 — body compute targets outer contract symbol (mutation attempt)
+    #   OOF-L8 — lead binding shadows outer contract symbol or loop item
+    def check_loop_body(loop_decl, outer_symbols, item_name, _item_type)
+      errors     = []
+      loop_name  = loop_decl.fetch("name")
+      body       = loop_decl.fetch("body", [])
+      lead_names = []
+
+      body.each do |b|
+        case b.fetch("kind", "")
+        when "lead"
+          name = b.fetch("name")
+          # Must not shadow outer contract symbol
+          if outer_symbols.key?(name)
+            errors << oof("OOF-L8",
+              "lead '#{name}' in loop '#{loop_name}' shadows outer contract symbol — not permitted in loop body v0",
+              loop_name)
+          end
+          # Must not shadow loop item variable
+          if name == item_name
+            errors << oof("OOF-L8",
+              "lead '#{name}' in loop '#{loop_name}' shadows loop item variable '#{item_name}'",
+              loop_name)
+          end
+          # Initial must be a static literal
+          initial = b.fetch("initial", nil)
+          if initial && !literal_expr?(initial)
+            errors << oof("OOF-L5",
+              "lead '#{name}' in loop '#{loop_name}': initial value must be a static literal in v0",
+              loop_name)
+          end
+          lead_names << name
+        when "compute"
+          target = b.fetch("name")
+          # compute must target a lead binding — not outer symbols, not item
+          if target == item_name
+            errors << oof("OOF-L7",
+              "body compute in loop '#{loop_name}' targets loop item '#{target}' — item is read-only",
+              loop_name)
+          elsif outer_symbols.key?(target) && !lead_names.include?(target)
+            errors << oof("OOF-L7",
+              "body compute in loop '#{loop_name}' targets outer contract symbol '#{target}' — outer state is read-only",
+              loop_name)
+          elsif !lead_names.include?(target) && !outer_symbols.key?(target) && target != item_name
+            # Target is neither a lead binding, outer symbol, nor item — undefined in body scope
+            errors << oof("OOF-L5",
+              "body compute in loop '#{loop_name}' targets '#{target}' which is not a declared lead binding",
+              loop_name)
+          end
+        when "for_loop", "budgeted_loop"
+          errors << oof("OOF-L5",
+            "nested loop '#{b.fetch("name", "?")}' in loop body '#{loop_name}' is not supported in v0",
+            loop_name)
+        when "decreases", "max_steps"
+          errors << oof("OOF-L5",
+            "'#{b.fetch("kind")}' is not valid inside a loop body (belongs to recursive contracts)",
+            loop_name)
+        end
+      end
+
+      errors
+    end
+
+    # Produce typed body array for SemanticIR lowering.
+    # Returns array of hashes with kind "lead" or "compute".
+    def typed_loop_body(loop_decl, _outer_symbols, _item_name, _item_type)
+      loop_decl.fetch("body", []).filter_map do |b|
+        case b.fetch("kind", "")
+        when "lead"
+          {
+            "kind"            => "lead",
+            "name"            => b.fetch("name"),
+            "type_annotation" => b.fetch("type_annotation", "Unknown"),
+            "initial"         => b.fetch("initial", nil)
+          }
+        when "compute"
+          {
+            "kind" => "compute",
+            "name" => b.fetch("name"),
+            "expr" => b.fetch("expr", nil)
+          }
+        end
+      end
     end
   end
 
