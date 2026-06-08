@@ -4,14 +4,16 @@ Status: experiment-pass compiler surface
 Date: 2026-06-05
 Accepted: 2026-06-07 (Portfolio Architect Supervisor)
 Gates closed: 1+3+4+5+6+7 (2026-06-07) · 8 (2026-06-08)
+Gate 5 (recur() semantics): design locked 2026-06-08 — proof pending
 Acceptance receipt: proposals/accepted/PROP-039-acceptance-receipt-2026-06-07.md
 Author: `[Igniter-Lang Compiler / Grammar Expert]`
 Stage: 3 — experiment-pass
 Authoring card: S3-R251-C2-I
 
 Surface open: parse → classify → typecheck → SemanticIR; OOF-L1/R2/R4 active
-Surface closed: runtime, recur(), igc run, public/stable/production
+Surface closed: runtime, igc run, public/stable/production
 Surface open (gate 8): loop body semantics — TypeChecker scope rules, lead/compute body IR, SemanticIR typed body nodes (experiment-pass 2026-06-08)
+Surface gate 5 (design locked): recur() syntax + context validation + positional arg typecheck + return type inference — proof pending
 Depends on:
 - PROP-037 external progression and service liveness semantics
 - Chapter 13 managed recursion draft
@@ -557,11 +559,13 @@ OOF-L1..L5 do not collide with OOF-L6 (Ch8 `now()` prohibition; Ch8 authority on
 
 | Code | Condition | Severity | Status (gate 6) |
 | --- | --- | --- | --- |
-| `OOF-R1` | `recur()` appears outside recursive or fuel_bounded context | error | candidate — recur() not in v0 |
+| `OOF-R1` | `recur()` appears outside `recursive` or `fuel_bounded` contract context (incl. loop body, regular contract, service_loop) | error | candidate → gate 5 proof pending |
 | `OOF-R2` | `recursive` contract missing a `decreases` declaration | error | **experiment-pass** — classifier.rb; loop_typechecker_proof 49/49 |
-| `OOF-R3` | Structural variant not proven to decrease at a `recur()` site | error | candidate — future TypeChecker proof |
+| `OOF-R3` | Structural variant not proven to decrease at a `recur()` site | error | candidate — future TypeChecker proof (not gate 5) |
 | `OOF-R4` | `fuel_bounded` (or `recursive + decreases fuel`) missing static `max_steps` | error | **experiment-pass** — classifier.rb; loop_typechecker_proof 49/49 |
-| `OOF-R5` | Recursive step changes output/parameter shape incompatibly | error | candidate — future type proof |
+| `OOF-R5` | `recur()` called with wrong number of arguments (arity ≠ input count) | error | candidate → gate 5 proof pending |
+| `OOF-R6` | `recur()` argument type does not match corresponding `input` type | error | candidate → gate 5 proof pending |
+| `OOF-R7` | `recur()` in contract with ≠ 1 output (multi-output recur() deferred to v1) | error | candidate → gate 5 proof pending |
 
 **Namespace conflict resolved (gate 6):** Ch13 §13.7 previously listed deferred
 service-loop vocabulary under OOF-R2/R4 codes. Those are PROP-037 territory and
@@ -572,6 +576,159 @@ experiment-pass surface takes precedence over Ch13 deferred vocabulary.
 
 `OOF-SL*` names remain PROP-037 companion territory, not PROP-039 authority.
 Service-loop diagnostics must not be accepted under PROP-039.
+
+---
+
+## recur() Call Semantics (Gate 5 Design)
+
+**Gate 5 authorization:** design locked 2026-06-08 — proof pending.
+
+```text
+G5 opens `recur()` as a typed recursive call expression inside authorized
+recursive/fuel_bounded contract contexts only. It does not open recursive
+execution, termination proof, VM stack behavior, tail-call optimization, or
+runtime authority.
+```
+
+Formal formula:
+
+```
+G5 = recur() syntax + context validation + positional arg typecheck + return type inference.
+G5 ≠ termination proof.
+G5 ≠ recursive execution.
+G5 ≠ VM/runtime authorization.
+```
+
+### Grammar v0
+
+`recur()` is a **call expression** — it appears inside `compute` expression bodies,
+not as a top-level body declaration:
+
+```igniter
+recursive contract CountDown {
+  input n: Integer
+  compute result = recur(n - 1)
+  output result: Integer
+  decreases fuel
+  max_steps 100
+}
+```
+
+```igniter
+fuel_bounded contract Step {
+  input n: Integer
+  compute result = recur(n - 1)
+  output result: Integer
+  max_steps 50
+}
+```
+
+**v0 restrictions:**
+- `recur()` is positional: args map to `input` declarations by order, left to right.
+  Named form (`recur(n: n - 1)`) deferred to v1.
+- Contract must have exactly **one** `output` declaration. Return type = that output's type.
+- Multiple `recur()` calls in a single compute expression are allowed (e.g., tree recursion) —
+  syntax + typecheck only; no termination, complexity, or runtime-stack claims.
+- `recur()` is not valid in loop bodies, regular contracts, or `service_loop`.
+
+### Authorized Contexts
+
+| Context | `recur()` status |
+|---------|-----------------|
+| `recursive contract` (has `decreases`) | ✅ allowed |
+| `fuel_bounded contract` (has `max_steps`) | ✅ allowed |
+| Regular `contract` | ❌ OOF-R1 |
+| `for`/`loop` body | ❌ OOF-R1 |
+| `service_loop` body | ❌ OOF-R1 |
+
+For `recursive`: `decreases` obligation already enforced by OOF-R2 (gate 3a).
+For `fuel_bounded`: `max_steps` obligation already enforced by OOF-R4 (gate 3a).
+Gate 5 adds `recur()` call validity on top of existing structural constraints.
+
+### Arg Typecheck Rules
+
+Given contract inputs in declaration order `[i₁: T₁, i₂: T₂, …, iₙ: Tₙ]` and
+a single output `output r: Tᵣ`:
+
+| Condition | Diagnostic |
+|-----------|-----------|
+| `len(recur_args) ≠ n` | OOF-R5 |
+| `type(recur_args[k]) ≠ Tₖ` | OOF-R6 |
+| output count ≠ 1 | OOF-R7 |
+| `recur()` outside authorized context | OOF-R1 |
+
+Return type of `recur()` call = type of the single output declaration.
+
+### SemanticIR Shape (v0)
+
+`recur()` lowers to a `recur_call` **sub-expression** inside a compute node,
+not a top-level SemanticIR node:
+
+```json
+{
+  "kind": "compute_node",
+  "name": "result",
+  "expr": {
+    "kind": "recur_call",
+    "args": [
+      { "kind": "binary_op", "op": "-", "left": { "kind": "ref", "name": "n" }, "right": { "kind": "literal", "value": 1 } }
+    ],
+    "return_type": "Integer"
+  }
+}
+```
+
+Multiple `recur()` calls in one expression are allowed at the IR level — each
+lowers to a `recur_call` node where it appears in the expression tree.
+
+### Gate 5 Closed Surface
+
+| Form | Status |
+|------|--------|
+| Recursive execution / VM recursion stack | closed — runtime gate |
+| Termination / decreasing variant proof (OOF-R3) | closed — future TypeChecker gate |
+| Named `recur(n: n - 1)` args | closed — v1 |
+| Multi-output `recur()` | closed — v1 (OOF-R7 fires in v0) |
+| `recur()` in loop body | closed — OOF-R1 |
+| `recur()` in `service_loop` | closed — OOF-R1 |
+| Tail-call optimization, TCO | closed — runtime gate |
+| `recur()` in regular contract | closed — OOF-R1 |
+
+### Proof fixtures (v0 minimal — no conditional expression dependency)
+
+Gate 5 proof fixtures use only forms already authorized. `if/then/else` is NOT
+required — proof uses direct `recur()` calls and negative diagnostic cases:
+
+```igniter
+-- Positive: recur() in recursive contract
+recursive contract CountDown {
+  input n: Integer
+  compute result = recur(n - 1)
+  output result: Integer
+  decreases fuel
+  max_steps 100
+}
+
+-- Positive: recur() in fuel_bounded contract
+fuel_bounded contract Step {
+  input n: Integer
+  compute result = recur(n - 1)
+  output result: Integer
+  max_steps 50
+}
+
+-- Positive: multiple recur() calls
+recursive contract TreeSize {
+  input n: Integer
+  compute size = recur(n - 1) + recur(n - 2)
+  output size: Integer
+  decreases fuel
+  max_steps 200
+}
+```
+
+Proof does not claim any contract above terminates or executes correctly — it
+only proves that `recur()` parses, type-checks, and lowers to SemanticIR.
 
 ---
 
@@ -673,6 +830,20 @@ should close:
    - OOF-L8: lead binding shadows outer contract symbol or loop item.
 
    Regression: loop_typechecker_proof 49/49 · loop_semanticir_proof 49/49 · loop_class_parser_proof 60/60 · loop_class_semantics_proof 66/66 — all PASS.
+
+9. `recur()` call semantics — context validation (OOF-R1), positional arg typecheck
+   (OOF-R5/R6), single-output constraint (OOF-R7), return type inference, SemanticIR
+   `recur_call` sub-expression node. **Design locked 2026-06-08.** Proof pending.
+
+   Design decisions locked (2026-06-08):
+   - `recur()` valid in `recursive contract` and `fuel_bounded contract` only.
+   - v0 positional args: map by input declaration order; named form deferred to v1.
+   - v0 single-output constraint: OOF-R7 if output count ≠ 1.
+   - Multiple `recur()` calls in one expr: allowed (syntax + typecheck only).
+   - OOF-R3 (termination/decreasing variant proof): NOT gate 5 — future TypeChecker gate.
+   - `recur()` in loop body / regular contract / service_loop: OOF-R1.
+   - Proof fixtures: minimal — no conditional expression dependency.
+   - Execution, VM stack, TCO, runtime authority: all closed.
 
 Runtime execution, `igc run`, `.igbin`, RuntimeSmoke, Reference Runtime,
 production, release, performance, certification, and portability gates remain
