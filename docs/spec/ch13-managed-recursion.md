@@ -5,7 +5,7 @@ Stage: 4 (deferred)
 Source PROP: PROP-039+ placeholder for managed local recursion / loop-class
 extensions; PROP-037 owns external progression and service liveness
 Governance: META-EXPERT-013
-Last updated: 2026-06-04
+Last updated: 2026-06-08
 
 > **Proposed — Stage 4 deferred.** This chapter describes the managed recursion
 > and service loop extension. It is not in scope for Stage 3.
@@ -29,6 +29,10 @@ for ClaimLoop item in claims {
 }
 
 -- Structural recursion: variant decreases at every recur() call
+-- NOTE: This is an aspirational Stage-4 / v1 form.
+--   `decreases items.remaining` — dotted-path variant: fail-closed OOF-R3 in v0.
+--   `recur(items: items.tail, ...)` — named args: v1 form; v0 uses positional recur().
+--   See §13.3 for the v0-compatible form.
 recursive contract SumList(items: Collection[Integer], acc: Integer) -> total: Integer
   decreases items.remaining
 {
@@ -80,7 +84,7 @@ service contract LiveNewsClarityService()
 | Class | Termination contract | Compiler verification |
 |-------|---------------------|----------------------|
 | `FiniteLoop` | Terminates when collection is exhausted | Collection size is finite; proven by type |
-| `StructuralRecursion` | Terminates because structural variant strictly decreases | Compiler checks variant at every `recur()` site |
+| `StructuralRecursion` | Terminates because structural variant strictly decreases | Compiler performs syntactic_v0 decrease check at every `recur()` site: whitelist `variant−N`, `variant.tail`, `variant.rest`; other forms fire OOF-R3 |
 | `FuelBoundedRecursion` | Terminates when fuel counter reaches zero | `max_steps` is a static literal |
 | `ConvergentLoop` | Terminates when metric reaches threshold or fuel exhausts | Convergence criterion and `max_steps` required |
 | `ServiceLoop` | Does not terminate by design; must be stoppable, observable, and bounded per step | Heartbeat, checkpoint, cancellation, and `max_step_latency` verified |
@@ -98,24 +102,33 @@ binding and descriptor obligations are governed by PROP-037 companion wording.
 fuel-bounded recursion:
 
 ```igniter
-recursive contract SumList(items: Collection[Integer], acc: Integer) -> total: Integer
-  decreases items.remaining
-{
-  match items.head {
-    none    => output acc
-    some(x) => recur(items: items.tail, acc: acc + x)
-  }
+-- v0 form: simple identifier decreases variant, positional recur() args
+recursive contract SumList {
+  input items: Collection[Integer]
+  input acc: Integer
+  output total: Integer
+  decreases items        -- simple identifier; dotted-path (e.g. items.remaining) is OOF-R3 in v0
+  max_steps 10000
+  compute total = recur(items.tail, acc + 1)   -- v0: positional args; named args are v1
 }
 ```
 
-The compiler checks that the `decreases` expression is strictly smaller at every
-`recur()` call site. A `recur()` outside a `recursive` or `fuel_bounded` context
-is OOF-R1.
+> **v0 syntactic decrease check (OOF-R3 gate, experiment-pass 2026-06-08):**
+> The compiler verifies at every `recur()` call site that the variant-position
+> argument syntactically decreases the declared `decreases` variant.
+> Accepted patterns: `variant - N` (N > 0), `variant.tail`, `variant.rest`.
+> All other forms fire OOF-R3 (error). Dotted-path `decreases` variants such as
+> `decreases items.remaining` are fail-closed — they fire OOF-R3 immediately
+> as an unsupported variant form in v0. The broader aspirational form (arbitrary
+> structural variant, SMT proof, named `recur()` args) remains Stage 4 design work.
 
-For fuel-bounded recursion, `decreases fuel` is the design shorthand for a
-compiler-visible static budget that decreases on every recursive step. The exact
-syntax, metric model, and diagnostic ownership remain PROP-039+ design work; no
-current parser or TypeChecker enforcement is claimed by this chapter.
+A `recur()` outside a `recursive` or `fuel_bounded` context is OOF-R1
+(experiment-pass — recursive_body_proof 100/100 PASS).
+
+For fuel-bounded recursion, `decreases fuel` is the accepted shorthand:
+the fuel counter is compiler-managed, not a named input variant. `fuel_bounded`
+contracts and `recursive + decreases fuel` contracts are exempt from OOF-R3.
+Static `max_steps` is required for both (OOF-R4 fires if absent).
 
 ---
 
@@ -127,11 +140,12 @@ A service loop must satisfy three compiler-checked obligations:
    and terminates gracefully.
 
 2. **Observable**: `heartbeat every N.duration` — the loop emits a heartbeat signal
-   within each heartbeat window. A step that blocks the heartbeat is OOF-R2.
+   within each heartbeat window. A step that blocks the heartbeat will be
+   OOF-SL* (PROP-037 territory; deferred — see §13.7 migration note).
 
 3. **Bounded per step**: `max_step_latency N.duration` — each iteration must
    complete within the latency budget. A step that provably exceeds the budget
-   is OOF-R3 (warn).
+   will be OOF-SL* (PROP-037 territory; deferred — see §13.7 migration note).
 
 Service loops do not have a termination proof. Instead, they are governed by
 liveness theory: the loop is alive as long as heartbeat signals arrive.
@@ -179,23 +193,27 @@ append is `lifecycle: :audit` by default.
 
 ## § 13.7 OOF Rules
 
-**Updated: PROP-039 Gate 6 (2026-06-07)**
+**Updated: PROP-039 OOF-R3 gate (2026-06-08)**
 
 ### Managed Local Recursion (PROP-039 authority)
 
-The following codes are PROP-039 canon. OOF-R1 is a candidate; OOF-R2 and
-OOF-R4 are `experiment-pass compiler surface` (proven in gate 4,
-`loop_typechecker_proof` 49/49 PASS; active in `classifier.rb`).
+All OOF-R1..R7 codes are PROP-039 canon experiment-pass compiler surface.
 
 | Code | Condition | Severity | Status |
 |------|-----------|----------|--------|
-| OOF-R1 | `recur()` outside recursive or fuel_bounded context | error | candidate |
-| OOF-R2 | `recursive` contract missing a `decreases` declaration | error | **experiment-pass** |
-| OOF-R3 | Structural variant not proven to decrease at a `recur()` site | error | candidate |
-| OOF-R4 | `fuel_bounded` (or `recursive + decreases fuel`) missing static `max_steps` | error | **experiment-pass** |
-| OOF-R5 | Recursive step changes output/parameter shape incompatibly | error | candidate |
+| OOF-R1 | `recur()` outside `recursive` or `fuel_bounded` context (incl. regular contract, loop body) | error | **experiment-pass** — typechecker.rb; recursive_body_proof 100/100 |
+| OOF-R2 | `recursive` contract missing a `decreases` declaration | error | **experiment-pass** — classifier.rb; loop_typechecker_proof 49/49 |
+| OOF-R3 | Variant-position arg does not syntactically decrease declared variant; also fires when `decreases` variant is a dotted-path (fail-closed in v0) | error | **experiment-pass** — syntactic_v0; typechecker.rb; oof_r3_syntactic_variant_decrease_proof 33/33 |
+| OOF-R4 | `fuel_bounded` (or `recursive + decreases fuel`) missing static `max_steps` | error | **experiment-pass** — classifier.rb; loop_typechecker_proof 49/49 |
+| OOF-R5 | `recur()` arity mismatch — arg count does not match input count | error | **experiment-pass** — typechecker.rb; recursive_body_proof 100/100 |
+| OOF-R6 | `recur()` argument type mismatch — arg type does not match corresponding input type | error | **experiment-pass** — typechecker.rb; recursive_body_proof 100/100 |
+| OOF-R7 | `recur()` return type unavailable or ambiguous — contract does not have exactly one output | error | **experiment-pass** — typechecker.rb; recursive_body_proof 100/100 |
 
-OOF-R1..R5 are managed local recursion codes owned by PROP-039.
+OOF-R1..R7 are managed local recursion codes owned by PROP-039.
+OOF-R3 scope: `recursive` contracts with named (non-fuel) `decreases` variant only;
+`fuel_bounded` and `recursive + decreases fuel` are exempt.
+Full termination proof, SMT verification, and dotted-path variant support remain
+Stage 4 design work — not claimed by the syntactic_v0 gate.
 
 ### Service Loop Obligations (PROP-037 territory — migration pending)
 
@@ -215,18 +233,20 @@ implementation is authorized. Until then, they are deferred:
 
 | Code | Condition | Severity | Status |
 |------|-----------|----------|--------|
-| OOF-L1 | `for_loop` source is not `Collection[T]` | error | **experiment-pass** |
+| OOF-L1 | `for_loop` source is not `Collection[T]` | error | **experiment-pass** — typechecker.rb; loop_typechecker_proof 49/49 |
 | OOF-L2 | `max_steps` is dynamic where v0 requires static literal | error | candidate |
 | OOF-L3 | Semantic loop block is unnamed (Postulate 28) | error | candidate |
 | OOF-L4 | `break` in a PROP-039 v0 loop | error | candidate |
-| OOF-L5 | Loop body contains unsupported local-repetition form | error | candidate |
+| OOF-L5 | Unsupported loop body form (nested loop at body level, non-literal `lead` initial, `lead` at contract level, undefined compute target) | error | **experiment-pass** — typechecker.rb; loop_body_semantics_proof 100/100 |
+| OOF-L7 | Loop body compute targets loop item variable or outer contract symbol (read-only violation) | error | **experiment-pass** — typechecker.rb; loop_body_semantics_proof 100/100 |
+| OOF-L8 | `lead` binding shadows outer contract symbol or loop item variable | error | **experiment-pass** — typechecker.rb; loop_body_semantics_proof 100/100 |
 
 OOF-L6 is Ch8 authority (ambient-clock / `now()` refusal). PROP-039 does not
 own or modify OOF-L6.
 
-Source-level `break` remains deferred. Future proof fixtures must include
-unnamed-loop robustness for Postulate 28 (the R246/R247 `OOF-L3` pressure
-item), but enforcement is not yet proven.
+OOF-L2/L3/L4 remain candidates. Source-level `break` is deferred. Future proof
+fixtures must include unnamed-loop robustness for Postulate 28 (the R246/R247
+`OOF-L3` pressure item), but enforcement is not yet proven.
 
 ---
 

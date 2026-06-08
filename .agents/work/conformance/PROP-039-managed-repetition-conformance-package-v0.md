@@ -247,8 +247,9 @@ PROP-039. It is permitted to:
 | body execution | ✅ lab VM executes loop body; body_nodes = compute-only execution field (VM compat) |
 | Gate 8 — loop body semantics | ✅ G8 closed 2026-06-08 — `lead` keyword in parser.rs, OOF-L5/L7/L8 in classifier.rs + typechecker.rs, `body=[lead_node*,compute_node*]` + `item_type` in emitter.rs; two-track: `body_nodes` VM exec / `body` canon; verify_g4_body_semantics.rb 18/18 PASS |
 | Gate 5 — recur() call semantics | ✅ G5 closed 2026-06-08 — OOF-R1/R5/R6/R7 in typechecker.rs, `recur_call` sub-expr node in emitter.rs; `recur_call` is sub-expression only (never top-level node); verify_g5_recur.rb 18/18 PASS |
+| OOF-R3 — syntactic variant decrease | ✅ closed 2026-06-08 — classifier.rs extracts `decreases_variant`; typechecker.rs OOF-R3 per recur() site + dotted-path fail-closed; emitter.rs `termination.variant_check="syntactic_v0"`; Collection.tail/rest whitelist; verify_oof_r3.rb 34/34 PASS |
 
-Lab is now symmetric with canon on gate 8 body semantics and gate 5 recur() call semantics.
+Lab is now symmetric with canon on gate 8 body semantics, gate 5 recur() call semantics, and OOF-R3 syntactic variant decrease.
 
 ---
 
@@ -319,3 +320,4 @@ The following surfaces remain closed for PROP-039:
 | Canon Gate 5 | `igniter-lang/experiments/recursive_body_proof/` | 100/100 PASS — 2026-06-08 |
 | Lab Gate 5 (Rust symmetry) | `igniter-lab/igniter-compiler/verify_g5_recur.rb` | 18/18 PASS — 2026-06-08 |
 | OOF-R3 gate | `igniter-lang/experiments/oof_r3_syntactic_variant_decrease_proof/verify_oof_r3.rb` | 33/33 PASS — 2026-06-08 |
+| Lab OOF-R3 (Rust symmetry) | `igniter-lab/igniter-compiler/verify_oof_r3.rb` | 34/34 PASS — 2026-06-08 |
