@@ -101,13 +101,19 @@ recursive contract <Name> {
 ### 1.2 Active OOF Diagnostics (experiment-pass)
 
 These codes are active in the canon classifier/typechecker pipeline.
-Proven in `igniter-lang/experiments/loop_typechecker_proof/` — 49/49 PASS.
 
 | Code | Fires when | Stage | Proof |
 |------|-----------|-------|-------|
-| OOF-L1 | `for_loop` source is not `Collection[T]` | TypeChecker | loop_typechecker_proof |
-| OOF-R2 | `recursive` contract missing `decreases` declaration | Classifier | loop_typechecker_proof |
-| OOF-R4 | `fuel_bounded` (or `recursive + decreases fuel`) missing static `max_steps` | Classifier | loop_typechecker_proof |
+| OOF-L1 | `for_loop` source is not `Collection[T]` | TypeChecker | loop_typechecker_proof (49/49) |
+| OOF-L5 | Unsupported loop body form (nested loop, lead at contract level, non-literal initial, undefined compute target) | TypeChecker | loop_body_semantics_proof (100/100) |
+| OOF-L7 | Body compute targets loop item or outer contract symbol (read-only violation) | TypeChecker | loop_body_semantics_proof (100/100) |
+| OOF-L8 | `lead` binding shadows outer contract symbol or loop item variable | TypeChecker | loop_body_semantics_proof (100/100) |
+| OOF-R1 | Invalid `recur()` context — `recur()` outside `recursive`/`fuel_bounded` contract (incl. loop body, regular contract) | TypeChecker | recursive_body_proof (100/100) |
+| OOF-R2 | `recursive` contract missing `decreases` declaration | Classifier | loop_typechecker_proof (49/49) |
+| OOF-R4 | `fuel_bounded` (or `recursive + decreases fuel`) missing static `max_steps` | Classifier | loop_typechecker_proof (49/49) |
+| OOF-R5 | `recur()` arity mismatch — arg count ≠ input count | TypeChecker | recursive_body_proof (100/100) |
+| OOF-R6 | `recur()` argument type mismatch — arg type ≠ corresponding input type | TypeChecker | recursive_body_proof (100/100) |
+| OOF-R7 | `recur()` return type unavailable or ambiguous — contract ≠ exactly one output | TypeChecker | recursive_body_proof (100/100) |
 
 ### 1.3 SemanticIR Shapes (experiment-pass)
 
@@ -172,10 +178,10 @@ obligations for alternate implementations at this time.
 
 | Item | Status | Notes |
 |------|--------|-------|
-| OOF-L2..L5 | candidate | dynamic max_steps, unnamed loop, break, unsupported body form |
-| OOF-R1 | candidate | recur() outside context (recur() not in v0) |
-| OOF-R3 | candidate | variant not proven to decrease (future TypeChecker proof) |
-| OOF-R5 | candidate | recursive step shape change (future type proof) |
+| OOF-L2/L3/L4 | candidate | dynamic max_steps, unnamed loop, break — not yet proven |
+| OOF-L5/L7/L8 | ✅ experiment-pass — gate 8 closed 2026-06-08 | loop body scope rules; see §1.2 |
+| OOF-R1/R5/R6/R7 | ✅ experiment-pass — gate 5 closed 2026-06-08 | recur() context + arg + output validation; see §1.2 |
+| OOF-R3 | candidate | variant not proven to decrease (future TypeChecker proof — NOT gate 5) |
 | `recur()` primitive — G5 | ✅ gate 5 closed 2026-06-08 — recursive_body_proof 100/100 PASS. OOF-R1/R5/R6/R7 experiment-pass. SemanticIR `recur_call` sub-expr. Termination (OOF-R3), named args, multi-output, execution: all deferred. |
 | `ConvergentLoop` | vocabulary only | metric/threshold/budget form; future proof |
 | loop body semantics | ✅ gate 8 closed 2026-06-08 — `lead_node` + `compute_node`; OOF-L5/L7/L8 active; scope rules proven. See PROP-039 §"Local Loop Body Semantics (Gate 8 Design)". |
@@ -225,7 +231,7 @@ PROP-039. It is permitted to:
 | SemanticIR loop_node shape | ✅ G3c closed 2026-06-08 — emitter.rs emits kind="loop_node", loop_class, termination, source_ref |
 | OOF-L1 (Collection source check) | ✅ G6 closed 2026-06-08 — TypeChecker emits OOF-L1 for FiniteLoop source not Collection[T] (canon meaning). Parser-level OOF-L1 ("unbounded loop") remains as lab-local diagnostic for `loop` without max_steps — lab delta, does not collide in practice (different trigger context). |
 | body execution | ✅ lab VM executes loop body; body_nodes = compute-only execution field (VM compat) |
-| Gate 8 — loop body semantics | ✅ G8 closed 2026-06-08 — `lead` keyword in parser.rs, OOF-L5/L7/L8 in classifier.rs + typechecker.rs, `body=[lead_node*,compute_node*]` + `item_type` in emitter.rs; two-track: `body_nodes` VM exec / `body` canon; verify_g4_body_semantics.rb 16/16 PASS |
+| Gate 8 — loop body semantics | ✅ G8 closed 2026-06-08 — `lead` keyword in parser.rs, OOF-L5/L7/L8 in classifier.rs + typechecker.rs, `body=[lead_node*,compute_node*]` + `item_type` in emitter.rs; two-track: `body_nodes` VM exec / `body` canon; verify_g4_body_semantics.rb 18/18 PASS |
 
 Lab is now symmetric with canon on gate 8 body semantics.
 
