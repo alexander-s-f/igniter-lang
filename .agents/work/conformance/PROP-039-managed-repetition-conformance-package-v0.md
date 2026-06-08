@@ -178,7 +178,7 @@ obligations for alternate implementations at this time.
 | OOF-R5 | candidate | recursive step shape change (future type proof) |
 | `recur()` primitive | deferred | body semantics gate required before proving |
 | `ConvergentLoop` | vocabulary only | metric/threshold/budget form; future proof |
-| loop body semantics | deferred | body=[] in v0; body variable binding future gate |
+| loop body semantics | **gate 8 pending** — design locked 2026-06-08; proof not yet run. `lead_node` + `compute_node`; scope rules defined. See PROP-039 §"Local Loop Body Semantics (Gate 8 Design)". |
 | `for` with optional max_steps cap | open question | deferred per §for/loop split |
 | `break` in loop body | deferred | terminates loop evidence; deferred |
 | Dynamic `max_steps` | deferred | type/provenance/upper-bound rules needed first |

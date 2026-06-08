@@ -3,14 +3,15 @@
 Status: experiment-pass compiler surface
 Date: 2026-06-05
 Accepted: 2026-06-07 (Portfolio Architect Supervisor)
-Gates closed: 1+3+4+5+6+7 (2026-06-07)
+Gates closed: 1+3+4+5+6+7 (2026-06-07) · Gate 8 pending (2026-06-08)
 Acceptance receipt: proposals/accepted/PROP-039-acceptance-receipt-2026-06-07.md
 Author: `[Igniter-Lang Compiler / Grammar Expert]`
 Stage: 3 — experiment-pass
 Authoring card: S3-R251-C2-I
 
 Surface open: parse → classify → typecheck → SemanticIR; OOF-L1/R2/R4 active
-Surface closed: runtime, body semantics, recur(), igc run, public/stable/production
+Surface closed: runtime, recur(), igc run, public/stable/production
+Surface pending (gate 8): loop body semantics — TypeChecker scope rules, lead/compute body IR, SemanticIR typed body nodes
 Depends on:
 - PROP-037 external progression and service liveness semantics
 - Chapter 13 managed recursion draft
@@ -295,6 +296,146 @@ Rationale:
 
 ---
 
+## Local Loop Body Semantics (Gate 8 Design)
+
+**Gate 8 authorization:** pending (Meta-Architect, 2026-06-08)
+
+```text
+Gate 8 = loop body is no longer opaque syntax.
+Gate 8 ≠ loop execution.
+```
+
+### Core Formula
+
+Canon currently sees loop body as opaque (`body=[]` in SemanticIR). Gate 8 closes
+the local semantic surface: the TypeChecker gains lexical scope awareness for loop
+bodies, `lead` becomes a first-class body declaration, and SemanticIR emits typed
+body nodes instead of an empty array.
+
+**What gate 8 accepts:**
+- `item` receives type `T` from `Collection[T]` source.
+- Loop body has its own lexical scope.
+- Outer contract symbols are accessible read-only; mutation of outer state is
+  rejected.
+- Loop-carried state is explicit — it is never inferred from outer variables.
+- SemanticIR stops writing `body=[]` and stores typed `lead_node` + `compute_node`.
+- v0 body surface is minimal: only `compute` + explicit `lead`.
+
+### Body Grammar (v0)
+
+Two declaration kinds are accepted in a loop body in v0:
+
+**`lead` — explicit loop-carried binding:**
+
+```igniter
+for ProcessAll item in items {
+  lead total: Integer = 0
+  compute total = total + item
+}
+```
+
+```igniter
+loop Accumulate item in items max_steps: 1000 {
+  lead total: Integer = 0
+  compute total = total + item
+}
+```
+
+`lead` rules:
+- Must be declared before any `compute` that references it.
+- Type annotation is required; type is not inferred.
+- Initial value must be a static literal in v0.
+- Multiple `lead` bindings are permitted in one body.
+- A `lead` name must not shadow any outer contract symbol.
+
+**`compute` — body-local assignment:**
+
+```igniter
+compute total = total + item
+```
+
+`compute` rules (body scope):
+- May read: `item`, declared `lead` bindings, outer contract `input` and `compute`
+  symbols (read-only).
+- May write: only a `lead` binding declared in this body (rebind).
+- May NOT: assign to outer contract symbols, shadow outer names, invoke `recur()`,
+  use `break`, emit effects or escape operations.
+
+### Scope Access Table
+
+| Symbol kind | Readable in body | Writable in body |
+|-------------|-----------------|-----------------|
+| `item` (loop variable) | ✅ yes | ❌ no |
+| `lead` binding | ✅ yes | ✅ yes (rebind only) |
+| Outer contract `input` | ✅ read-only | ❌ no |
+| Outer contract `compute` | ✅ read-only | ❌ no |
+| Outer contract `output` | ❌ not in body | ❌ no |
+| Nested loop, `recur()`, `break` | ❌ not in v0 | ❌ no |
+| Effects / escape operations | ❌ not in v0 | ❌ no |
+
+Shadowing any outer contract name inside a loop body is a gate 8 scope error.
+
+### SemanticIR Body Shape (v0)
+
+Gate 8 replaces `body=[]` with a non-empty array of typed body nodes. Two node
+kinds only:
+
+```json
+"body": [
+  {
+    "kind": "lead_node",
+    "name": "total",
+    "type": "Integer",
+    "initial": { "kind": "literal", "value": 0 }
+  },
+  {
+    "kind": "compute_node",
+    "name": "total",
+    "expr": { "kind": "binary_op", "op": "+",
+              "left": { "kind": "ref", "name": "total" },
+              "right": { "kind": "ref", "name": "item" } }
+  }
+]
+```
+
+`lead_node` required fields: `name`, `type`, `initial`.
+`compute_node` required fields: `name`, `expr` (typed expression IR).
+
+No other body node kinds are accepted in v0. The gate 8 parser/typechecker proof
+must reject unsupported forms via a scope/body diagnostic (OOF-L5 or successor).
+
+### Gate 8 Closed Surface
+
+The following forms are closed in gate 8 and require separate authorization:
+
+| Form | Status |
+|------|--------|
+| Nested loops in body | closed — not in v0 |
+| `recur()` in loop body | closed — separate gate (G5) |
+| `break` in body | closed — deferred (OOF-L4) |
+| Effects / escape operations | closed |
+| Implicit accumulator inferred from outer compute | closed |
+| `lead` initial = non-literal expression | closed in v0 |
+| `lead` type inferred (no annotation) | closed — explicit type required |
+| Lab VM conformance update | closed — separate conformance pass after gate 8 |
+| Runtime execution semantics | closed |
+| `recur()` body validation | closed — G5, depends on body semantics gate |
+
+### Candidate Diagnostics (gate 8)
+
+These codes are candidates for gate 8. They require an OOF registry review step
+before being promoted to experiment-pass — same pattern as gate 6.
+
+| Code | Condition | Status |
+|------|-----------|--------|
+| `OOF-L5` | Loop body contains unsupported form (nested loop, `recur`, `break`, effect, call) | candidate → experiment-pass at gate 8 |
+| _gate 8 scope codes_ | `compute` in body targets outer contract symbol; `lead` shadows outer name | candidates — numbers assigned at gate 8 OOF registry step |
+
+OOF-L6 is Ch8 authority (`now()` prohibition). PROP-039 gate 8 scope codes are
+assigned after L5, skipping L6. Final numbering is gate 8 OOF registry work.
+
+---
+
 ## Service-Loop / PROP-037 Exclusion
 
 Service-loop liveness is excluded from PROP-039 authority.
@@ -408,7 +549,7 @@ canon compiler pipeline. Codes marked `candidate` remain proposal text only.
 | `OOF-L2` | `max_steps` is dynamic where v0 requires a static literal | error | candidate |
 | `OOF-L3` | Semantic loop block is unnamed (Postulate 28) | error | candidate |
 | `OOF-L4` | `break` appears in a PROP-039 v0 loop | error | candidate — break deferred |
-| `OOF-L5` | Loop body contains unsupported local-repetition form | error | candidate |
+| `OOF-L5` | Loop body contains unsupported form (nested loop, `recur`, `break`, effect, call in body scope) | error | candidate → experiment-pass at gate 8 |
 
 OOF-L1..L5 do not collide with OOF-L6 (Ch8 `now()` prohibition; Ch8 authority only).
 
@@ -508,6 +649,20 @@ should close:
    Canonical conformance spine: grammar forms, OOF codes, SemanticIR shapes, lab consumption
    contract, PROP-039/PROP-037 boundary, runtime hold.
 
+8. Loop body semantics — TypeChecker scope rules, `lead`/`compute` body declarations,
+   SemanticIR typed body nodes. **PENDING** (Meta-Architect authorization: 2026-06-08)
+
+   Design decisions locked (2026-06-08):
+   - `lead` is explicit (not inferred from first outer `compute`).
+   - Body scope: `item` + `lead` + outer read-only; no outer mutation; no shadowing.
+   - SemanticIR v0 body kinds: `lead_node` + `compute_node` only.
+   - `recur()` in body, nested loops, break, effects: all closed in v0.
+   - Lab VM conformance update: separate pass after canon gate 8 proof.
+
+   Proof plan: experiments/loop_body_semantics_proof/ — Ruby proof, ~100 checks.
+   Route: canon TypeChecker + SemanticIR emitter update; OOF-L5 + scope codes to
+   experiment-pass via gate 8 OOF registry sub-step.
+
 Runtime execution, `igc run`, `.igbin`, RuntimeSmoke, Reference Runtime,
 production, release, performance, certification, and portability gates remain
 closed until separately opened.
@@ -524,7 +679,9 @@ closed until separately opened.
   or held as explanatory shorthand?
 - What exhaustion policies are allowed for fuel-bounded recursion and budgeted
   local loops?
-- How should loop-local compute nodes expose evidence or accumulated values in
-  later SemanticIR work?
+- ~~How should loop-local compute nodes expose evidence or accumulated values in
+  later SemanticIR work?~~ **Resolved (gate 8, 2026-06-08):** `lead_node` +
+  `compute_node` in typed body array; `lead` is the only loop-carried value;
+  outer read-only access is via ref, not mutation.
 - Does `OOF-L*` belong in the same registry namespace as existing Ch8 `OOF-L6`,
   or should local-loop candidates be renumbered during registry review?
