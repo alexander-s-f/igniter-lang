@@ -6,6 +6,29 @@ module IgniterLang
   class TypeChecker
     DEFAULT_VERSION = "typed-pass-executable-proof-v0"
 
+    # ── igniter-string-core-units-and-pure-stdlib-boundary-v0 ─────────────────
+    # Text stdlib function registry (v0).
+    # arg_types: positional expected types. "Text" accepts both Text and String
+    # (v0 compatibility rule: string literals from the parser type as "String").
+    # return_type: "Collection[Text]" is the only parameterised return; all
+    # others are simple type names handled by type_ir().
+    TEXT_STDLIB_FNS = {
+      "concat"          => { arg_types: %w[Text Text],              return_type: "Text" },
+      "trim"            => { arg_types: %w[Text],                   return_type: "Text" },
+      "contains"        => { arg_types: %w[Text Text],              return_type: "Bool" },
+      "starts_with"     => { arg_types: %w[Text Text],              return_type: "Bool" },
+      "ends_with"       => { arg_types: %w[Text Text],              return_type: "Bool" },
+      "split"           => { arg_types: %w[Text Text],              return_type: "Collection[Text]" },
+      "replace"         => { arg_types: %w[Text Text Text],         return_type: "Text" },
+      "replace_all"     => { arg_types: %w[Text Text Text],         return_type: "Text" },
+      "byte_length"     => { arg_types: %w[Text],                   return_type: "Integer" },
+      "rune_length"     => { arg_types: %w[Text],                   return_type: "Integer" },
+      "grapheme_length" => { arg_types: %w[Text],                   return_type: "Integer" },
+      "byte_slice"      => { arg_types: %w[Text Integer Integer],   return_type: "Text" },
+      "rune_slice"      => { arg_types: %w[Text Integer Integer],   return_type: "Text" },
+      "grapheme_slice"  => { arg_types: %w[Text Integer Integer],   return_type: "Text" },
+    }.freeze
+
     def initialize(typechecker_version: DEFAULT_VERSION)
       @typechecker_version = typechecker_version
     end
@@ -328,6 +351,9 @@ module IgniterLang
         infer_olap_rollup(fn, args, symbol_types, type_errors, type_warnings, node_name)
       when "recur"
         infer_recur_call(expr, symbol_types, type_errors, type_warnings, node_name)
+      when *TEXT_STDLIB_FNS.keys
+        # igniter-string-core-units-and-pure-stdlib-boundary-v0
+        infer_text_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
       else
         type_errors << oof("OOF-TY0", "Unknown function: #{fn}", node_name)
         typed_expr("call", type_ir("Unknown"), [], "fn" => fn, "args" => [])
@@ -976,6 +1002,66 @@ module IgniterLang
 
     def dedupe_errors(errors)
       errors.uniq { |entry| [entry.fetch("rule"), entry.fetch("message"), entry.fetch("node"), entry.fetch("line")] }
+    end
+
+    # ── igniter-string-core-units-and-pure-stdlib-boundary-v0: text stdlib ────
+
+    # Validate and type-infer a call to a text stdlib function.
+    # Emits OOF-TY0 for arity mismatch or argument type mismatch.
+    # Resolves fn name to the canonical "stdlib.text.<fn>" IR path.
+    def infer_text_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
+      spec           = TEXT_STDLIB_FNS.fetch(fn)
+      expected_count = spec[:arg_types].length
+
+      # Arity check — early return with empty args if wrong
+      if args.length != expected_count
+        type_errors << oof(
+          "OOF-TY0",
+          "stdlib.text.#{fn}: expected #{expected_count} argument(s), got #{args.length}",
+          node_name
+        )
+        return typed_expr("call", text_stdlib_return_type(spec[:return_type]), [],
+                          "fn" => "stdlib.text.#{fn}", "args" => [])
+      end
+
+      # Infer and validate each argument
+      typed_args = args.each_with_index.map do |arg, idx|
+        ta       = infer_expr(arg, symbol_types, type_errors, type_warnings, node_name)
+        actual   = type_name(ta.fetch("resolved_type"))
+        expected = spec[:arg_types][idx]
+        unless actual == "Unknown" || text_arg_compatible?(actual, expected)
+          type_errors << oof(
+            "OOF-TY0",
+            "stdlib.text.#{fn} arg #{idx + 1}: expected #{expected}, got #{actual}",
+            node_name
+          )
+        end
+        ta
+      end
+
+      deps = typed_args.flat_map { |ta| ta.fetch("deps") }.uniq
+      typed_expr("call", text_stdlib_return_type(spec[:return_type]), deps,
+                 "fn" => "stdlib.text.#{fn}", "args" => typed_args)
+    end
+
+    # Build the return type IR for a text stdlib function.
+    # "Collection[Text]" needs to be constructed as a parameterised type;
+    # all other return types are simple names handled by type_ir().
+    def text_stdlib_return_type(name)
+      if name == "Collection[Text]"
+        { "name" => "Collection", "params" => [{ "name" => "Text", "params" => [] }] }
+      else
+        type_ir(name)
+      end
+    end
+
+    # v0 compatibility rule: Text ≡ String for text stdlib argument positions.
+    # String literals from the parser carry type_tag "String"; they must be
+    # accepted where "Text" is expected without a type error.
+    # For non-Text expected types (Integer, Bool), exact match is required.
+    def text_arg_compatible?(actual, expected)
+      return actual == expected unless expected == "Text"
+      %w[Text String].include?(actual)
     end
 
     # ── PROP-039 gate 5: recur() helpers ───────────────────────────────────────
