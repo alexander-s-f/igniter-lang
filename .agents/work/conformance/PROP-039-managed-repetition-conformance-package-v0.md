@@ -118,6 +118,7 @@ These codes are active in the canon classifier/typechecker pipeline.
 ### 1.3 SemanticIR Shapes (experiment-pass)
 
 Proven in `igniter-lang/experiments/loop_semanticir_proof/` — 49/49 PASS.
+Body semantics extended by Gate 8: `igniter-lang/experiments/loop_body_semantics_proof/` — 100/100 PASS.
 
 #### FiniteLoop → loop_node
 
@@ -127,9 +128,13 @@ Proven in `igniter-lang/experiments/loop_semanticir_proof/` — 49/49 PASS.
   "loop_class": "finite",
   "name": "<LoopName>",
   "item": "<item-variable>",
+  "item_type": "<CollectionElementType>",
   "source_ref": "<source-name>",
   "termination": "collection_exhaustion",
-  "body": [],
+  "body": [
+    { "kind": "lead_node", "name": "<name>", "type": "<Type>", "initial": "<expr>" },
+    { "kind": "compute_node", "name": "<name>", "type": "<Type>", "expr": "<expr>" }
+  ],
   "fragment": "<fragment-class>"
 }
 ```
@@ -142,10 +147,14 @@ Proven in `igniter-lang/experiments/loop_semanticir_proof/` — 49/49 PASS.
   "loop_class": "budgeted",
   "name": "<LoopName>",
   "item": "<item-variable>",
+  "item_type": "<CollectionElementType>",
   "source_ref": "<source-name>",
   "termination": "budget_exhaustion",
   "max_steps": "<N>",
-  "body": [],
+  "body": [
+    { "kind": "lead_node", "name": "<name>", "type": "<Type>", "initial": "<expr>" },
+    { "kind": "compute_node", "name": "<name>", "type": "<Type>", "expr": "<expr>" }
+  ],
   "fragment": "<fragment-class>"
 }
 ```
@@ -160,9 +169,13 @@ Proven in `igniter-lang/experiments/loop_semanticir_proof/` — 49/49 PASS.
 }
 ```
 
-`body=[]` in all loop_node shapes: body semantics are deferred. An alternate
-implementation may emit body content in its own IR, but canon conformance
-is defined by the shapes above.
+`body=[lead_node*, compute_node*]` in loop_node shapes: gate 8 closed 2026-06-08.
+`lead_node` zero or more (loop-carried bindings); `compute_node` zero or more (body computations).
+`item_type` reflects the Collection element type inferred at TypeCheck time.
+
+**Two-track note (lab):** Lab Rust implementation carries a separate `body_nodes` field (compute-only,
+VM execution). The canon conformance target is `body`. An alternate implementation may carry additional
+execution fields without violating conformance, provided the canon `body` shape above is also present.
 
 ### 1.4 grammar_version
 
@@ -232,8 +245,9 @@ PROP-039. It is permitted to:
 | OOF-L1 (Collection source check) | ✅ G6 closed 2026-06-08 — TypeChecker emits OOF-L1 for FiniteLoop source not Collection[T] (canon meaning). Parser-level OOF-L1 ("unbounded loop") remains as lab-local diagnostic for `loop` without max_steps — lab delta, does not collide in practice (different trigger context). |
 | body execution | ✅ lab VM executes loop body; body_nodes = compute-only execution field (VM compat) |
 | Gate 8 — loop body semantics | ✅ G8 closed 2026-06-08 — `lead` keyword in parser.rs, OOF-L5/L7/L8 in classifier.rs + typechecker.rs, `body=[lead_node*,compute_node*]` + `item_type` in emitter.rs; two-track: `body_nodes` VM exec / `body` canon; verify_g4_body_semantics.rb 18/18 PASS |
+| Gate 5 — recur() call semantics | ✅ G5 closed 2026-06-08 — OOF-R1/R5/R6/R7 in typechecker.rs, `recur_call` sub-expr node in emitter.rs; `recur_call` is sub-expression only (never top-level node); verify_g5_recur.rb 18/18 PASS |
 
-Lab is now symmetric with canon on gate 8 body semantics.
+Lab is now symmetric with canon on gate 8 body semantics and gate 5 recur() call semantics.
 
 ---
 
