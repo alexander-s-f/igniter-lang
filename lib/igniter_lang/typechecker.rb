@@ -42,6 +42,25 @@ module IgniterLang
     # Closed list in v1; not user-extensible.
     NUMERIC_ACCESSORS = %w[count length size total_count num_items num_elements].freeze
 
+    # PROP-042 T3: Numeric measure builtins registry (v0 — exhaustive).
+    # Only count(Collection[T]) is in v0.
+    # size/length/Text measures deferred. User-defined measures deferred to v1.
+    # NOT user-extensible in v0. Adding an entry requires a new PROP amendment.
+    # NOT a full termination proof — numeric evidence with trust metadata only.
+    NUMERIC_MEASURE_BUILTINS = {
+      "count" => {
+        "qualified_name" => "stdlib.collection.count",
+        "input_type"     => "Collection",
+        "return_type"    => "Integer",
+        "trust"          => "stdlib_numeric_certified",
+        "source"         => "compiler_builtin"
+      }
+    }.freeze
+
+    # PROP-042 T3: Matches "fn_name(arg_name)" — the T3 function-call decreases form.
+    # Produced by parser.rb parse_decreases_decl when lparen follows the first identifier.
+    T3_CALL_FORM_RE = /\A(\w+)\((\w+)\)\z/
+
     def initialize(typechecker_version: DEFAULT_VERSION)
       @typechecker_version = typechecker_version
     end
@@ -53,6 +72,7 @@ module IgniterLang
       # PROP-041: build T2 size-relation registry (stdlib + user-declared)
       @size_registry = build_size_registry(classified_program)
       @t2_context    = nil
+      @t3_context    = nil  # PROP-042 T3
       @assumption_errors = assumption_errors_by_name(@assumption_registry)
       @olap_env = olap_env(classified_program.fetch("olap_points", []))
       @olap_errors = olap_declaration_errors(@olap_env)
@@ -117,11 +137,21 @@ module IgniterLang
       recur_inputs = all_decls.select { |d| d.fetch("kind","") == "input" }
       recur_outputs = all_decls.select { |d| d.fetch("kind","") == "output" }
 
-      # PROP-039 OOF-R3 / PROP-041 T2: decreases_variant — extracted by classifier,
-      # nil for fuel/fuel_bounded. Dotted-path is dispatched through T2 registry.
+      # PROP-039 OOF-R3 / PROP-041 T2 / PROP-042 T3: decreases_variant — extracted
+      # by classifier, nil for fuel/fuel_bounded. Dispatch priority:
+      #   function-call "fn(arg)"  → T3 (PROP-042)
+      #   dotted-path  "sub.field" → T2 (PROP-041)
+      #   simple-ident "n"         → T1 (PROP-039)
       @t2_context       = nil
+      @t3_context       = nil  # PROP-042 T3
       decreases_variant = classified_contract.fetch("decreases_variant", nil)
-      if decreases_variant && decreases_variant.include?(".")
+      if decreases_variant && T3_CALL_FORM_RE.match?(decreases_variant)
+        # PROP-042 T3: function-call form dispatch (count(items) etc.)
+        # Returns nil to clear variant from @recur_context.
+        decreases_variant = handle_t3_variant(
+          decreases_variant, classified_contract, type_errors, contract_name_str
+        )
+      elsif decreases_variant && decreases_variant.include?(".")
         # PROP-041: T2 structural-size dispatch (numeric → OOF-R3; registered → T2;
         # missing → OOF-R8). Returns nil to clear variant from @recur_context.
         decreases_variant = handle_t2_variant(
@@ -276,6 +306,11 @@ module IgniterLang
         result["decreases_variant_t2"]   = @t2_context[:dv]
         result["size_relation_evidence"] = @t2_context[:entry]
       end
+      # PROP-042 T3: propagate numeric measure evidence for SemanticIR numeric_measure_v0 emission
+      if @t3_context&.fetch(:kind) == :t3_pass
+        result["decreases_variant_t3"]     = @t3_context[:dv]
+        result["numeric_measure_evidence"] = @t3_context[:builtin].merge("arg" => @t3_context[:arg_name])
+      end
       result
     end
 
@@ -369,6 +404,13 @@ module IgniterLang
             if @t2_context&.fetch(:kind) == :t2_pass &&
                obj_name == @t2_context[:subject] &&
                field    == @t2_context[:accessor]
+              obj_typed = typed_expr("ref", obj_type_ir, [obj_name], "name" => obj_name)
+              return typed_expr("field_access", obj_type_ir, [obj_name],
+                               "object" => obj_typed, "field" => field)
+            end
+            # PROP-042 T3: suppress OOF-P1 for any field access on the T3-measured input.
+            # Structural coverage is checked in t3_call_site_check; OOF-R11 is authoritative.
+            if @t3_context&.fetch(:kind) == :t3_pass && obj_name == @t3_context[:arg_name]
               obj_typed = typed_expr("ref", obj_type_ir, [obj_name], "name" => obj_name)
               return typed_expr("field_access", obj_type_ir, [obj_name],
                                "object" => obj_typed, "field" => field)
@@ -1231,6 +1273,10 @@ module IgniterLang
         if @t2_context&.fetch(:kind) == :t2_pass
           t2_call_site_check(expr, type_errors, node_name, @t2_context)
         end
+        # PROP-042 T3: numeric measure call-site check → OOF-R11
+        if @t3_context&.fetch(:kind) == :t3_pass
+          t3_call_site_check(expr, type_errors, node_name, @t3_context)
+        end
       end
 
       typed_args = args.map { |a| infer_expr(a, symbol_types, [], [], node_name) }
@@ -1442,6 +1488,101 @@ module IgniterLang
       return false unless expr.fetch("field", "") == accessor
       obj = expr.fetch("object", {})
       obj.is_a?(Hash) && obj.fetch("kind", "") == "ref" && obj.fetch("name", "") == subject
+    end
+
+    # ── PROP-042 T3: numeric measure dispatch and call-site check ───────────────
+
+    # Handle a function-call form decreases variant for T3.
+    # Sets @t3_context and fires OOF-R10 for unrecognized measure functions.
+    # Returns nil in all cases (function-call form is never kept as a raw variant).
+    # NOT a full termination proof — numeric evidence with trust metadata only.
+    def handle_t3_variant(dv, classified_contract, type_errors, contract_name_str)
+      m        = T3_CALL_FORM_RE.match(dv)
+      fn_name  = m[1]
+      arg_name = m[2]
+
+      builtin = NUMERIC_MEASURE_BUILTINS[fn_name]
+      unless builtin
+        # OOF-R10: function-call decreases with fn not in NUMERIC_MEASURE_BUILTINS v0
+        type_errors << oof("OOF-R10",
+          "contract '#{contract_name_str}' — decreases measure '#{fn_name}(#{arg_name})': " \
+          "'#{fn_name}' is not a recognized stdlib numeric measure in v0; allowed: count; " \
+          "user-defined measures and Text length measures require future authorization",
+          contract_name_str)
+        @t3_context = { kind: :t3_r10 }
+        return nil
+      end
+
+      # Resolve measured input's declared type from input declarations
+      all_decls  = classified_contract.fetch("declarations", [])
+      input_decl = all_decls.find { |d| d.fetch("kind", "") == "input" && d.fetch("name", "") == arg_name }
+      subject_type = if input_decl
+        raw = input_decl.fetch("type_annotation", "Unknown")
+        if raw.is_a?(Hash)
+          raw.fetch("name", "Unknown")
+        else
+          raw.to_s.split("[", 2).first.strip
+        end
+      else
+        "Unknown"
+      end
+
+      # T3 pass context — used by infer_expr (OOF-P1 suppression) and t3_call_site_check (OOF-R11)
+      @t3_context = {
+        kind:         :t3_pass,
+        dv:           dv,
+        fn_name:      fn_name,
+        arg_name:     arg_name,
+        subject_type: subject_type,
+        builtin:      builtin
+      }
+      nil
+    end
+
+    # Call-site check for T3 recur() calls.
+    # The argument at the measured-input position must be a T2-registered structural
+    # subvalue of the measured input. Fires OOF-R11 on failure.
+    # Structural coverage implies numeric decrease via stdlib_numeric_certified axioms:
+    #   count(x.tail) < count(x),  count(x.rest) < count(x).
+    def t3_call_site_check(expr, type_errors, node_name, ctx)
+      recur_ctx = @recur_context
+      return unless recur_ctx
+
+      input_names = recur_ctx[:input_names]
+      subject_pos = input_names.index(ctx[:arg_name])
+      return unless subject_pos
+
+      args = expr.fetch("args", [])
+      return if subject_pos >= args.length
+
+      variant_arg = args[subject_pos]
+      unless t3_structurally_covered?(variant_arg, ctx[:arg_name], ctx[:subject_type])
+        arg_desc = syntactic_arg_desc(variant_arg)
+        fn_name  = ctx[:fn_name]
+        arg_name = ctx[:arg_name]
+        type_errors << oof("OOF-R11",
+          "recur() in '#{node_name}' — numeric measure decrease obligation not satisfied for " \
+          "'#{fn_name}(#{arg_name})': argument at position #{subject_pos + 1} does not satisfy " \
+          "#{fn_name}(arg) < #{fn_name}(#{arg_name}); expected a T2-registered structural " \
+          "subvalue of '#{arg_name}' (e.g., #{arg_name}.tail or #{arg_name}.rest for " \
+          "Collection, or a declared size_relation for the type)",
+          node_name)
+      end
+    end
+
+    # True iff expr is a field_access on subject_name whose accessor is registered
+    # in the T2 size_registry for subject_type.
+    # Delegates structural coverage to the T2 registry (stdlib + user-declared).
+    def t3_structurally_covered?(expr, subject_name, subject_type)
+      return false unless expr.is_a?(Hash) && expr.fetch("kind", "") == "field_access"
+
+      obj = expr.fetch("object", {})
+      fld = expr.fetch("field", "")
+      return false unless obj.is_a?(Hash) &&
+                          obj.fetch("kind", "") == "ref" &&
+                          obj.fetch("name", "") == subject_name
+
+      @size_registry.key?([subject_type, fld])
     end
 
     # Produce typed body array for SemanticIR lowering.

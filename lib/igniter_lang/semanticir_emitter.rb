@@ -157,13 +157,32 @@ module IgniterLang
       contract_ir["profile_authority"] = profile_authority if profile_authority
       assumption_refs = contract.fetch("assumption_refs", [])
       contract_ir["assumption_refs"] = assumption_refs unless assumption_refs.empty?
-      # PROP-041 T2 / PROP-039 OOF-R3: emit termination evidence
-      # T2 path (structural_size_v1) takes precedence when typechecker set decreases_variant_t2.
-      # T1 path (syntactic_v0) is byte-for-byte preserved.
-      # NOTE: T2 is structural evidence with trust metadata — NOT a full termination proof.
+      # PROP-042 T3 / PROP-041 T2 / PROP-039 OOF-R3: emit termination evidence.
+      # Dispatch priority (mutually exclusive — only one fires per contract):
+      #   T3 numeric_measure_v0  — set by handle_t3_variant (PROP-042)
+      #   T2 structural_size_v1  — set by handle_t2_variant (PROP-041)
+      #   T1 syntactic_v0        — clean simple-identifier decreases (PROP-039)
+      # T2 and T1 are structural evidence / syntactic evidence with trust metadata.
+      # T3 is numeric evidence with trust metadata.
+      # None of these constitute a full termination proof.
       decreases_variant    = contract.fetch("decreases_variant", nil)
       decreases_variant_t2 = contract.fetch("decreases_variant_t2", nil)
-      if contract_ir["modifier"] == "recursive" && decreases_variant_t2
+      decreases_variant_t3 = contract.fetch("decreases_variant_t3", nil)  # PROP-042 T3
+      if contract_ir["modifier"] == "recursive" && decreases_variant_t3
+        # PROP-042 T3: numeric_measure_v0 — numeric measure evidence with stdlib_numeric_certified trust
+        evidence = contract.fetch("numeric_measure_evidence", {})
+        contract_ir["termination"] = {
+          "decreases"       => decreases_variant_t3,
+          "variant_check"   => "numeric_measure_v0",
+          "numeric_measure" => {
+            "fn"     => evidence.fetch("qualified_name"),
+            "arg"    => evidence.fetch("arg"),
+            "trust"  => evidence.fetch("trust"),
+            "source" => evidence.fetch("source")
+          }
+        }
+      elsif contract_ir["modifier"] == "recursive" && decreases_variant_t2
+        # PROP-041 T2: structural_size_v1 — unchanged
         evidence = contract.fetch("size_relation_evidence", {})
         contract_ir["termination"] = {
           "decreases"     => decreases_variant_t2,
@@ -175,6 +194,7 @@ module IgniterLang
           }
         }
       elsif contract_ir["modifier"] == "recursive" && decreases_variant
+        # T1: syntactic_v0 — unchanged
         contract_ir["termination"] = {
           "decreases"     => decreases_variant,
           "variant_check" => "syntactic_v0"

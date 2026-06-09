@@ -1359,10 +1359,24 @@ module IgniterLang
       { "kind" => "lead", "name" => name, "type_annotation" => type_ref, "initial" => initial }
     end
 
-    # decreases <dotted-ident-path>  (e.g. "items.remaining" or "n")
+    # decreases <variant>
+    #   PROP-039 / PROP-041 / PROP-042 dispatch:
+    #   decreases <ident>            → T1 simple-identifier   (e.g. "n")
+    #   decreases <ident>.<ident>    → T2 dotted-path         (e.g. "items.tail")
+    #   decreases <ident>(<ident>)   → T3 function-call form  (e.g. "count(items)")
     def parse_decreases_decl
-      parts = []
-      parts << name_token!(%i[ident])
+      fn_or_var = name_token!(%i[ident])
+
+      # PROP-042 T3: function-call form — decreases count(items)
+      if peek_type?(:lparen)
+        advance                    # consume (
+        arg = name_token!(%i[ident])
+        expect_type!(:rparen)      # consume )
+        return { "kind" => "decreases", "variant" => "#{fn_or_var}(#{arg})" }
+      end
+
+      # T1 / T2: simple-identifier or dotted-path
+      parts = [fn_or_var]
       while peek_type?(:dot)
         advance
         parts << name_token!(%i[ident])
