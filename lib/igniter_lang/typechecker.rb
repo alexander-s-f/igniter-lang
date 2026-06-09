@@ -57,6 +57,16 @@ module IgniterLang
       }
     }.freeze
 
+    # PROP-043: Map[String,V] stdlib function registry (v0 — exhaustive, not user-extensible).
+    # Short source names → qualified SemanticIR names (same pattern as TEXT_STDLIB_FNS).
+    # Adding an entry requires a new PROP amendment and P3+ authorization.
+    MAP_STDLIB_FNS = {
+      "map_get"        => { qualified_name: "stdlib.map.get",        arity: 2 },
+      "map_has_key"    => { qualified_name: "stdlib.map.has_key",    arity: 2 },
+      "map_from_pairs" => { qualified_name: "stdlib.map.from_pairs", arity: 1 },
+      "map_empty"      => { qualified_name: "stdlib.map.empty",      arity: 0 },
+    }.freeze
+
     # PROP-042 T3: Matches "fn_name(arg_name)" — the T3 function-call decreases form.
     # Produced by parser.rb parse_decreases_decl when lparen follows the first identifier.
     T3_CALL_FORM_RE = /\A(\w+)\((\w+)\)\z/
@@ -115,7 +125,7 @@ module IgniterLang
     def type_shapes(classified_program)
       classified_program.fetch("type_declarations").each_with_object({}) do |type, shapes|
         shapes[type.fetch("name")] = type.fetch("fields", []).each_with_object({}) do |field, fields|
-          fields[field.fetch("name")] = type_ir(normalize_type(field.fetch("type_annotation")))
+          fields[field.fetch("name")] = type_ir(field.fetch("type_annotation"))  # PROP-043 C1: preserve Map[K,V] params
         end
       end
     end
@@ -158,6 +168,34 @@ module IgniterLang
           decreases_variant, classified_contract, type_errors, contract_name_str
         )
       end
+
+      # PROP-043: @output_type_hints — pre-scan output declarations whose type_annotation
+      # names a known named Record type in @type_shapes. Used by infer_record_literal to
+      # resolve { field: value } literals to a named Record type and validate field shapes.
+      # Only named Records (user-declared, present in @type_shapes) receive hints.
+      # Map/Collection/primitive types are excluded — they are not @type_shapes entries.
+      @output_type_hints = {}
+      all_decls.select { |d| d.fetch("kind", "") == "output" }.each do |od|
+        ann = od.fetch("type_annotation", nil)
+        next unless ann
+        tn = ann.is_a?(Hash) ? ann.fetch("name", nil) : ann.to_s
+        @output_type_hints[od.fetch("name")] = type_ir(ann) if @type_shapes.key?(tn)
+      end
+
+      # PROP-043: OOF-MAP1/2/3 — check all declarations for Map annotation violations.
+      # Runs before declarations.each so errors accumulate early and blocking_rule_present?
+      # can suppress spurious downstream type mismatches.
+      map_annotation_errors = []
+      all_decls.each do |decl|
+        next unless decl.key?("type_annotation")
+        check_map_annotation(
+          decl.fetch("type_annotation"),
+          decl.fetch("name"),
+          decl.fetch("kind", ""),
+          map_annotation_errors
+        )
+      end
+      type_errors.concat(map_annotation_errors)
 
       @recur_context = {
         authorized:         recur_authorized,
@@ -438,6 +476,10 @@ module IgniterLang
         infer_index_access(expr, symbol_types, type_errors, type_warnings, node_name)
       when "if_expr"
         infer_if_expr(expr, symbol_types, type_errors, type_warnings, node_name)
+      when "array_literal"  # PROP-043: Collection[T] inference for map_from_pairs inputs
+        infer_array_literal(expr, symbol_types, type_errors, type_warnings, node_name)
+      when "record_literal"  # PROP-043: named Record inference via @output_type_hints
+        infer_record_literal(expr, symbol_types, type_errors, type_warnings, node_name)
       else
         type_errors << oof("OOF-TY0", "Unsupported expression kind: #{expr.fetch("kind")}", node_name)
         typed_expr("unsupported", type_ir("Unknown"), [], "source_kind" => expr.fetch("kind"))
@@ -459,6 +501,12 @@ module IgniterLang
       when *TEXT_STDLIB_FNS.keys
         # igniter-string-core-units-and-pure-stdlib-boundary-v0
         infer_text_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
+      when *MAP_STDLIB_FNS.keys
+        # PROP-043: Map[String,V] stdlib — map_get/map_has_key/map_from_pairs/map_empty
+        infer_map_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
+      when "or_else"
+        # PROP-043: Option[V] unwrap with default (or_else introduced alongside Map v0)
+        infer_or_else(args, symbol_types, type_errors, type_warnings, node_name)
       else
         type_errors << oof("OOF-TY0", "Unknown function: #{fn}", node_name)
         typed_expr("call", type_ir("Unknown"), [], "fn" => fn, "args" => [])
@@ -1584,6 +1632,290 @@ module IgniterLang
 
       @size_registry.key?([subject_type, fld])
     end
+
+    # ── PROP-043: Map[String,V] stdlib — private implementation ──────────────────
+
+    # Dispatcher for MAP_STDLIB_FNS.keys.
+    # Routes fn to the appropriate infer_map_* handler.
+    def infer_map_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
+      case fn
+      when "map_get"
+        infer_map_get(args, symbol_types, type_errors, type_warnings, node_name)
+      when "map_has_key"
+        infer_map_has_key(args, symbol_types, type_errors, type_warnings, node_name)
+      when "map_from_pairs"
+        infer_map_from_pairs(args, symbol_types, type_errors, type_warnings, node_name)
+      when "map_empty"
+        infer_map_empty(args, symbol_types, type_errors, type_warnings, node_name)
+      else
+        type_errors << oof("OOF-TY0", "Unknown map function: #{fn}", node_name)
+        typed_expr("call", type_ir("Unknown"), [], "fn" => fn, "args" => [])
+      end
+    end
+
+    # Rule MAP-GET: map_get(Map[String,V], String) → Option[V]
+    # V extracted from Map params[1]. Unknown-compat: Option[Unknown] for Unknown map.
+    def infer_map_get(args, symbol_types, type_errors, type_warnings, node_name)
+      unless args.length == 2
+        type_errors << oof("OOF-TY0", "map_get requires 2 arguments (map, key)", node_name)
+        return typed_expr("call", type_ir("Unknown"), [], "fn" => "stdlib.map.get", "args" => [])
+      end
+
+      map_arg = infer_expr(args[0], symbol_types, type_errors, type_warnings, node_name)
+      key_arg = infer_expr(args[1], symbol_types, type_errors, type_warnings, node_name)
+
+      map_type = map_arg.fetch("resolved_type")
+      unless type_name(map_type) == "Map" || type_name(map_type) == "Unknown"
+        type_errors << oof(
+          "OOF-TY0",
+          "map_get: first argument must be Map[String,V], got #{type_name(map_type)}",
+          node_name
+        )
+      end
+
+      value_type = if type_name(map_type) == "Map"
+        params = map_type.fetch("params", [])
+        params.length >= 2 ? params[1] : type_ir("Unknown")
+      else
+        type_ir("Unknown")
+      end
+
+      deps = (map_arg.fetch("deps", []) + key_arg.fetch("deps", [])).uniq
+      typed_expr("call", option_type_ir(value_type), deps,
+                 "fn" => "stdlib.map.get", "args" => [map_arg, key_arg])
+    end
+
+    # Rule MAP-HAS-KEY: map_has_key(Map[String,V], String) → Bool
+    # Always Bool regardless of V. Unknown-compat: Bool even for Unknown map.
+    def infer_map_has_key(args, symbol_types, type_errors, type_warnings, node_name)
+      unless args.length == 2
+        type_errors << oof("OOF-TY0", "map_has_key requires 2 arguments (map, key)", node_name)
+        return typed_expr("call", type_ir("Unknown"), [], "fn" => "stdlib.map.has_key", "args" => [])
+      end
+
+      map_arg = infer_expr(args[0], symbol_types, type_errors, type_warnings, node_name)
+      key_arg = infer_expr(args[1], symbol_types, type_errors, type_warnings, node_name)
+
+      map_type = map_arg.fetch("resolved_type")
+      unless type_name(map_type) == "Map" || type_name(map_type) == "Unknown"
+        type_errors << oof(
+          "OOF-TY0",
+          "map_has_key: first argument must be Map[String,V], got #{type_name(map_type)}",
+          node_name
+        )
+      end
+
+      deps = (map_arg.fetch("deps", []) + key_arg.fetch("deps", [])).uniq
+      typed_expr("call", type_ir("Bool"), deps,
+                 "fn" => "stdlib.map.has_key", "args" => [map_arg, key_arg])
+    end
+
+    # Rule MAP-FROM-PAIRS: map_from_pairs(Collection[PairRecord]) → Map[String,V]
+    # V inferred from @type_shapes[elem]["value"]. Silent Unknown fallback on unrecognized elem.
+    def infer_map_from_pairs(args, symbol_types, type_errors, type_warnings, node_name)
+      unless args.length == 1
+        type_errors << oof("OOF-TY0", "map_from_pairs requires 1 argument (pairs)", node_name)
+        return typed_expr("call", type_ir("Unknown"), [], "fn" => "stdlib.map.from_pairs", "args" => [])
+      end
+
+      pairs_arg  = infer_expr(args[0], symbol_types, type_errors, type_warnings, node_name)
+      pairs_type = pairs_arg.fetch("resolved_type")
+      value_type = infer_from_pairs_value_type(pairs_type)
+
+      typed_expr("call", map_type_ir("String", value_type), pairs_arg.fetch("deps", []),
+                 "fn" => "stdlib.map.from_pairs", "args" => [pairs_arg])
+    end
+
+    # Infer value type V from a Collection[PairRecord] type for map_from_pairs.
+    # Looks up @type_shapes[elem_name]["value"]. Silent Unknown on any miss.
+    def infer_from_pairs_value_type(pairs_type)
+      return type_ir("Unknown") unless type_name(pairs_type) == "Collection"
+
+      elem_params = pairs_type.fetch("params", [])
+      return type_ir("Unknown") if elem_params.empty?
+
+      elem_type_name = type_name(elem_params[0])
+      if @type_shapes&.key?(elem_type_name)
+        value_field = @type_shapes[elem_type_name]["value"]
+        return value_field if value_field
+      end
+
+      type_ir("Unknown")
+    end
+
+    # Rule MAP-EMPTY: map_empty() → Map[String,Unknown]
+    # Context-driven V inference deferred to v1. V=Unknown is the accepted v0 behavior.
+    # map_empty() flows to output Map[String,String] without OOF — output check uses
+    # type_name equality only ("Map" == "Map"); param unification is v1.
+    def infer_map_empty(args, symbol_types, type_errors, type_warnings, node_name)
+      unless args.empty?
+        type_errors << oof("OOF-TY0", "map_empty takes no arguments", node_name)
+        return typed_expr("call", type_ir("Unknown"), [], "fn" => "stdlib.map.empty", "args" => [])
+      end
+
+      typed_expr("call", map_type_ir("String", "Unknown"), [],
+                 "fn" => "stdlib.map.empty", "args" => [],
+                 "note" => "empty-type-context-inference-deferred-v1")
+    end
+
+    # Rule OR-ELSE: or_else(Option[V], V) → V
+    # V extracted from Option params[0]. Unknown-compat: Unknown if not Option.
+    # fn name in SemanticIR: "or_else" (no stdlib. prefix — v0 design).
+    def infer_or_else(args, symbol_types, type_errors, type_warnings, node_name)
+      unless args.length == 2
+        type_errors << oof("OOF-TY0", "or_else requires 2 arguments (option, default)", node_name)
+        return typed_expr("call", type_ir("Unknown"), [], "fn" => "or_else", "args" => [])
+      end
+
+      opt_arg     = infer_expr(args[0], symbol_types, type_errors, type_warnings, node_name)
+      default_arg = infer_expr(args[1], symbol_types, type_errors, type_warnings, node_name)
+
+      opt_type = opt_arg.fetch("resolved_type")
+      inner_type = if type_name(opt_type) == "Option"
+        params = opt_type.fetch("params", [])
+        params.length >= 1 ? params[0] : type_ir("Unknown")
+      else
+        type_ir("Unknown")
+      end
+
+      deps = (opt_arg.fetch("deps", []) + default_arg.fetch("deps", [])).uniq
+      typed_expr("call", inner_type, deps,
+                 "fn" => "or_else", "args" => [opt_arg, default_arg])
+    end
+
+    # array_literal: infers Collection[T] from the first non-Unknown element type.
+    # Empty array: Collection[Unknown]. Required for map_from_pairs pair arrays.
+    def infer_array_literal(expr, symbol_types, type_errors, type_warnings, node_name)
+      items = expr.fetch("items", [])
+      if items.empty?
+        return typed_expr("array_literal", collection_type_ir_from(type_ir("Unknown")), [], "items" => [])
+      end
+
+      typed_items = items.map { |item| infer_expr(item, symbol_types, type_errors, type_warnings, node_name) }
+      elem_type   = typed_items.map { |ti| ti.fetch("resolved_type") }
+                               .find { |t| type_name(t) != "Unknown" } || type_ir("Unknown")
+      deps = typed_items.flat_map { |ti| ti.fetch("deps", []) }.uniq
+      typed_expr("array_literal", collection_type_ir_from(elem_type), deps, "items" => typed_items)
+    end
+
+    # record_literal: resolves to named Record type via @output_type_hints if available.
+    # Validates field presence, no extra fields, and type_name compatibility.
+    # Falls back to Unknown if no hint or on field mismatch.
+    def infer_record_literal(expr, symbol_types, type_errors, type_warnings, node_name)
+      fields = expr.fetch("fields", {})
+      typed_fields = fields.transform_values do |val_expr|
+        infer_expr(val_expr, symbol_types, type_errors, type_warnings, node_name)
+      end
+      deps = typed_fields.values.flat_map { |tf| tf.fetch("deps", []) }.uniq
+
+      hint_type = @output_type_hints&.fetch(node_name, nil)
+      if hint_type && type_name(hint_type) != "Unknown"
+        type_name_str   = type_name(hint_type)
+        expected_fields = @type_shapes.fetch(type_name_str, {})
+        field_errors    = []
+
+        expected_fields.each do |fname, expected_type|
+          if typed_fields.key?(fname)
+            actual_type = typed_fields[fname].fetch("resolved_type")
+            unless type_name(actual_type) == type_name(expected_type) ||
+                   type_name(actual_type) == "Unknown"
+              field_errors << oof(
+                "OOF-TY0",
+                "record literal field '#{fname}': expected #{type_name(expected_type)}, " \
+                "got #{type_name(actual_type)}",
+                node_name
+              )
+            end
+          else
+            field_errors << oof("OOF-TY0", "record literal missing required field: #{fname}", node_name)
+          end
+        end
+
+        typed_fields.each_key do |fname|
+          unless expected_fields.key?(fname)
+            field_errors << oof("OOF-TY0", "record literal has unexpected field: #{fname}", node_name)
+          end
+        end
+
+        if field_errors.empty?
+          return typed_expr("record_literal", hint_type, deps, "fields" => typed_fields)
+        else
+          type_errors.concat(field_errors)
+          return typed_expr("record_literal", type_ir("Unknown"), deps, "fields" => typed_fields)
+        end
+      end
+
+      typed_expr("record_literal", type_ir("Unknown"), deps, "fields" => typed_fields)
+    end
+
+    # check_map_annotation: validates a single type_annotation for Map constraint violations.
+    # OOF-MAP1: non-String key (exempts Unknown key).
+    # OOF-MAP2: Any value — permanently closed.
+    # OOF-MAP3: Unknown value in output declarations only.
+    def check_map_annotation(annotation, node_name, decl_kind, errors)
+      return unless annotation.is_a?(Hash) && annotation.fetch("name", nil) == "Map"
+
+      params    = annotation.fetch("params", [])
+      key_param = params[0]
+      val_param = params[1]
+      key_name  = param_type_name(key_param)
+      val_name  = param_type_name(val_param)
+
+      if key_name && key_name != "String" && key_name != "Unknown"
+        errors << oof(
+          "OOF-MAP1",
+          "Map key type in v0 must be String; " \
+          "Map[K,V] where K = '#{key_name}' requires v1 authorization; " \
+          "use Map[String,V] or a named Record for known key schemas",
+          node_name
+        )
+      end
+
+      if val_name == "Any"
+        errors << oof(
+          "OOF-MAP2",
+          "Map value type 'Any' is permanently closed at contract boundaries; " \
+          "use a homogeneous type V or a named Record",
+          node_name
+        )
+      end
+
+      if decl_kind == "output" && val_name == "Unknown"
+        errors << oof(
+          "OOF-MAP3",
+          "Map value type 'Unknown' is a compiler uncertainty marker and must not " \
+          "appear in user-declared output type annotations",
+          node_name
+        )
+      end
+    end
+
+    # Extract the type name from a param entry (Hash or String).
+    def param_type_name(param)
+      return nil if param.nil?
+      param.is_a?(Hash) ? param.fetch("name", nil) : param.to_s
+    end
+
+    # Map[K,V] type IR. K and V may be Hash type_ir or String type name.
+    def map_type_ir(key, value)
+      key_ir = key.is_a?(Hash) ? key : { "name" => key.to_s, "params" => [] }
+      val_ir = value.is_a?(Hash) ? value : { "name" => value.to_s, "params" => [] }
+      { "name" => "Map", "params" => [key_ir, val_ir] }
+    end
+
+    # Option[V] type IR. V may be Hash type_ir or String type name.
+    def option_type_ir(inner)
+      inner_ir = inner.is_a?(Hash) ? inner : type_ir(inner.to_s)
+      { "name" => "Option", "params" => [inner_ir] }
+    end
+
+    # Collection[V] type IR. elem_type_ir may be Hash type_ir or String type name.
+    def collection_type_ir_from(elem_type_ir)
+      { "name" => "Collection",
+        "params" => [elem_type_ir.is_a?(Hash) ? elem_type_ir : type_ir(elem_type_ir.to_s)] }
+    end
+
+    # ── End PROP-043 ─────────────────────────────────────────────────────────────
 
     # Produce typed body array for SemanticIR lowering.
     # Returns array of hashes with kind "lead" or "compute".

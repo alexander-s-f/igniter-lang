@@ -49,7 +49,7 @@ module IgniterLang
           "fields" => type.fetch("fields", []).map do |field|
             {
               "name" => field.fetch("name"),
-              "type_annotation" => normalize_type(field.fetch("type_annotation")),
+              "type_annotation" => normalized_type_annotation(field.fetch("type_annotation")),  # PROP-043 C1: preserve Map[K,V] params
               "optional" => field.fetch("optional", false)
             }
           end
