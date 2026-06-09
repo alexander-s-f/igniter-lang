@@ -55,6 +55,7 @@ module IgniterLang
     for loop recursive fuel_bounded decreases
     lead
     size_relation
+    variant match
   ].freeze
 
   class Lexer
@@ -139,6 +140,8 @@ module IgniterLang
       when "=" then
         if peek(1) == "="
           advance; advance; Token.new(:op, "==", l, c)
+        elsif peek(1) == ">"
+          advance; advance; Token.new(:fat_arrow, "=>", l, c)  # PROP-044-P3
         else
           advance; Token.new(:assign, "=", l, c)
         end
@@ -272,7 +275,8 @@ module IgniterLang
     def parse
       program = { "kind" => "source_file", "module" => nil, "imports" => [],
                   "traits" => [], "impls" => [], "contract_shapes" => [],
-                  "contracts" => [], "types" => [], "functions" => [],
+                  "contracts" => [], "types" => [], "variants" => [],  # PROP-044-P3
+                  "functions" => [],
                   "pipelines" => [], "olap_points" => [], "assumptions" => [],
                   "profiles" => [],        # PROP-040
                   "size_relations" => [],  # PROP-041
@@ -299,6 +303,7 @@ module IgniterLang
         when "contract_shape" then program["contract_shapes"] << decl
         when "contract"       then program["contracts"]       << decl
         when "type"           then program["types"]           << decl
+        when "variant"        then program["variants"]        << decl  # PROP-044-P3
         when "function"       then program["functions"]       << decl
         when "pipeline"       then program["pipelines"]       << decl
         when "olap_point"     then program["olap_points"]     << decl
@@ -408,6 +413,7 @@ module IgniterLang
           nil
         end
       when "type"           then advance; parse_type_decl
+      when "variant"        then advance; parse_variant_decl    # PROP-044-P3
       when "def"            then advance; parse_function_decl
       when "pipeline"       then advance; parse_pipeline_decl
       when "olap_point"     then advance; parse_olap_point_decl
@@ -1722,6 +1728,7 @@ module IgniterLang
       when :keyword
         case tok.value
         when "if"    then advance; parse_if_expr
+        when "match" then advance; parse_match_expr              # PROP-044-P3
         when "true"  then advance; { "kind" => "literal", "value" => true,  "type_tag" => "Bool" }
         when "false" then advance; { "kind" => "literal", "value" => false, "type_tag" => "Bool" }
         when "nil"   then advance; { "kind" => "literal", "value" => nil,   "type_tag" => "Nil" }
@@ -1729,7 +1736,13 @@ module IgniterLang
           advance; { "kind" => "ref", "name" => tok.value }
         end
       when :ident
-        advance; { "kind" => "ref", "name" => tok.value }
+        advance
+        # PROP-044-P3: PascalCase ident immediately followed by { → variant construct
+        if tok.value[0] =~ /[A-Z]/ && peek_type?(:lbrace)
+          parse_variant_construct(tok.value)
+        else
+          { "kind" => "ref", "name" => tok.value }
+        end
       when :int_lit
         advance; { "kind" => "literal", "value" => tok.value, "type_tag" => "Integer" }
       when :float_lit
@@ -1776,6 +1789,102 @@ module IgniterLang
       end
       expect_type!(:rbracket)
       { "kind" => "array_literal", "items" => items }
+    end
+
+    # ── PROP-044-P3: variant declaration ──────────────────────────────────────
+
+    def parse_variant_decl
+      name = name_token!(%i[ident])
+      expect_type!(:lbrace)
+      arms = []
+      until peek_type?(:rbrace) || peek_type?(:eof)
+        arm = parse_variant_arm
+        arms << arm if arm
+      end
+      expect_type!(:rbrace)
+      { "kind" => "variant", "name" => name, "arms" => arms }
+    end
+
+    def parse_variant_arm
+      arm_name = name_token!(%i[ident])
+      fields = []
+      if peek_type?(:lbrace)
+        advance # consume {
+        until peek_type?(:rbrace) || peek_type?(:eof)
+          fname = name_token!(%i[ident keyword])
+          expect_type!(:colon)
+          ftype = parse_type_ref
+          fields << { "name" => fname, "type_annotation" => ftype }
+          advance if peek_type?(:comma)
+        end
+        expect_type!(:rbrace)
+      end
+      advance if peek_type?(:comma)
+      { "kind" => "variant_arm", "name" => arm_name, "fields" => fields }
+    end
+
+    # ── PROP-044-P3: variant construct expression ──────────────────────────
+
+    def parse_variant_construct(arm_name)
+      expect_type!(:lbrace)
+      fields = {}
+      until peek_type?(:rbrace) || peek_type?(:eof)
+        key = name_token!(%i[ident keyword])
+        expect_type!(:colon)
+        val = parse_expr
+        fields[key] = val
+        advance if peek_type?(:comma)
+      end
+      expect_type!(:rbrace)
+      { "kind" => "variant_construct", "arm" => arm_name, "fields" => fields }
+    end
+
+    # ── PROP-044-P3: match expression ─────────────────────────────────────
+
+    def parse_match_expr
+      subject = parse_expr
+      expect_type!(:lbrace)
+      arms = []
+      until peek_type?(:rbrace) || peek_type?(:eof)
+        arm = parse_match_arm
+        arms << arm if arm
+        advance if peek_type?(:comma)
+      end
+      expect_type!(:rbrace)
+      { "kind" => "match_expr", "subject" => subject, "arms" => arms }
+    end
+
+    def parse_match_arm
+      pattern = parse_match_pattern
+      return nil unless pattern
+      expect_type!(:fat_arrow)
+      body = parse_expr
+      { "kind" => "match_arm", "pattern" => pattern, "body" => body }
+    end
+
+    def parse_match_pattern
+      tok = peek
+      if tok.type == :ident && tok.value == "_"
+        advance
+        return { "wildcard" => true, "arm" => "_", "bindings" => [] }
+      end
+      if tok.type == :ident || tok.type == :keyword
+        arm_name = name_token!(%i[ident keyword])
+        bindings = []
+        if peek_type?(:lbrace)
+          advance # consume {
+          until peek_type?(:rbrace) || peek_type?(:eof)
+            binding = name_token!(%i[ident keyword])
+            bindings << binding
+            advance if peek_type?(:comma)
+          end
+          expect_type!(:rbrace)
+        end
+        return { "wildcard" => false, "arm" => arm_name, "bindings" => bindings }
+      end
+      @errors << { "message" => "Expected match arm pattern, got #{tok.type}(#{tok.value})", "line" => tok.line }
+      advance
+      nil
     end
 
     def parse_record_or_block
@@ -1837,6 +1946,7 @@ module IgniterLang
         "contract_shapes" => @ast["contract_shapes"],
         "contracts"       => @ast["contracts"],
         "types"           => @ast["types"],
+        "variants"        => @ast.fetch("variants", []),         # PROP-044-P3
         "functions"       => @ast["functions"],
         "pipelines"       => @ast.fetch("pipelines", []),
         "olap_points"     => @ast.fetch("olap_points", []),
@@ -1881,6 +1991,17 @@ module IgniterLang
 
       # PROP-040: profile declarations
       return "profile-v0" if @ast.fetch("profiles", []).any?
+
+      # PROP-044-P3: variant declarations and match/variant_construct expressions
+      has_variant_forms = @ast.fetch("variants", []).any? ||
+        @ast.fetch("contracts", []).any? { |c|
+          c.fetch("body", []).any? { |n|
+            next false unless n.is_a?(Hash)
+            expr = n["expr"]
+            expr.is_a?(Hash) && %w[match_expr variant_construct].include?(expr["kind"])
+          }
+        }
+      return "variant-v0" if has_variant_forms
 
       # PROP-039 gate 3: loop/recursion forms
       loop_contract_modifiers = %w[recursive fuel_bounded]
