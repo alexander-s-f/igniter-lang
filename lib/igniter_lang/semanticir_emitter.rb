@@ -89,6 +89,9 @@ module IgniterLang
       result["olap_points"] = typed_program.fetch("olap_points") if typed_program.key?("olap_points")
       invariants = typed_program_invariants(result.fetch("contracts"))
       result["invariants"] = invariants unless invariants.empty?
+      # PROP-044 P6: emit variant declarations when present
+      variant_env = typed_program.fetch("variant_env", {})
+      result["variant_declarations"] = semantic_variant_declarations(variant_env) unless variant_env.empty?
       # PROP-045: emit module-level intent_text when present
       module_intent = typed_program.fetch("intent_text", nil)
       result["intent_text"] = module_intent if module_intent
@@ -298,6 +301,12 @@ module IgniterLang
       when Hash
         if expr.fetch("kind", nil) == "if_expr"
           semantic_if_expr(expr)
+        # PROP-044 P6: variant_construct → typed variant_construct node
+        elsif expr.fetch("kind", nil) == "variant_construct"
+          semantic_variant_construct(expr)
+        # PROP-044 P6: match_expr → typed match_node (renamed to avoid confusion with parse AST)
+        elsif expr.fetch("kind", nil) == "match_expr"
+          semantic_match_node(expr)
         # PROP-039 gate 5: recur() call → recur_call sub-expression node
         elsif expr.fetch("kind", nil) == "call" && expr.fetch("fn", nil) == "recur"
           {
@@ -332,6 +341,55 @@ module IgniterLang
         "then_branch"   => semantic_expr(then_expr),
         "else_branch"   => semantic_expr(else_expr),
         "resolved_type" => expr.fetch("resolved_type")
+      }
+    end
+
+    # PROP-044 P6: convert variant_env (3-level hash) to variant_decl node array.
+    def semantic_variant_declarations(variant_env)
+      variant_env.map do |variant_name, arms|
+        {
+          "kind" => "variant_decl",
+          "name" => variant_name,
+          "arms" => arms.map do |arm_name, fields|
+            {
+              "name"   => arm_name,
+              "fields" => fields.map { |fname, type_ir| {"name" => fname, "type" => type_ir} }
+            }
+          end
+        }
+      end
+    end
+
+    # PROP-044 P6: lower a TypeChecker variant_construct node to SemanticIR shape.
+    def semantic_variant_construct(expr)
+      {
+        "kind"          => "variant_construct",
+        "arm"           => expr.fetch("arm"),
+        "variant"       => expr.fetch("variant"),
+        "fields"        => expr.fetch("typed_fields", {}).transform_values { |f| semantic_expr(f) },
+        "resolved_type" => expr.fetch("resolved_type")
+      }
+    end
+
+    # PROP-044 P6: lower a TypeChecker match_expr node to SemanticIR match_node shape.
+    def semantic_match_node(expr)
+      {
+        "kind"          => "match_node",
+        "subject"       => semantic_expr(expr.fetch("subject")),
+        "subject_type"  => expr.fetch("subject_type"),
+        "arms"          => expr.fetch("arms", []).map { |arm| semantic_match_arm(arm) },
+        "exhaustive"    => expr.fetch("exhaustive", false),
+        "has_wildcard"  => expr.fetch("has_wildcard", false),
+        "resolved_type" => expr.fetch("resolved_type")
+      }
+    end
+
+    def semantic_match_arm(arm)
+      body = arm.fetch("body")
+      {
+        "pattern"       => arm.fetch("pattern"),
+        "body"          => semantic_expr(body),
+        "resolved_type" => body.fetch("resolved_type")
       }
     end
 
