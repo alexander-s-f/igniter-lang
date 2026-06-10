@@ -91,6 +91,29 @@ module IgniterLang
         typecheck_contract(contract)
       end
 
+      # PROP-044-P9: OOF-KIND6 — reserved __* field names in module-level declarations.
+      module_reserved_errors = []
+      classified_program.fetch("type_declarations", []).each do |type_decl|
+        type_decl.fetch("fields", []).each do |field|
+          fname = field.fetch("name", "")
+          next unless fname.start_with?("__")
+          module_reserved_errors << oof("OOF-KIND6",
+            "Field '#{fname}' in type '#{type_decl.fetch("name")}' uses reserved compiler prefix '__' (compiler-owned variant runtime field)",
+            type_decl.fetch("name"))
+        end
+      end
+      classified_program.fetch("variant_declarations", []).each do |vd|
+        vd.fetch("arms", []).each do |arm|
+          arm.fetch("fields", []).each do |field|
+            fname = field.fetch("name", "")
+            next unless fname.start_with?("__")
+            module_reserved_errors << oof("OOF-KIND6",
+              "Field '#{fname}' in variant '#{vd.fetch("name")}' arm '#{arm.fetch("name")}' uses reserved compiler prefix '__'",
+              vd.fetch("name"))
+          end
+        end
+      end
+
       result = {
         "kind" => "typed_program",
         "typechecker_version" => @typechecker_version,
@@ -102,7 +125,7 @@ module IgniterLang
         "module" => classified_program.fetch("module"),
         "type_env" => @type_shapes,
         "contracts" => typed_contracts,
-        "type_errors" => typed_contracts.flat_map { |contract| contract.fetch("type_errors") },
+        "type_errors" => typed_contracts.flat_map { |contract| contract.fetch("type_errors") } + module_reserved_errors,
         "semantic_ir_ref" => nil
       }
       result["assumption_registry"] = @assumption_registry unless @assumption_registry.empty?
