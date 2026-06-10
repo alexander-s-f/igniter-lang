@@ -45,10 +45,18 @@ Closed PROPs remain in `proposals/` for reference. They are not moved to `accept
 | [PROP-030A](PROP-030A-temporal-scope-exclusion-errata-v0.md) | authored-pending-review | Errata to PROP-030: canonical `runtime.temporal_scope_exclusion` refusal for out-of-scope TEMPORAL executor artifacts |
 | [PROP-031](PROP-031-contract-modifiers-v0.md) | experiment-pass | Contract modifiers: optional `pure/observed/effect/privileged/irreversible` prefix, implicit pure default, OOF-M1 only; parser/classifier/typechecker/SemanticIR proof PASS; no Effect Surface/Profile/authority/runtime enforcement |
 | [PROP-032](PROP-032-assumptions-block-v0.md) | experiment-pass | `assumptions {}` block + `uses assumptions NAME`; Phase 1/2/3/4 compiler proofs accepted by S3-R36-C2-A; PROP-033 evidence validation and runtime receipts remain excluded |
+| [PROP-033](PROP-033-via-profile-binding-v0.md) | experiment-pass | `via profile` source-level binding; profile_binding metadata propagates parse→classify→typecheck→SemanticIR; no runtime profile resolution or authority injection |
+| [PROP-034](PROP-034-output-evidence-syntax-v0.md) | experiment-pass | Output `evidence [refs]` syntax/metadata; refs are opaque in v0; full evidence-chain validation, runtime evidence linkage, and cross-contract evidence remain excluded |
+| [PROP-035](PROP-035-effect-surface-io-capability-v0.md) | experiment-pass | `capability` / `effect_binding` grammar and OOF-M2/M4/M5; IO.* types stay opaque; broader Effect Surface fields, delegation/schema validation, and runtime authority remain excluded |
 | [PROP-036](PROP-036-compiler-profile-manifest-identity-v0.md) | accepted | `compiler_profile_id` manifest identity; accepted proposal-only by S3-R35-C3-A; separate implementation authorization required before code |
 | [PROP-037](PROP-037-external-progression-service-liveness-v0.md) | accepted | External progression and service liveness semantics; accepted proposal-only by S3-R37-C3-A; descriptor/proof follow-ups only, no parser/runtime/fragment-class authorization |
 | [PROP-038](PROP-038-compiler-profile-contract-v0.md) | accepted | `compiler_profile_contract`; accepted proposal-only by S3-R61-C3-A; proof-local implementation, internal validator extraction, report-only annotation, digest policy/proofs/errata, live validator implementation, strict-mode/refusal designs, proof-local result-shape, live implementation scope review, bounded internal-only strict-refusal implementation, live internal foundation acceptance, canon sync, and R86 Ch5/Ch7/language-spec sync are accepted in sequence through S3-R86-C4-A; public API/CLI, persisted reports/sidecars, loader/report, CompatibilityReport, runtime, Gate 3 widening, and production remain closed |
-| [PROP-039](PROP-039-managed-local-recursion-and-loop-classes-v0.md) | experiment-pass | Managed local recursion and loop classes; gates 1+3+4+5+6+7 closed 2026-06-07; FiniteLoop/BudgetedLocalLoop/StructuralRecursion/FuelBoundedRecursion vocabulary + parse→classify→tc→SemanticIR pipeline; OOF-L1/R2/R4 active experiment-pass; grammar_version="loop-v0"; lab G1+G2 conformance closed; ServiceLoop → PROP-037 exclusive; runtime/body-semantics/recur/igc-run/public/stable/production remain closed |
+| [PROP-039](PROP-039-managed-local-recursion-and-loop-classes-v0.md) | experiment-pass | Managed local recursion and loop classes; gates 1+3+4+5+6+7+8 and recur()/body-semantics compiler checks closed; FiniteLoop/BudgetedLocalLoop/StructuralRecursion/FuelBoundedRecursion vocabulary + parse→classify→tc→SemanticIR pipeline; OOF-L1/R1/R2/R3/R4/R5/R6/R7 active experiment-pass; grammar_version="loop-v0"; ServiceLoop → PROP-037 exclusive; runtime recursion, VM stack, TCO, public/stable API, production runtime, and performance authority remain closed |
+| [PROP-040](PROP-040-profile-declarations-v0.md) | experiment-pass | Module-level `profile <name> { authority: <modifier> }`; OOF-M7/M8 validate unknown profile and modifier/authority mismatch; no runtime profile injection/resolution, cross-module imports, or broader profile policy |
+| [PROP-041](PROP-041-t2-structural-size-relation-v0.md) | experiment-pass / production compiler surface | T2 structural-size relation; proposal proof 48/48 and P7 production verification 48/48; `structural_size_v1` SemanticIR live; runtime execution, VM changes, and stable public API remain closed |
+| [PROP-042](PROP-042-t3-numeric-measure-expressions-v0.md) | experiment-pass / production compiler surface | T3 numeric measure expressions; P5 production implementation closed 45/45 with T1/T2/R3 regressions clean; `numeric_measure_v0` live; runtime execution, VM stack, TCO, and public/stable API remain closed |
+| [PROP-044](PROP-044-kind-discriminated-outcome-convention-and-sum-type-requirements-v0.md) | implemented through TypeChecker P5 | Kind-discriminated outcome convention plus variant/match path; P5 TypeChecker closed 75/75 with OOF-KIND1..5 active; P6 SemanticIR emitter pending; VM/runtime/public/stable sum-type authority closed |
+| [PROP-045](PROP-045-source-intent-descriptor-and-queryable-contract-purpose-v0.md) | implemented metadata propagation P2 | Source-level `intent` descriptor; P2 parser/classifier/typechecker/SemanticIR metadata propagation closed 53/53; P3+ index/query tooling and stable query API pending; `intent` grants no capability, policy, or runtime authority |
 
 ---
 
@@ -176,12 +184,13 @@ runtime, Reference Runtime, stable API, production, Spark, release, public demo,
 public performance, official/reference status, alternative certification,
 portability, or lab-canon authority.
 
+Previously queued IDs PROP-033, PROP-034, and PROP-035 are now authored and
+experiment-pass in the Stage 3 active table above. PROP-040 owns profile
+declarations / authority resolution. Do not reuse those IDs for new proposals.
+
 | ID | Title | Depends On | Stage | Priority |
 |----|-------|------------|-------|----------|
-| PROP-033 | `via profile binding` | PROP-031 | 3 | high |
-| PROP-034 | `output evidence syntax` | PROP-031, PROP-032 | 3 | high |
-| PROP-035 | profile declarations / authority resolution | PROP-031, PROP-033 | 3 | medium |
-| TBD | Effect Surface | PROP-031 | 3 | medium |
+| TBD | Broad Effect Surface field/accountability enforcement beyond PROP-035 `capability`/`effect_binding` | PROP-031, PROP-035, PROP-040 | 3+ | medium |
 | TBD | Prior queued ideas need renumbering/requeue | — | 3+ | medium |
 
 ---
