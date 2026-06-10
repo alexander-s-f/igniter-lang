@@ -5,13 +5,13 @@
 **Authority:** governance / proposal text only  
 **Date:** 2026-06-10  
 **Predecessor:** LAB-FAILURE-TAXONOMY-P3 (Decision A — open narrow naming-convention PROP now)  
-**Status:** DRAFT
+**Status:** DRAFT — amended by PROP-047-P2 after LAB-FAILURE-TAXONOMY-P4
 
 ---
 
 ## Purpose
 
-This proposal names the stable cross-domain failure/outcome vocabulary for Igniter lab and canon guidance. It defines five stable cross-domain terms, documents ten recovery axes, states forbidden-collapse rules, and gives guidance on when to use KDR vs. variant and how to name what is observed vs. unknown.
+This proposal names the stable cross-domain failure/outcome vocabulary for Igniter lab and canon guidance. It defines six stable cross-domain terms, documents ten recovery axes, states forbidden-collapse rules, and gives guidance on when to use KDR vs. variant and how to name what is observed vs. unknown.
 
 **This proposal does NOT:**
 - Define a global `FailureKind` enum
@@ -21,7 +21,7 @@ This proposal names the stable cross-domain failure/outcome vocabulary for Ignit
 - Make public or production-stable API claims
 - Grant serialization ABI authority for any term
 
-The evidence base is nine lab proof tracks (51+ checks each, cross-domain) and five Canon documents. The stable terms named here are already in use in lab fixtures; this proposal names them officially for guidance purposes.
+The evidence base is ten lab proof tracks and five Canon documents. The stable terms named here are already in use in lab fixtures; this proposal names them officially for guidance purposes.
 
 ---
 
@@ -35,6 +35,7 @@ The evidence base is nine lab proof tracks (51+ checks each, cross-domain) and f
 | Covenant P11/P13/P15/P16/P17 | Canon | Timeout ≠ failure; uncertainty non-discardable; evidence-kind load-bearing; idempotency gate |
 | LAB-EPISTEMIC-OUTCOME-P2/P4 | Storage write / commit-ack / reconciliation | `unknown_external_state`, `timed_out`, `denied`, `partial` (as `partly_confirmed`) |
 | LAB-FAILURE-TAXONOMY-P2 | HTTP client / upstream call | `unknown_external_state`, `upstream_unavailable`, `denied` — POST-DISPATCH TIMEOUT → `unknown_external_state` proven in a second independent domain |
+| LAB-FAILURE-TAXONOMY-P4 | Batch job processing + multi-upstream network | `partial_success` — bounded mixed outcome with observed per-item/sub-operation evidence; 54/54 PASS |
 | LAB-EXECUTE-QUERY-P1/P2/P3 | Storage query | `denied`, `query_error`, `system_error`, `rows`, `empty` |
 | LAB-FILTER-EVAL-P1 | Query filter | `rows`, `empty`, `query_error` |
 | LAB-RESULT-ENVELOPE-P1/P2 | Validation / HTTP | `valid`, `invalid`, `unauthorized` (denial), `system_error` |
@@ -58,19 +59,19 @@ These axes are orthogonal. Do not conflate them. Each has a distinct recovery pa
 | 3 | **external_unavailable** | Infrastructure-level failure; the endpoint or store is not reachable; retry with backoff after interval |
 | 4 | **timeout** | Time limit elapsed; the outcome is unknown, not failed (Covenant P15); route to reconciliation, not retry |
 | 5 | **unknown_external_state** | Request was sent; no confirmed receipt; must reconcile with an idempotency key before any retry; never route to success or failure directly |
-| 6 | **partial_success** | Some sub-effects confirmed; some unconfirmed; not the same as unknown; **DEFERRED — see NAMING-DEFERRED** |
+| 6 | **partial_success** | A bounded operation produced both confirmed successes and confirmed failures/non-completions, with enough item-level evidence to account for the mixed outcome |
 | 7 | **validation_invalid** | Domain constraint violated by data; fix the data; not access denial, not infrastructure |
 | 8 | **compensation** | Irreversible effect completed; a named compensation contract is required (Covenant P17); pattern only — no stable cross-domain term assigned here |
 | 9 | **retryable_vs_not** | Cross-cutting axis; whether automatic retry is permitted depends on idempotency gate (Covenant P16) and the specific outcome kind; arm names are domain-local |
 | 10 | **type_error_vs_domain_outcome** | Compiler diagnostic (OOF-KIND) is not a runtime outcome; a type error at compile time is not an instance of any outcome kind; keep these namespaces separate |
 
-**All ten axes are acknowledged here.** Axis 6 is explicitly deferred per NAMING-DEFERRED.
+**All ten axes are acknowledged here.** Axis 6 is now promoted to a stable naming term by PROP-047-P2 after LAB-FAILURE-TAXONOMY-P4 closed the evidence gap.
 
 ---
 
-## NAMING-TERMS — Five Stable Cross-Domain Terms
+## NAMING-TERMS — Six Stable Cross-Domain Terms
 
-These five terms have been confirmed independently in two or more non-overlapping proof domains. Contract authors may use them as stable `kind` string values in KDR records.
+These six terms have been confirmed independently in two or more non-overlapping proof domains. Contract authors may use them as stable `kind` string values in KDR records.
 
 ---
 
@@ -150,6 +151,22 @@ dispatch_started == false  (timeout before dispatch)
 
 ---
 
+### Term 6: `partial_success`
+
+**Definition:** A bounded operation produced both confirmed successes and confirmed failures/non-completions, with enough item-level or sub-operation evidence to account for the mixed outcome.
+
+`partial_success` requires observed evidence. It is not an ambiguous timeout, missing acknowledgement, or unknown external state. It requires at least one confirmed success and at least one confirmed failure/non-completion within the bounded operation. If no successes are confirmed, use a total failure/domain-local failed outcome. If every item succeeds, use total success/domain-local `ok`.
+
+**Recovery:** Usually continue with confirmed successes, reconcile the mixed receipt, retry or repair the failed subset, and record the item/sub-operation evidence. Do not collapse to total failure, total success, or unknown. The recovery action should be subset-aware, for example `retry_failed_items` rather than retrying the whole batch blindly.
+
+**Evidence:** Reconciliation domain (`partial`, `partly_confirmed`, `PartiallyConfirmed`) + LAB-FAILURE-TAXONOMY-P4 batch/job processing domain (54/54 PASS). P4 also provides secondary multi-upstream network confirmation (`A=ok`, `B=error` → `partial_success`). The evidence distinguishes `partial_success` from `ok`, total failure, `system_error`, `unknown_external_state`, and `denied`.
+
+**Local names:** Domains may use `partial`, `partially_confirmed`, `partial_success`, or richer local KDR/variant arms. The stable convention term is `partial_success`.
+
+**Do not collapse with:** `unknown_external_state` (unknown has no confirmed item/sub-operation accounting), `system_error` (system error has no per-item evidence), failed/total failure (some work succeeded), or `ok`/total success (some work failed or did not complete). See NAMING-COLLAPSE rules FC-4 through FC-7.
+
+---
+
 ## NAMING-COLLAPSE — Forbidden-Collapse Rules
 
 These collapses are FORBIDDEN. Each pair names distinct axes with distinct recovery paths. Collapsing them erases the recovery distinction.
@@ -160,19 +177,36 @@ Do not produce `denied` when the request was received and found semantically inv
 **FC-2: `timed_out` vs `unknown_external_state`**  
 Do not use `timed_out` as a final routing kind when the post-dispatch case applies. Covenant P15 states that a timeout after dispatch is `UnknownExternalOutcome`, not `ObservedFailure`. These require different recovery: `timed_out` is a transport observation; `unknown_external_state` is the epistemic conclusion requiring reconciliation.
 
-**FC-3: `unknown_external_state` vs `system_error`**  
+**FC-3: `unknown_external_state` vs `system_error`**
+
 `unknown_external_state` requires reconciliation before any retry. `system_error` permits retry with backoff directly (no reconciliation needed). Collapsing them forces one recovery path on the other and may result in either double-effects (if unknown is retried as system_error) or missed reconciliation (if system_error is treated as unknown).
 
-**FC-4: `partial_success` vs `unknown_external_state`**  
-A partial outcome has some confirmed resource handles; an unknown outcome has none confirmed. Partial requires reconciliation of the unconfirmed sub-effects; unknown requires reconciliation of the whole. Routing partial to unknown loses the confirmed handles. (Axis 6 is deferred for stable term assignment, but this forbidden collapse is active now — see NAMING-DEFERRED.)
+**FC-4: `partial_success` vs `unknown_external_state`**
 
-**FC-5: `validation_invalid` vs `capability_denied`**  
+`partial_success` requires observed item/sub-operation evidence. `unknown_external_state` is the absence of confirmed acknowledgement after dispatch. Routing partial to unknown loses confirmed successes and failed-subset evidence; routing unknown to partial fabricates evidence the caller does not have.
+
+**FC-5: `partial_success` vs `system_error`**
+
+`system_error` names an infrastructure fault with no item/sub-operation evidence. `partial_success` names a bounded operation that ran far enough to account for both successes and failures/non-completions. If there is no item evidence, do not classify as partial.
+
+**FC-6: `partial_success` vs failed / total failure**
+
+Total failure means no sub-operation succeeded. `partial_success` means at least one sub-operation succeeded and at least one failed or did not complete. Collapsing partial to failed discards confirmed successful work and may trigger duplicate processing.
+
+**FC-7: `partial_success` vs ok / total success**
+
+Total success means all sub-operations succeeded. `partial_success` means at least one sub-operation failed or did not complete. Collapsing partial to ok silently drops failure evidence and prevents repair/retry of the failed subset.
+
+**FC-8: `validation_invalid` vs `capability_denied`**
+
 `validation_invalid` (or `invalid`) names a data constraint failure; `capability_denied` (or `denied`) names an authority gate failure. The former invites the caller to fix their data; the latter invites the caller to obtain authority or change their plan. Collapsing them gives misleading recovery guidance.
 
-**FC-6: `retry_budget_exhausted` vs `upstream_failure`**  
+**FC-9: `retry_budget_exhausted` vs `upstream_failure`**
+
 Exhausting a retry budget is a caller-side budget event. An upstream failure is a state of the remote service. These must not be conflated: a caller who exhausts its budget does not thereby know the upstream failed; the upstream state is still unknown. If the upstream genuinely failed on every attempt, that is upstream-failure evidence (confirmed); if the upstream is unreachable but might be processing requests, the state is unknown.
 
-**FC-7: Observation types `real`, `model`, `human`**  
+**FC-10: Observation types `real`, `model`, `human`**
+
 Covenant P13 names these as distinct evidence kinds. A model-confirmed outcome is not the same as a real-observation outcome. Do not coerce `evidence_kind: "model"` to `evidence_kind: "real"` without an explicit human verification step. (No-Upward-Coercion rule.)
 
 ---
@@ -203,7 +237,7 @@ Variant/match uses Path B lowering (PROP-044-P8): `variant_construct → OP_PUSH
 
 **Neither form is universally correct.** Use KDR at boundaries and for interop. Use variant/match when exhaustiveness enforcement in the type system matters. A contract may use KDR output for its external surface and variant/match internally for its routing logic.
 
-**This PROP does not create a global `Outcome[T,E]` type.** The five stable terms apply to `kind: String` KDR values. Variant arms may use these names or domain-local names; the stable terms are naming guidance, not a sealed enum.
+**This PROP does not create a global `Outcome[T,E]` type.** The six stable terms apply to `kind: String` KDR values. Variant arms may use these names or domain-local names; the stable terms are naming guidance, not a sealed enum.
 
 ---
 
@@ -219,6 +253,7 @@ When classifying an outcome, name the epistemic state accurately:
 | Request sent, no acknowledgement | `unknown_external_state` | `system_error`, `timed_out` (as terminal) |
 | Infrastructure fault, request not processed | `system_error` | `unknown_external_state` |
 | Input was semantically invalid | `query_error` or `invalid` | `denied` |
+| Bounded operation has both confirmed successes and confirmed failed/non-completed items | `partial_success` | `ok`, `failed`, `system_error`, `unknown_external_state` |
 | Clock expired, post-dispatch | `unknown_external_state` | `timed_out` (as terminal kind) |
 | Clock expired, pre-dispatch | `upstream_unavailable` | `timed_out` (as terminal kind), `unknown_external_state` |
 
@@ -245,16 +280,6 @@ These fields must not be dropped when routing `unknown_external_state` outcomes.
 
 The following terms are acknowledged as real axes but are **not promoted to stable cross-domain terms** in this proposal. They are explicitly deferred, not absent by oversight.
 
-### Axis 6: `partial_success`
-
-**Status:** Single-domain evidence only (reconciliation domain: `partly_confirmed` in LAB-EPISTEMIC-OUTCOME-P4, `PartiallyConfirmed` variant in LAB-OUTCOME-VARIANT-P1, `partial` in Ch12).
-
-**Why deferred:** Ch12 names `partial` as one of seven canonical outcome kinds. The epistemic domain proves it as a distinct KDR kind and variant arm. However, no cross-domain proof has yet confirmed that `partial_success` arises as a distinct kind in a non-reconciliation domain (e.g., storage query, HTTP client, validation). Naming it as a stable cross-domain term before that evidence exists would be premature.
-
-**What IS active now:** The forbidden-collapse rule FC-4 (`partial_success` ≠ `unknown_external_state`) is active. Contract authors must not collapse partial and unknown even while the stable term for partial is deferred. A partial outcome has some confirmed resource handles; an unknown outcome has none confirmed. The distinction in recovery strategy is epistemic and does not require a stable term name to be enforced.
-
-**Next route:** `LAB-FAILURE-TAXONOMY-P4` — partial_success cross-domain proof. If that proof passes, this PROP can be amended to add `partial` (or `partial_success`) as a sixth stable term.
-
 ### `compensation`
 
 **Status:** Ch12 names `compensated` as one of seven outcome kinds. LAB-OUTCOME-VARIANT-P1 proves `ConfirmedFailedCompensatable` as a distinct variant arm. Covenant P17 requires a named compensation contract.
@@ -276,7 +301,7 @@ The following surfaces are closed by this proposal and may not be opened by subs
 | Surface | Status | Reason |
 |---------|--------|--------|
 | Global `FailureKind` enum | **CLOSED** | Flattening 10 axes into one enum erases recovery distinctions. Each axis has a distinct recovery path; a single enum cannot encode them without collapsing the axes. |
-| `Outcome[T,E]` generic sealed type | **CLOSED** | Three unsatisfied preconditions remain: generic type parameters, a sealed variant across domains, and cross-domain vocabulary consensus. This PROP does not satisfy the third precondition for all axes. |
+| `Outcome[T,E]` generic sealed type | **CLOSED** | Naming six stable terms does not create generic parameters, a sealed variant, runtime representation, or public type-system authority. |
 | New OOF diagnostic codes | **CLOSED** | OOF codes are compiler diagnostics, not runtime outcome names. Axis 10 explicitly keeps these namespaces separate. |
 | Compiler / parser / VM / runtime changes | **CLOSED** | This is a naming-convention proposal only. No implementation authority is created. |
 | Serialization ABI | **CLOSED** | Stable KDR string values are named for guidance; their wire encoding is not specified or locked here. |
@@ -293,7 +318,7 @@ The following surfaces are closed by this proposal and may not be opened by subs
 | `system_error` | 3 (external_unavailable) | Strong (2+ domains) | ✓ | Retry with backoff; no reconciliation |
 | `timed_out` | 4 (timeout) | Cross-domain (Ch12 + 2 domains) | ✓ (transport observation; classify further) | Route to `unknown_external_state` (post-dispatch) or `upstream_unavailable` (pre-dispatch) |
 | `unknown_external_state` | 5 (unknown_external_state) | Cross-domain (2 domains) | ✓ | Reconcile; do not retry before reconciliation |
-| `partial` / `partial_success` | 6 (partial_success) | Single-domain | **DEFERRED** | Reconcile unconfirmed sub-effects (guidance active; stable term pending P4) |
+| `partial_success` | 6 (partial_success) | Cross-domain: reconciliation + batch/job + multi-upstream network | ✓ | Continue with confirmed successes; retry/repair failed subset; record mixed receipt |
 | `invalid` | 7 (validation_invalid) | Strong (2+ domains) | ✓ (domain-local surface term) | Fix data; retry |
 | `compensated` | 8 (compensation) | Partial (canon + 1 domain) | Pattern only | Named compensation contract required (P17) |
 | retryable/non-retryable | 9 (retryable_vs_not) | Cross-domain (pattern) | Pattern only | Idempotency gate (P16); arm names domain-local |
@@ -303,11 +328,13 @@ The following surfaces are closed by this proposal and may not be opened by subs
 
 ## NAMING-NEXT — Recommended Next Routes
 
-1. **LAB-FAILURE-TAXONOMY-P4** — partial_success cross-domain proof. If this passes, amend this PROP to add `partial` as the sixth stable term.
+1. **Optional: LAB-FAILURE-TAXONOMY-P5** — compensation/retryability vocabulary pressure, only if governance wants to continue the taxonomy track.
 
-2. **Canon amendment card** — if the full PROP is approved, a subsequent card should amend Ch12 to mark the five stable terms as guidance-approved (not just Canon-named). This is a separate authority action.
+2. **Hold taxonomy and return to IO / Query / IGV work** — acceptable now that the sixth stable term is promoted and the closed surfaces remain closed.
 
-3. **Lab fixture alignment** — lab fixtures may use domain-local terms (`upstream_unavailable`, `not_found`, `rows`, `empty`, etc.) that are not in the stable cross-domain set. This is correct behavior. The stable set is for cross-domain guidance only; domain-local names remain valid.
+3. **Canon amendment card** — if the full PROP is approved, a subsequent card should amend Ch12 to mark the six stable terms as guidance-approved (not just Canon-named). This is a separate authority action.
+
+4. **Lab fixture alignment** — lab fixtures may use domain-local terms (`upstream_unavailable`, `not_found`, `rows`, `empty`, `partial`, `partially_confirmed`, etc.) that are not exact spelling matches for the stable cross-domain set. This is correct behavior. The stable set is for cross-domain guidance only; domain-local names remain valid.
 
 ---
 
@@ -315,19 +342,20 @@ The following surfaces are closed by this proposal and may not be opened by subs
 
 | # | Decision |
 |---|----------|
-| D1 | Five stable cross-domain terms: `denied`, `unknown_external_state`, `timed_out`, `system_error`, `query_error` |
+| D1 | Six stable cross-domain terms: `denied`, `unknown_external_state`, `timed_out`, `system_error`, `query_error`, `partial_success` |
 | D2 | `transport_kind: "timeout"` alone is NOT sufficient to classify an outcome; the `dispatch_started`/`ack_received` Bool pair is required |
-| D3 | FC-1 through FC-7 forbidden-collapse rules are ACTIVE |
-| D4 | Axis 6 (`partial_success`) is explicitly deferred; FC-4 is active regardless |
+| D3 | FC-1 through FC-10 forbidden-collapse rules are ACTIVE |
+| D4 | Axis 6 (`partial_success`) is promoted by PROP-047-P2 because LAB-FAILURE-TAXONOMY-P4 closed the evidence gap |
 | D5 | KDR is valid for boundary, interop, and proof-local use; variant/match is preferred where exhaustiveness enforcement matters |
 | D6 | `__arm`/`__variant` are compiler-owned fields; must not appear as user-authored contract field names |
 | D7 | No-Upward-Coercion: `evidence_kind: "model"` must not be promoted to `evidence_kind: "real"` without explicit human verification |
 | D8 | `unknown_external_state` outcomes must carry `request_id`, `idempotency_key`, and `metadata` |
 | D9 | Global `FailureKind` enum is permanently closed |
-| D10 | `Outcome[T,E]` is permanently closed until all three preconditions are satisfied |
+| D10 | `Outcome[T,E]` remains closed; this naming convention is not a generic sealed type |
 | D11 | OOF-KIND codes are compiler diagnostics; they are not runtime outcome kinds |
 | D12 | Compensation is a pattern (Covenant P17); no stable cross-domain term is assigned |
+| D13 | `partial_success` requires item/sub-operation evidence; ambiguous timeout or missing acknowledgement must route to `unknown_external_state`, not partial |
 
 ---
 
-*Authorized by: LAB-FAILURE-TAXONOMY-P3, Decision A (2026-06-10)*
+*Authorized by: LAB-FAILURE-TAXONOMY-P3, Decision A (2026-06-10); amended by PROP-047-P2 after LAB-FAILURE-TAXONOMY-P4 (54/54 PASS).*
