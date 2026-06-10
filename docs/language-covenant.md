@@ -583,15 +583,18 @@ compiler without a grammar surface to support them.
 > of `contract_ir` may treat `profile_binding` as validated authority without a
 > PROP-040 schema check having been run in the compilation pipeline.
 
-**Rationale:** `profile_binding` appears in `contract_ir` before PROP-040 closes
-the profile declaration surface. During this gap, consumers must not treat the
-field as evidence of validated policy. The field means "the source declared this
-intent" — not "the compiler verified this policy".
+**Rationale:** `profile_binding` appears in `contract_ir` as source metadata.
+PROP-040 closes the v0 profile declaration surface by adding same-module profile
+declarations plus OOF-M7/M8 checks for unknown profiles and authority mismatch.
+Consumers still must not treat the field as runtime authority. The field means
+"the source declared this intent and the compiler can validate the v0 profile
+binding when PROP-040 is active" — not "runtime authority was granted".
 
 **Scope:**
 - All `contract_ir` consumers (assembler, manifest, runtime loaders)
-- Applies until PROP-040 (profile declarations) reaches `experiment-pass` and
-  OOF-M7/M8 are active in the classification pipeline
+- Applies after PROP-040 as a boundary rule: OOF-M7/M8 validate the v0
+  source-level binding, but runtime profile injection/resolution and broader
+  profile policy remain closed until separately authorized.
 
 ---
 
@@ -599,20 +602,20 @@ intent" — not "the compiler verified this policy".
 |-----------|-------------|------|-------------|-------------------|
 | 1–2 | ch1 (Identity), ch2 (Grammar) | PROP-001, PROP-014 | ✅ | `enforced` |
 | 3 | ch9 (Temporal) | PROP-022 | ✅ | `enforced` |
-| 4, 7, 16, 17, 19 | ch12 (Effect Surface) | PROP-035 | pending | `planned PROP` |
+| 4, 7, 16, 17, 19 | ch12 (Effect Surface) | PROP-035 | PROP-035 ✅ for `capability`/`effect_binding`; broader fields pending | `experiment-pass` subset; `planned PROP` for broad Effect Surface field enforcement |
 | 5 | ch9 (BiHistory) | PROP-022 | ✅ | `enforced` |
-| 6, 20 | ch10 (Modifiers §10.5) | PROP-031, PROP-033 | PROP-031 ✅ | `planned PROP` (PROP-033) |
+| 6, 20 | ch10 (Modifiers §10.5) | PROP-031, PROP-034 | PROP-034 ✅ for output `evidence []` syntax/metadata | `experiment-pass` syntax; evidence-chain validation still `planned PROP` |
 | 8 | ch12 (receipt field) | PROP-035 | pending | `planned PROP` |
 | 9 | ch12 (authority field) | PROP-035 | pending | `planned PROP` |
-| 10 | ch11 (Profile System) | PROP-033 ✅, PROP-040 ✅ | PROP-033 ✅ PROP-040 ✅ | `experiment-pass` (binding + declarations + OOF-M7/M8) |
+| 10 | ch11 (Profile System) | PROP-033 ✅, PROP-040 ✅ | PROP-033 ✅ PROP-040 ✅ | `experiment-pass` (binding + declarations + OOF-M7/M8; runtime authority closed) |
 | 11 | ch10 (observed modifier) | PROP-031 | ✅ | `planned PROP` (PROP-035 required-field enforcement) |
 | 12 | ch10 (observed modifier) | PROP-031 | ✅ | `planned PROP` (PROP-035 receipt type enforcement) |
 | 13 | ch10 (observed modifier) | PROP-031 | ✅ | `enforced` (classifier fragment class) |
-| 14 | ch13 (Managed Recursion) | PROP-039 ✅ | gates 1+3+4+5+6 closed | `experiment-pass compiler surface` (parse→classify→tc→SIR; OOF-L1/R2/R4 active; runtime closed) |
+| 14 | ch13 (Managed Recursion) | PROP-039 ✅, PROP-041 ✅, PROP-042 ✅ | PROP-039 compiler surface; PROP-041 T2 and PROP-042 T3 production compiler surfaces | `experiment-pass` / production compiler surface; runtime recursion/performance authority closed |
 | 15 | ch12 (failure taxonomy) | PROP-035 | pending | `planned PROP` |
 | 18 | ch10 (pure/irreversible separation) | PROP-031 | ✅ | `enforced` |
 | 21 | ch12 (Effect Surface, all fields) | PROP-035 | pending | `planned PROP` |
-| 22 | Gap-H (assumptions block) | PROP-032 | open | `planned PROP` |
+| 22 | Gap-H (assumptions block) | PROP-032 | PROP-032 ✅ assumptions syntax/use surface | `experiment-pass` syntax/use; evidence-chain carrying and receipt validation still `planned PROP` |
 | 23 | Gap-H (synthetic receipt type) | TBD | open | `spec_candidate` |
 | 24 | Gap-J (constraints block) + ch12 | TBD | open | `spec_candidate` |
 | 25 | Gap-J (constraints block) | TBD | open | `spec_candidate` |
@@ -633,6 +636,7 @@ a formal status to every postulate and defines the rule for new additions.
 |--------|---------|------------------|
 | `enforced` | The compiler currently rejects violations at parse, classify, or type-check time | Cite the mechanism and the implementing PROP or proof anchor |
 | `planned PROP` | A PROP exists or is queued that will wire compiler enforcement | Cite PROP number or named queue slot (Gap label if no PROP yet drafted) |
+| `experiment-pass` | A bounded proposal/proof surface has passed verification, but does not by itself imply runtime, public API, or broader policy authority | Cite the PROP/proof and name the remaining closed surfaces |
 | `spec_candidate` | The concept is defined in the Covenant or CSM but no PROP is queued | Cite CSM row; state what evidence or design work is needed to advance to a PROP |
 | `doctrine-only` | Intentionally not a compiler rule; compliance maintained by a non-compiler mechanism | Explain the enforcement mechanism (PROP filter, review gate, governance policy) |
 | `partial` | Enforced for some named surfaces; pending PROP for others | Expand in a per-surface subtable |
@@ -643,6 +647,9 @@ a formal status to every postulate and defines the rule for new additions.
 > before it is accepted. A postulate without a status is incomplete.
 >
 > - `planned PROP` requires a cited PROP number or named queue slot.
+> - `experiment-pass` requires a cited PROP/proof anchor and an explicit boundary
+>   when syntax/metadata exists but validation, runtime, or policy authority is
+>   still pending.
 > - `spec_candidate` requires a cited CSM row.
 > - `doctrine-only` requires an explicit statement of the non-compiler enforcement mechanism.
 > - `partial` requires a per-surface subtable.
@@ -659,25 +666,25 @@ a formal status to every postulate and defines the rule for new additions.
 | P1 | Contracts are dependency graphs, not sequences | `enforced` | GraphCompiler validates DAG; DSL rejects imperative sequences |
 | P2 | Every computation declares its dependencies | `enforced` | Compiler requires explicit `depends_on:`/`with:` on all compute nodes |
 | P3 | Time is an explicit parameter (`as_of: DateTime`) | `enforced` | TEMPORAL fragment (PROP-022 ✅); History[T] requires `as_of` input; source-level `now()` forbidden (Ch8 `OOF-L6` wording anchor) |
-| P4 | Every side effect is named (`escape` modifier) | `planned PROP` | PROP-035 (Effect Surface); effect declaration not yet enforced as required field on all I/O |
+| P4 | Every side effect is named (`escape` modifier) | `partial` | `escape Name` is parse-enforced today; PROP-035 `capability`/`effect_binding` and OOF-M2/M4/M5 are experiment-pass; effect declaration is not yet enforced as a required field on all I/O |
 | P5 | Contract outputs are immutable values | `enforced` | Frozen CompiledGraph; append-only history type; no mutation API at runtime |
-| P6 | Every output carries a provenance chain (`evidence []`) | `planned PROP` | PROP-033 — evidence chains at composition boundaries; not yet enforced at output declaration |
-| P7 | Effect Surface readable from contract header alone | `planned PROP` | PROP-035 — Effect Surface as separate declared block |
+| P6 | Every output carries a provenance chain (`evidence []`) | `experiment-pass` syntax; validation still `planned PROP` | PROP-034 — output `evidence []` syntax/metadata is experiment-pass; refs are opaque in v0; full evidence-chain validation is not yet enforced |
+| P7 | Effect Surface readable from contract header alone | `planned PROP` | PROP-035 — `capability`/`effect_binding` body declarations are experiment-pass; broader Effect Surface header/readability field set remains pending |
 | P8 | Receipts are immutable proofs of specific operations | `planned PROP` | PROP-035 — receipt field schema with required fields |
 | P9 | Authority is a typed value, not an ambient role | `planned PROP` | PROP-035 — `authority:` required field on privileged/irreversible contracts |
-| P10 | Profiles are compile-time policy, not runtime config | `planned PROP` | PROP-034 (Profile System) |
+| P10 | Profiles are compile-time policy, not runtime config | `experiment-pass` | PROP-033 `via profile` binding + PROP-040 profile declarations and OOF-M7/M8 checks; runtime profile injection/resolution remains closed |
 | P11 | Uncertainty is a required typed field, not silently dropped | `planned PROP` | PROP-035 — required-field enforcement on observation types; PROP-031 ✅ classifies modifier |
 | P12 | Simulated receipts are a different type from real receipts | `planned PROP` | PROP-031 ✅ classifies fragment; PROP-035 enforces type incompatibility at contract boundaries |
 | P13 | Real / model / human observations are distinct types | `enforced` | PROP-031 ✅ — classifier assigns fragment class; modifier system enforces distinction at classification |
-| P14 | Every repetition belongs to a loop class with a compiler-verified contract | `experiment-pass` | PROP-039 ✅ — gates 1+3+4+5+6 closed; FiniteLoop/BudgetedLocalLoop/StructuralRecursion/FuelBoundedRecursion vocabulary + parse→SIR pipeline; OOF-L1/R2/R4 active; PROP-037 owns service-liveness |
+| P14 | Every repetition belongs to a loop class with a compiler-verified contract | `experiment-pass` / production compiler surface | PROP-039 ✅ — FiniteLoop/BudgetedLocalLoop/StructuralRecursion/FuelBoundedRecursion compiler surface and OOF-R1..R7; PROP-041 T2 structural-size and PROP-042 T3 numeric-measure production compiler surfaces; runtime recursion/performance authority remains closed; PROP-037 owns service-liveness |
 | P15 | Timeout is `UnknownExternalOutcome`, not `ObservedFailure` | `planned PROP` | PROP-035 — failure taxonomy with distinct types |
 | P16 | Non-idempotent operations under retry are a compile error | `planned PROP` | PROP-035 — idempotency key requirement on retry-enabled profiles |
 | P17 | Irreversible contracts name their compensation or declare `no_compensation` | `planned PROP` | PROP-035 — `compensation:` required field on irreversible contracts |
 | P18 | Irreversible contract unreachable from pure context | `enforced` | PROP-031 ✅ — pure/irreversible separation enforced at classifier; TypeChecker propagates fragment class |
-| P19 | Profile may declare max reversibility level; exceeding it is a compile error | `planned PROP` | PROP-035 + PROP-034 — reversibility scale + profile enforcement |
-| P20 | Contract composition preserves evidence chains | `planned PROP` | PROP-033 — evidence chain DAG validation at composition boundaries |
+| P19 | Profile may declare max reversibility level; exceeding it is a compile error | `planned PROP` | PROP-040 validates v0 profile existence/authority only; reversibility scale and broader profile policy enforcement remain pending under Effect/Profile policy work |
+| P20 | Contract composition preserves evidence chains | `planned PROP` | PROP-034 provides output evidence syntax/metadata only; evidence-chain DAG validation at composition boundaries remains pending |
 | P21 | A program names all its consequences | `planned PROP` | PROP-035 — Effect Surface; all effect fields required at declaration |
-| P22 | Every assumption is declared, typed, and carried through evidence | `planned PROP` | PROP-032 (Gap-H) — assumptions block; `uses assumptions NAME` enforced at call site. ⚠️ Queue conflict: proposals/README.md reserves PROP-032 for `via profile binding`; CSM and agent-context assign PROP-032 to this surface. Must be resolved before authoring. See semantic-governance-heat-map.md §GI-1. |
+| P22 | Every assumption is declared, typed, and carried through evidence | `experiment-pass` syntax/use; evidence carrying still `planned PROP` | PROP-032 (Gap-H) — `assumptions {}` block and `uses assumptions NAME` surface are experiment-pass. GI-1 numbering is resolved in the proposal index: PROP-032 = assumptions block; PROP-033 = `via profile` binding. Typed assumption semantics, evidence-chain carrying, and receipt validation remain pending. |
 | P23 | Synthetic world state must carry epistemic markers that survive receipts | `spec_candidate` | CSM: `SimulationReceipt` shape defined; no PROP yet; requires Gap-H PROP + receipt type system |
 | P24 | Consequential choices must expose inputs, assumptions, constraints, alternatives, authority | `spec_candidate` | CSM: `StrategyDecision` shape defined; no PROP yet; requires Gap-J PROP + ch12 effect surface |
 | P25 | Constraints are declared, typed, and carried through `constraint_hash` | `spec_candidate` | CSM: `constraints {}` block defined; no PROP yet; Gap-J PROP required before implementation |
@@ -695,50 +702,48 @@ surfaces because some have no compiler implementation yet.
 | P28 surface | What P28 requires | Current enforcement | Enforcement path |
 |------------|-------------------|---------------------|-----------------|
 | `invariant` block | Must have a name; referenced in violation observation receipts | **`enforced`** — parser requires name; unnamed `invariant` is a parse error today | Already enforced; anchor: parser spec |
-| `escape` declaration | Must be named; referenced in `escape_boundaries` of receipts | **Unknown** — Compiler/Grammar Expert must verify (OQ-P28-1 below) | `planned PROP` — PROP-035 (Effect Surface) should formalize naming requirement |
-| Loop class declaration | Must be named; referenced in managed loop contract | **N/A** — loop classes not yet implemented | `planned PROP` — PROP-039+ or later; naming requirement must be explicit in the eventual managed local recursion / loop-class PROP draft |
-| `assumptions {}` block | Must be named; carried through `evidence []` chain | **N/A** — Gap-H not yet implemented | `planned PROP` — PROP-032 (Gap-H); `uses assumptions NAME` syntax enforces naming |
+| `escape` declaration | Must have a name; referenced in `escape_boundaries` of receipts | **`enforced` for source grammar** — `EscapeDecl := "escape" Name`; parser requires a name token | Already parse-enforced; PROP-035 still owns broader Effect Surface and receipt-linking requirements |
+| Loop class declaration | Must be named; referenced in managed loop contract | **partial / experiment-pass compiler surface** — PROP-039 loop-class surface exists, but broader naming policy and runtime loop contract remain closed | PROP-039/041/042 compiler surfaces; PROP-037 owns service-liveness; no runtime authority |
+| `assumptions {}` block | Must be named; carried through `evidence []` chain | **`experiment-pass` syntax/use** — PROP-032 owns assumptions block and `uses assumptions NAME`; evidence carrying remains pending | PROP-032 for syntax/use; future evidence-chain validation for carrying through receipts |
 | `constraints {}` block | Must be named; carried through `constraint_hash` | **N/A** — Gap-J not yet implemented | `spec_candidate` → `planned PROP` when Gap-J PROP is queued |
 
-**P28 current enforcement summary:** Only `invariant` block naming is enforced by
-the compiler today. All other P28 surfaces are either unimplemented or unverified.
-P28 is a **governing commitment** across the full surface; current enforcement is
-partial. A future card (or OQ-P28-1 response from Compiler/Grammar Expert) should
-promote the `escape` declaration row from Unknown to Enforced or Planned PROP.
+**P28 current enforcement summary:** `invariant` naming and `escape Name`
+source grammar are enforced today. PROP-032 assumptions syntax/use and PROP-039
+loop-class compiler surfaces are experiment-pass, but evidence carrying, receipt
+linking, broader loop policy, and constraints remain incomplete. P28 remains a
+**governing commitment** across the full surface; current enforcement is partial.
 
 ---
 
 ### Open Questions for Compiler/Grammar Expert (from this section)
 
-**OQ-P28-1 — `escape` declaration naming enforcement**
+**OQ-P28-1 — `escape` declaration naming enforcement (answered 2026-06-10)**
 
-Is an unnamed `escape` declaration currently a parse error, or is it silently
-accepted? Specifically:
+An unnamed `escape` declaration is a parse error by grammar/parser shape:
+`EscapeDecl := "escape" Name`, and `parse_escape_decl` calls
+`name_token!(%i[ident])`.
 
 ```igniter
--- Is this currently refused by the parser?
+-- Refused by the parser: missing required Name
 escape
 read value: Integer from "sensors/{id}"
 
--- Or is escape always positional/anonymous at this stage?
+-- Accepted shape
 escape sensor_read
 read value: Integer from "sensors/{id}"
 ```
 
-Expected answer: the Compiler/Grammar Expert should check the parser and classify
-the `escape` row in the P28 surface table as `enforced` (parse error today) or
-`planned PROP` (not yet wired). This closes the "Unknown" entry above and the
-longstanding OQ-1 from `covenant-accountability-postulates-r29-v0.md`.
-
-Deliverable: a single row update to the P28 surface table above, either in a
-Compiler/Grammar Expert track doc or as an addendum to this section.
+This closes the "Unknown" entry above and the longstanding OQ-1 from
+`covenant-accountability-postulates-r29-v0.md` for source grammar naming only.
+Receipt linking and broader Effect Surface enforcement remain PROP-035 / future
+policy work.
 
 **OQ-P28-2 — PROP-035 Effect Surface should include a P28 enforcement clause**
 
-When PROP-035 (Effect Surface) is drafted, it should include an explicit clause
-requiring that every `escape` declaration carry a name that appears in the receipt
-`escape_boundaries` field. This ensures that P28 enforcement for escape declarations
-is a first-class PROP-035 acceptance criterion, not a later errata.
+PROP-035 should retain an explicit clause requiring that every relevant `escape`
+name appear in the receipt `escape_boundaries` field. Source grammar naming is
+already enforced; receipt-linking remains a broader Effect Surface acceptance
+criterion.
 
 Question for Compiler/Grammar Expert: should PROP-035 be the home for escape naming
 enforcement, or should a separate escape-naming-enforcement PROP be filed?
