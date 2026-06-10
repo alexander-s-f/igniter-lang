@@ -122,9 +122,9 @@ module IgniterLang
         when "escape"
           declarations << classified_decl(node, "escape", [], [])
         when "stream"
-          symbol_fragments[node.fetch("name")] = "escape"
+          symbol_fragments[node.fetch("name")] = "stream"
           symbol_kinds[node.fetch("name")] = "stream"
-          declarations << classified_decl(node, "escape", [], [])
+          declarations << classified_decl(node, "stream", [], []).merge(stream_value_fragment_metadata("stream"))
         when "capability"
           # PROP-035: capability <name>: <CapType>
           symbol_fragments[node.fetch("name")] = "escape"
@@ -153,7 +153,8 @@ module IgniterLang
           declarations << classified_decl(node, fragment, [], []).merge(value_fragment_metadata(fragment, node["type_annotation"]))
         when "window"
           window_declarations << node
-          declarations << classified_decl(node.merge("name" => node.fetch("label", "_window")), "escape", [], [])
+          declarations << classified_decl(node.merge("name" => node.fetch("label", "_window")), "stream", [], [])
+            .merge(stream_value_fragment_metadata("core"))
         when "uses_assumptions"
           name = node.fetch("name")
           assumption_refs << name
@@ -171,14 +172,15 @@ module IgniterLang
           declarations << classified_decl(node, "epistemic", [], missing)
         when "fold_stream"
           bound = node.fetch("bound", nil)
-          result_fragment = bound ? "core" : "oof"
+          node_fragment = bound ? "stream" : "oof"
+          value_fragment = bound ? "core" : "oof"
           deps = expr_refs(node.fetch("expr", { "kind" => "literal", "value" => nil }))
           deps.select { |dep| symbol_kinds[dep] == "stream" }.each do |stream_name|
             fold_stream_stream_refs[stream_name] << node.fetch("name")
           end
-          symbol_fragments[node.fetch("name")] = result_fragment
+          symbol_fragments[node.fetch("name")] = value_fragment
           symbol_kinds[node.fetch("name")] = "fold_stream"
-          declarations << classified_decl(node, result_fragment, deps, [])
+          declarations << classified_decl(node, node_fragment, deps, []).merge(stream_value_fragment_metadata(value_fragment))
         when "invariant"
           deps = [node.fetch("predicate_ref", nil)].compact
           missing = deps.reject { |dep| symbol_fragments.key?(dep) }
@@ -425,6 +427,8 @@ module IgniterLang
       return "core" if declarations.all? { |decl| decl.fetch("fragment_class") == "core" }
       return "temporal" if declarations.any? { |decl| decl.fetch("fragment_class") == "temporal" } &&
                            declarations.none? { |decl| decl.fetch("fragment_class") == "oof" }
+      return "stream" if declarations.any? { |decl| decl.fetch("fragment_class") == "stream" } &&
+                         declarations.none? { |decl| decl.fetch("fragment_class") == "oof" }
       return "escape" if (modifier != "pure" || declarations.any? { |decl| decl.fetch("fragment_class") == "escape" }) &&
                          declarations.none? { |decl| decl.fetch("fragment_class") == "oof" }
       return "epistemic" if declarations.any? { |decl| decl.fetch("fragment_class") == "epistemic" } &&
@@ -504,6 +508,14 @@ module IgniterLang
         "value_fragment_class" => "core",
         "required_capability" => temporal_capability(type_name),
         "temporal_axis" => temporal_axis(type_name)
+      }
+    end
+
+    def stream_value_fragment_metadata(value_fragment)
+      {
+        "node_fragment_class" => "stream",
+        "value_fragment_class" => value_fragment,
+        "required_capability" => "stream_input"
       }
     end
 
