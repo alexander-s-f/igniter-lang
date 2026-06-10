@@ -38,6 +38,9 @@ module IgniterLang
       # PROP-041: pass size_relation declarations through to TypeChecker
       size_relations = parsed_program.fetch("size_relations", [])
       result["size_relations"] = size_relations unless size_relations.empty?
+      # PROP-044 P5: variant declarations for TypeChecker @variant_shapes
+      variant_decls = variant_declarations(parsed_program)
+      result["variant_declarations"] = variant_decls unless variant_decls.empty?
       # PROP-045: propagate module-level intent_text
       module_intent = parsed_program.fetch("intent_text", nil)
       result["intent_text"] = module_intent if module_intent
@@ -54,6 +57,27 @@ module IgniterLang
               "name" => field.fetch("name"),
               "type_annotation" => normalized_type_annotation(field.fetch("type_annotation")),  # PROP-043 C1: preserve Map[K,V] params
               "optional" => field.fetch("optional", false)
+            }
+          end
+        }
+      end
+    end
+
+    # PROP-044 P5: surface variant declarations for TypeChecker @variant_shapes
+    def variant_declarations(parsed_program)
+      parsed_program.fetch("variants", []).map do |variant|
+        {
+          "kind" => "variant",
+          "name" => variant.fetch("name"),
+          "arms" => variant.fetch("arms", []).map do |arm|
+            {
+              "name"   => arm.fetch("name"),
+              "fields" => arm.fetch("fields", []).map do |field|
+                {
+                  "name"            => field.fetch("name"),
+                  "type_annotation" => normalized_type_annotation(field.fetch("type_annotation"))
+                }
+              end
             }
           end
         }

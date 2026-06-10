@@ -1980,6 +1980,7 @@ module IgniterLang
         "assumptions"     => @ast.fetch("assumptions", []),
         "profiles"        => @ast.fetch("profiles", []),        # PROP-040
         "size_relations"  => @ast.fetch("size_relations", []),  # PROP-041
+        "intent_text"     => @ast.fetch("intent_text", nil),    # PROP-045
         "parse_errors"    => @errors
       }
     end

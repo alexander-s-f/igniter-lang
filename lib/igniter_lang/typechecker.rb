@@ -76,7 +76,8 @@ module IgniterLang
     end
 
     def typecheck(classified_program)
-      @type_shapes = type_shapes(classified_program)
+      @type_shapes    = type_shapes(classified_program)
+      @variant_shapes = variant_shapes(classified_program)  # PROP-044 P5
       @assumption_registry = classified_program.fetch("assumption_registry", [])
       @type_shapes["Assumption"] = assumption_shape if assumptions_present?(classified_program)
       # PROP-041: build T2 size-relation registry (stdlib + user-declared)
@@ -105,6 +106,7 @@ module IgniterLang
         "semantic_ir_ref" => nil
       }
       result["assumption_registry"] = @assumption_registry unless @assumption_registry.empty?
+      result["variant_env"] = @variant_shapes unless @variant_shapes.empty?  # PROP-044 P5
       result["olap_points"] = @olap_env.values.map { |decl| decl.fetch("semantic_node") } unless @olap_env.empty?
       type_warnings = typed_contracts.flat_map { |contract| contract.fetch("type_warnings", []) }
       result["type_warnings"] = type_warnings unless type_warnings.empty?
@@ -131,6 +133,32 @@ module IgniterLang
           fields[field.fetch("name")] = type_ir(field.fetch("type_annotation"))  # PROP-043 C1: preserve Map[K,V] params
         end
       end
+    end
+
+    # PROP-044 P5: 3-level store: variant_name → arm_name → field_name → type_ir
+    def variant_shapes(classified_program)
+      classified_program.fetch("variant_declarations", []).each_with_object({}) do |variant, vshapes|
+        vshapes[variant.fetch("name")] =
+          variant.fetch("arms", []).each_with_object({}) do |arm, arms|
+            arms[arm.fetch("name")] =
+              arm.fetch("fields", []).each_with_object({}) do |field, fields|
+                fields[field.fetch("name")] = type_ir(field.fetch("type_annotation"))
+              end
+          end
+      end
+    end
+
+    def variant_type?(name)
+      @variant_shapes.key?(name)
+    end
+
+    def variant_arms(name)
+      @variant_shapes.fetch(name, {})
+    end
+
+    def find_variant_for_arm(arm_name)
+      @variant_shapes.each { |vname, arms| return vname if arms.key?(arm_name) }
+      nil
     end
 
     def typecheck_contract(classified_contract)
@@ -486,6 +514,10 @@ module IgniterLang
         infer_array_literal(expr, symbol_types, type_errors, type_warnings, node_name)
       when "record_literal"  # PROP-043: named Record inference via @output_type_hints
         infer_record_literal(expr, symbol_types, type_errors, type_warnings, node_name)
+      when "variant_construct"  # PROP-044 P5
+        infer_variant_construct(expr, symbol_types, type_errors, type_warnings, node_name)
+      when "match_expr"         # PROP-044 P5
+        infer_match_expr(expr, symbol_types, type_errors, type_warnings, node_name)
       else
         type_errors << oof("OOF-TY0", "Unsupported expression kind: #{expr.fetch("kind")}", node_name)
         typed_expr("unsupported", type_ir("Unknown"), [], "source_kind" => expr.fetch("kind"))
@@ -1852,6 +1884,188 @@ module IgniterLang
       end
 
       typed_expr("record_literal", type_ir("Unknown"), deps, "fields" => typed_fields)
+    end
+
+    # PROP-044 P5: infer a variant_construct expression.
+    # Resolves the variant by searching @variant_shapes for the arm name.
+    # Validates all supplied fields against the arm's declared field types.
+    # Returns type_ir(variant_name) on success; type_ir("Unknown") with OOF-KIND2 on failure.
+    def infer_variant_construct(expr, symbol_types, type_errors, type_warnings, node_name)
+      arm_name = expr.fetch("arm")
+      fields   = expr.fetch("fields", {})
+
+      variant_name = find_variant_for_arm(arm_name)
+      if variant_name.nil?
+        type_errors << oof("OOF-KIND2",
+          "variant_construct arm '#{arm_name}' is not declared in any variant",
+          node_name)
+        return typed_expr("variant_construct", type_ir("Unknown"), [],
+                          "arm" => arm_name, "variant" => nil, "typed_fields" => {})
+      end
+
+      arm_fields   = @variant_shapes[variant_name][arm_name]
+      typed_fields = {}
+      field_deps   = []
+
+      fields.each do |fname, fexpr|
+        typed_f = infer_expr(fexpr, symbol_types, type_errors, type_warnings, node_name)
+        if arm_fields.key?(fname)
+          expected = arm_fields[fname]
+          actual   = typed_f.fetch("resolved_type")
+          unless type_name(actual) == type_name(expected) || type_name(actual) == "Unknown"
+            type_errors << oof("OOF-KIND2",
+              "#{variant_name}::#{arm_name} field '#{fname}': " \
+              "expected #{type_name(expected)}, got #{type_name(actual)}",
+              node_name)
+          end
+        else
+          type_errors << oof("OOF-KIND2",
+            "field '#{fname}' is not declared in #{variant_name}::#{arm_name}",
+            node_name)
+        end
+        typed_fields[fname] = typed_f
+        field_deps.concat(typed_f.fetch("deps", []))
+      end
+
+      arm_fields.each_key do |required|
+        unless fields.key?(required)
+          type_errors << oof("OOF-KIND2",
+            "#{variant_name}::#{arm_name} is missing required field '#{required}'",
+            node_name)
+        end
+      end
+
+      typed_expr("variant_construct", type_ir(variant_name), field_deps.uniq,
+                 "arm" => arm_name, "variant" => variant_name, "typed_fields" => typed_fields)
+    end
+
+    # PROP-044 P5: infer a match_expr.
+    # Full mode: subject is a known variant → arm narrowing + exhaustiveness.
+    # Degraded mode: subject is Unknown (prior error) or non-variant type → walk arms, no narrowing.
+    def infer_match_expr(expr, symbol_types, type_errors, type_warnings, node_name)
+      subject_node = infer_expr(expr.fetch("subject"), symbol_types,
+                                type_errors, type_warnings, node_name)
+      subject_type = type_name(subject_node.fetch("resolved_type"))
+
+      # Non-variant subject — OOF-KIND4 (suppress if already Unknown from prior error)
+      unless variant_type?(subject_type) || subject_type == "Unknown"
+        type_errors << oof("OOF-KIND4",
+          "match subject has type '#{subject_type}' which is not a variant type",
+          node_name)
+        return infer_match_expr_degraded(expr, subject_node, symbol_types,
+                                        type_errors, type_warnings, node_name)
+      end
+
+      # Unknown subject: degraded mode without OOF-KIND4 (upstream error already explains it)
+      unless variant_type?(subject_type)
+        return infer_match_expr_degraded(expr, subject_node, symbol_types,
+                                        type_errors, type_warnings, node_name)
+      end
+
+      declared_arms = variant_arms(subject_type)
+      covered_arms  = {}
+      has_wildcard  = false
+      arm_types     = []
+      typed_arms    = []
+
+      expr.fetch("arms").each_with_index do |arm, idx|
+        pattern = arm.fetch("pattern")
+
+        if pattern.fetch("wildcard", false)
+          has_wildcard = true
+          typed_body   = infer_expr(arm.fetch("body"), symbol_types,
+                                    type_errors, type_warnings, node_name)
+          arm_types  << typed_body.fetch("resolved_type")
+          typed_arms << { "pattern" => pattern, "body" => typed_body }
+          next
+        end
+
+        arm_name = pattern.fetch("arm")
+        bindings = pattern.fetch("bindings", [])
+
+        # OOF-KIND3: already covered (unreachable arm)
+        if covered_arms.key?(arm_name)
+          type_errors << oof("OOF-KIND3",
+            "arm '#{arm_name}' is unreachable — already covered at position #{covered_arms[arm_name]}",
+            node_name)
+          next
+        end
+
+        covered_arms[arm_name] = idx
+
+        # OOF-KIND2: arm not declared in this variant
+        unless declared_arms.key?(arm_name)
+          type_errors << oof("OOF-KIND2",
+            "arm '#{arm_name}' is not declared in variant '#{subject_type}'",
+            node_name)
+          typed_body = infer_expr(arm.fetch("body"), symbol_types,
+                                  type_errors, type_warnings, node_name)
+          arm_types  << typed_body.fetch("resolved_type")
+          typed_arms << { "pattern" => pattern, "body" => typed_body }
+          next
+        end
+
+        arm_field_shapes = declared_arms[arm_name]
+        arm_bindings = {}
+        bindings.each do |binding|
+          if arm_field_shapes.key?(binding)
+            arm_bindings[binding] = arm_field_shapes[binding]
+          else
+            type_errors << oof("OOF-KIND2",
+              "binding '#{binding}' is not a field of #{subject_type}::#{arm_name}",
+              node_name)
+            arm_bindings[binding] = type_ir("Unknown")
+          end
+        end
+
+        arm_scope  = symbol_types.merge(arm_bindings)
+        typed_body = infer_expr(arm.fetch("body"), arm_scope,
+                                type_errors, type_warnings, node_name)
+        arm_types  << typed_body.fetch("resolved_type")
+        typed_arms << { "pattern" => pattern, "body" => typed_body }
+      end
+
+      # OOF-KIND1: non-exhaustive match (missing arms, no wildcard)
+      uncovered = declared_arms.keys - covered_arms.keys
+      if uncovered.any? && !has_wildcard
+        type_errors << oof("OOF-KIND1",
+          "match on '#{subject_type}' is non-exhaustive — " \
+          "missing arms: #{uncovered.sort.join(", ")}",
+          node_name)
+      end
+
+      result_type  = unify_match_arm_types(arm_types, subject_type, node_name, type_errors)
+      subject_deps = subject_node.fetch("deps", [])
+      arm_deps     = typed_arms.flat_map { |a| a.fetch("body", {}).fetch("deps", []) }
+
+      typed_expr("match_expr", result_type, (subject_deps + arm_deps).uniq,
+                 "subject"      => subject_node,
+                 "subject_type" => subject_type,
+                 "arms"         => typed_arms,
+                 "exhaustive"   => uncovered.empty? || has_wildcard,
+                 "has_wildcard" => has_wildcard)
+    end
+
+    def infer_match_expr_degraded(expr, subject_node, symbol_types, type_errors, type_warnings, node_name)
+      expr.fetch("arms").each do |arm|
+        infer_expr(arm.fetch("body"), symbol_types, type_errors, type_warnings, node_name)
+      end
+      typed_expr("match_expr", type_ir("Unknown"), subject_node.fetch("deps", []),
+                 "subject" => subject_node, "arms" => [], "exhaustive" => false,
+                 "has_wildcard" => false)
+    end
+
+    def unify_match_arm_types(arm_types, subject_type, node_name, type_errors)
+      return type_ir("Unknown") if arm_types.empty?
+
+      concrete = arm_types.map { |t| type_name(t) }.reject { |t| t == "Unknown" }.uniq
+      return type_ir("Unknown") if concrete.empty?
+      return type_ir(concrete.first) if concrete.length == 1
+
+      type_errors << oof("OOF-KIND5",
+        "match on '#{subject_type}' has divergent arm result types: #{concrete.sort.join(", ")}",
+        node_name)
+      type_ir("Unknown")
     end
 
     # check_map_annotation: validates a single type_annotation for Map constraint violations.
