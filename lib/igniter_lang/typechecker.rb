@@ -108,6 +108,9 @@ module IgniterLang
       result["olap_points"] = @olap_env.values.map { |decl| decl.fetch("semantic_node") } unless @olap_env.empty?
       type_warnings = typed_contracts.flat_map { |contract| contract.fetch("type_warnings", []) }
       result["type_warnings"] = type_warnings unless type_warnings.empty?
+      # PROP-045: propagate module-level intent_text
+      module_intent = classified_program.fetch("intent_text", nil)
+      result["intent_text"] = module_intent if module_intent
       result
     end
 
@@ -339,6 +342,9 @@ module IgniterLang
       # PROP-039 OOF-R3: propagate clean (non-dotted) decreases variant for SemanticIR evidence
       clean_variant = @recur_context.fetch(:decreases_variant, nil)
       result["decreases_variant"] = clean_variant if clean_variant
+      # PROP-045: propagate contract-level intent_text
+      intent_text = classified_contract.fetch("intent_text", nil)
+      result["intent_text"] = intent_text if intent_text
       # PROP-041 T2: propagate structural-size evidence for SemanticIR structural_size_v1 emission
       if @t2_context&.fetch(:kind) == :t2_pass
         result["decreases_variant_t2"]   = @t2_context[:dv]

@@ -56,6 +56,7 @@ module IgniterLang
     lead
     size_relation
     variant match
+    intent
   ].freeze
 
   class Lexer
@@ -286,6 +287,17 @@ module IgniterLang
       if peek_kw?("module")
         advance
         program["module"] = parse_module_path
+      end
+
+      # PROP-045: optional module-level intent descriptor (after module, before imports)
+      if peek_kw?("intent")
+        advance
+        tok = peek
+        if peek_type?(:string_lit)
+          program["intent_text"] = advance.value
+        else
+          @errors << { "message" => "intent requires a string literal", "line" => tok.line }
+        end
       end
 
       # imports
@@ -823,6 +835,8 @@ module IgniterLang
       when "max_steps"   then advance; parse_max_steps_decl
       # PROP-039 gate 8: loop body declarations (valid inside loop body only; TypeChecker rejects at contract level)
       when "lead"        then advance; parse_lead_decl
+      # PROP-045: intent descriptor — queryable purpose metadata, not a behavior declaration
+      when "intent"      then advance; parse_intent_decl
       when "pipeline"
         add_parse_error(
           rule: "OOF-P2",
@@ -885,6 +899,19 @@ module IgniterLang
       node["lifecycle"] = lifecycle if lifecycle
       node["evidence"] = parse_evidence_list if peek_value?("evidence")
       node
+    end
+
+    # PROP-045: intent "..." — queryable purpose metadata for a contract or module.
+    # Preserved through all pipeline stages into contract_ir as intent_text.
+    # Not a behavior declaration; not a capability grant; not a policy.
+    def parse_intent_decl
+      tok = peek
+      unless peek_type?(:string_lit)
+        @errors << { "message" => "intent requires a string literal", "line" => tok.line }
+        return nil
+      end
+      text = advance.value
+      { "kind" => "intent", "text" => text }
     end
 
     def parse_uses_decl

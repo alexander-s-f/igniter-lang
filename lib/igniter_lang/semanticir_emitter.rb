@@ -89,6 +89,9 @@ module IgniterLang
       result["olap_points"] = typed_program.fetch("olap_points") if typed_program.key?("olap_points")
       invariants = typed_program_invariants(result.fetch("contracts"))
       result["invariants"] = invariants unless invariants.empty?
+      # PROP-045: emit module-level intent_text when present
+      module_intent = typed_program.fetch("intent_text", nil)
+      result["intent_text"] = module_intent if module_intent
       result
     end
 
@@ -155,6 +158,9 @@ module IgniterLang
       profile_authority = contract.fetch("profile_authority", nil)
       contract_ir["profile_binding"]   = via_profile       if via_profile
       contract_ir["profile_authority"] = profile_authority if profile_authority
+      # PROP-045: emit intent_text when present (metadata only; not in behavior digest)
+      intent_text = contract.fetch("intent_text", nil)
+      contract_ir["intent_text"] = intent_text if intent_text
       assumption_refs = contract.fetch("assumption_refs", [])
       contract_ir["assumption_refs"] = assumption_refs unless assumption_refs.empty?
       # PROP-042 T3 / PROP-041 T2 / PROP-039 OOF-R3: emit termination evidence.

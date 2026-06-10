@@ -38,6 +38,9 @@ module IgniterLang
       # PROP-041: pass size_relation declarations through to TypeChecker
       size_relations = parsed_program.fetch("size_relations", [])
       result["size_relations"] = size_relations unless size_relations.empty?
+      # PROP-045: propagate module-level intent_text
+      module_intent = parsed_program.fetch("intent_text", nil)
+      result["intent_text"] = module_intent if module_intent
       result
     end
 
@@ -225,11 +228,25 @@ module IgniterLang
           # PROP-039 gate 4: structural meta-declarations — no named symbol produced.
           # Used only for OOF-R2/R4 post-body checks below; not added to declarations.
           nil
+        when "intent"
+          # PROP-045: intent descriptor — no symbol produced; collected below for OOF-INTENT3 check.
+          nil
         end
       end
 
       diagnostics.concat(stream_missing_window_oofs(fold_stream_stream_refs, window_declarations))
       diagnostics.concat(evidence_gate_oofs(contract, sample_input))
+
+      # PROP-045: extract intent_text; emit OOF-INTENT3 on duplicate
+      intent_nodes = contract.fetch("body").select { |n| n.fetch("kind", nil) == "intent" }
+      if intent_nodes.length > 1
+        diagnostics << oof(
+          "OOF-INTENT3",
+          "contract '#{contract.fetch("name")}' declares 'intent' more than once; only the first is used",
+          contract.fetch("name")
+        )
+      end
+      contract_intent_text = intent_nodes.first&.fetch("text", nil)
 
       modifier = contract.fetch("modifier", "pure")
 
@@ -374,6 +391,8 @@ module IgniterLang
       result["via_profile"]       = via_profile       if via_profile
       result["profile_authority"] = profile_authority  if profile_authority
       result["assumption_refs"]   = assumption_refs.uniq unless assumption_refs.empty?
+      # PROP-045: propagate contract-level intent_text
+      result["intent_text"] = contract_intent_text if contract_intent_text
       result
     end
 
