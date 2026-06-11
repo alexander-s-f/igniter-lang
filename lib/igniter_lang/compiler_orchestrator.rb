@@ -9,6 +9,7 @@ require_relative "classifier"
 require_relative "compilation_report"
 require_relative "compiler_profile_contract_validator"
 require_relative "compiler_result"
+require_relative "multifile_resolver"
 require_relative "parser"
 require_relative "semanticir_emitter"
 require_relative "typechecker"
@@ -55,10 +56,108 @@ module IgniterLang
       parsed = ParsedProgram.parse(File.read(source_path), source_path: source_path.to_s).to_h
       return parse_failure(parsed, source_path, out_path) unless parsed.fetch("parse_errors").empty?
 
+      compile_parsed(
+        parsed: parsed,
+        source_path: source_path,
+        out_path: out_path,
+        sample_input: sample_input,
+        sample_input_resolver: sample_input_resolver,
+        runtime_smoke: runtime_smoke,
+        compiler_profile_source: compiler_profile_source,
+        source_units: nil
+      )
+    rescue AssemblyRefused => e
+      report = CompilationReport.internal_error(
+        format_version: FORMAT_VERSION,
+        source_path: source_path,
+        rule: "assembler_refused",
+        error: e
+      )
+      refusal(report, source_path, out_path, status: "assembler_refused")
+    rescue => e
+      report = CompilationReport.internal_error(
+        format_version: FORMAT_VERSION,
+        source_path: source_path,
+        rule: "compiler_error",
+        error: e
+      )
+      refusal(report, source_path, out_path, status: "error")
+    end
+
+    def compile_sources(
+      source_paths:,
+      out_path:,
+      sample_input: nil,
+      sample_input_resolver: nil,
+      runtime_smoke: nil,
+      compiler_profile_source: nil
+    )
+      source_paths = Array(source_paths).map { |path| Pathname.new(path) }
+      out_path = Pathname.new(out_path)
+      return compile(
+        source_path: source_paths.fetch(0),
+        out_path: out_path,
+        sample_input: sample_input,
+        sample_input_resolver: sample_input_resolver,
+        runtime_smoke: runtime_smoke,
+        compiler_profile_source: compiler_profile_source
+      ) if source_paths.length == 1
+
+      resolved = MultifileResolver.new.resolve(source_paths)
+      unless resolved.fetch("ok")
+        report = multifile_resolution_failure_report(resolved)
+        return refusal(report, Pathname.new(resolved.fetch("source_path")), out_path, status: "oof")
+      end
+
+      parsed = resolved.fetch("parsed_program")
+      source_path = Pathname.new(parsed.fetch("source_path"))
+      return parse_failure(parsed, source_path, out_path) unless parsed.fetch("parse_errors").empty?
+
+      compile_parsed(
+        parsed: parsed,
+        source_path: source_path,
+        out_path: out_path,
+        sample_input: sample_input,
+        sample_input_resolver: sample_input_resolver,
+        runtime_smoke: runtime_smoke,
+        compiler_profile_source: compiler_profile_source,
+        source_units: resolved.fetch("source_units")
+      )
+    rescue AssemblyRefused => e
+      report = CompilationReport.internal_error(
+        format_version: FORMAT_VERSION,
+        source_path: source_path || Pathname.new("multifile:error"),
+        rule: "assembler_refused",
+        error: e
+      )
+      refusal(report, source_path || Pathname.new("multifile:error"), out_path, status: "assembler_refused")
+    rescue => e
+      report = CompilationReport.internal_error(
+        format_version: FORMAT_VERSION,
+        source_path: source_path || Pathname.new("multifile:error"),
+        rule: "compiler_error",
+        error: e
+      )
+      refusal(report, source_path || Pathname.new("multifile:error"), out_path, status: "error")
+    end
+
+    private
+
+    def compile_parsed(
+      parsed:,
+      source_path:,
+      out_path:,
+      sample_input:,
+      sample_input_resolver:,
+      runtime_smoke:,
+      compiler_profile_source:,
+      source_units:
+    )
       resolved_sample_input = sample_input || resolve_sample_input(parsed, sample_input_resolver)
       classified = @classifier.classify(parsed, sample_input: resolved_sample_input)
       typed = @typechecker.typecheck(classified)
       compilation = @emitter.emit_typed(typed)
+      attach_source_units!(compilation, source_units)
       report = CompilationReport.enrich(
         report: compilation.fetch("compilation_report"),
         parsed: parsed
@@ -128,25 +227,40 @@ module IgniterLang
         "assembled" => assembled,
         "sample_input" => resolved_sample_input
       }
-    rescue AssemblyRefused => e
-      report = CompilationReport.internal_error(
-        format_version: FORMAT_VERSION,
-        source_path: source_path,
-        rule: "assembler_refused",
-        error: e
-      )
-      refusal(report, source_path, out_path, status: "assembler_refused")
-    rescue => e
-      report = CompilationReport.internal_error(
-        format_version: FORMAT_VERSION,
-        source_path: source_path,
-        rule: "compiler_error",
-        error: e
-      )
-      refusal(report, source_path, out_path, status: "error")
     end
 
-    private
+    def attach_source_units!(compilation, source_units)
+      return unless source_units
+
+      compilation.fetch("semantic_ir")["source_units"] = source_units
+      compilation.fetch("compilation_report")["source_units"] = source_units
+    end
+
+    def multifile_resolution_failure_report(resolved)
+      digest = resolved.fetch("source_hash").delete_prefix("sha256:")[0, 16]
+      {
+        "kind" => "compilation_report",
+        "format_version" => FORMAT_VERSION,
+        "program_id" => "compilation_report/multifile_resolve/#{digest}",
+        "grammar_version" => "igniter-v0",
+        "source_hash" => resolved.fetch("source_hash"),
+        "source_path" => resolved.fetch("source_path"),
+        "source_units" => resolved.fetch("source_units"),
+        "pass_result" => "oof",
+        "stages" => {
+          "parse" => "ok",
+          "multifile_resolve" => "oof",
+          "classify" => "skipped",
+          "typecheck" => "skipped",
+          "emit" => "skipped"
+        },
+        "diagnostics" => Diagnostics.enrich(
+          resolved.fetch("diagnostics"),
+          category: Diagnostics::CATEGORIES.fetch(:classified)
+        ),
+        "semantic_ir_ref" => nil
+      }
+    end
 
     def parse_failure(parsed, source_path, out_path)
       report = CompilationReport.parse_failure(

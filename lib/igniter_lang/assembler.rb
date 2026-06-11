@@ -217,6 +217,7 @@ module IgniterLang
         "compatibility_metadata" => compatibility_metadata
       }
       artifact_material["entrypoint"] = entrypoint if entrypoint
+      artifact_material["source_units"] = semantic_ir.fetch("source_units") if semantic_ir.key?("source_units")
       # PROP-036: inject compiler_profile_id into hash material BEFORE artifact_hash
       # is computed. Adding it after Canonical.hash is called is forbidden.
       artifact_material["compiler_profile_id"] = compiler_profile_id if compiler_profile_id
@@ -253,6 +254,7 @@ module IgniterLang
         "diagnostics" => report.fetch("diagnostics")
       }
       manifest["entrypoint"] = entrypoint if entrypoint
+      manifest["source_units"] = semantic_ir.fetch("source_units") if semantic_ir.key?("source_units")
       # PROP-036: top-level manifest field; only present when a valid source is supplied.
       manifest["compiler_profile_id"] = compiler_profile_id if compiler_profile_id
 
