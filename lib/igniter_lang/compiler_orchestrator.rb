@@ -121,7 +121,10 @@ module IgniterLang
         sample_input_resolver: sample_input_resolver,
         runtime_smoke: runtime_smoke,
         compiler_profile_source: compiler_profile_source,
-        source_units: resolved.fetch("source_units")
+        source_units: resolved.fetch("source_units"),
+        cross_module_registry: resolved.fetch("cross_module_registry", {}),
+        per_module_imports: resolved.fetch("per_module_imports", {}),
+        per_contract_module: resolved.fetch("per_contract_module", {})
       )
     rescue AssemblyRefused => e
       report = CompilationReport.internal_error(
@@ -151,11 +154,18 @@ module IgniterLang
       sample_input_resolver:,
       runtime_smoke:,
       compiler_profile_source:,
-      source_units:
+      source_units:,
+      cross_module_registry: {},
+      per_module_imports: {},
+      per_contract_module: {}
     )
       resolved_sample_input = sample_input || resolve_sample_input(parsed, sample_input_resolver)
       classified = @classifier.classify(parsed, sample_input: resolved_sample_input)
-      typed = @typechecker.typecheck(classified)
+      typed = @typechecker.typecheck(classified,
+        cross_module_registry: cross_module_registry,
+        per_module_imports: per_module_imports,
+        per_contract_module: per_contract_module
+      )
       compilation = @emitter.emit_typed(typed)
       attach_source_units!(compilation, source_units)
       report = CompilationReport.enrich(
@@ -232,7 +242,9 @@ module IgniterLang
     def attach_source_units!(compilation, source_units)
       return unless source_units
 
-      compilation.fetch("semantic_ir")["source_units"] = source_units
+      # Guard: semantic_ir is nil when type errors blocked emission
+      sir = compilation["semantic_ir"]
+      sir["source_units"] = source_units if sir
       compilation.fetch("compilation_report")["source_units"] = source_units
     end
 

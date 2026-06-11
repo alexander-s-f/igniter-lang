@@ -75,7 +75,7 @@ module IgniterLang
       @typechecker_version = typechecker_version
     end
 
-    def typecheck(classified_program)
+    def typecheck(classified_program, cross_module_registry: {}, per_module_imports: {}, per_contract_module: {})
       @type_shapes    = type_shapes(classified_program)
       @variant_shapes = variant_shapes(classified_program)  # PROP-044 P5
       @assumption_registry = classified_program.fetch("assumption_registry", [])
@@ -90,9 +90,14 @@ module IgniterLang
       # LANG-TYPED-CONTRACT-REF-PROP-P3: build same-module contract registry for uses_contract resolution
       @same_module_registry = build_same_module_registry(classified_program)
       @classified_module = classified_program.fetch("module", nil)
+      # LANG-TYPED-CONTRACT-REF-PROP-P5: cross-module resolution state (per-call, not constructor)
+      @cross_module_registry = cross_module_registry
+      @per_module_imports = per_module_imports
+      @per_contract_module = per_contract_module
       typed_contracts = classified_program.fetch("contracts").map do |contract|
         typecheck_contract(contract)
       end
+      cycle_errors = detect_uses_cycles(typed_contracts)
       entrypoint_errors, resolved_entrypoint = validate_entrypoint(classified_program)
 
       # PROP-044-P9: OOF-KIND6 — reserved __* field names in module-level declarations.
@@ -129,7 +134,7 @@ module IgniterLang
         "module" => classified_program.fetch("module"),
         "type_env" => @type_shapes,
         "contracts" => typed_contracts,
-        "type_errors" => typed_contracts.flat_map { |contract| contract.fetch("type_errors") } + module_reserved_errors + entrypoint_errors,
+        "type_errors" => typed_contracts.flat_map { |contract| contract.fetch("type_errors") } + module_reserved_errors + entrypoint_errors + cycle_errors,
         "semantic_ir_ref" => nil
       }
       result["entrypoint"] = resolved_entrypoint if resolved_entrypoint
@@ -519,43 +524,194 @@ module IgniterLang
         )
       end
 
+      # PATH 1 — Qualified cross-module reference (dotted target)
       if target.include?(".")
-        type_errors << oof(
-          "OOF-REF2",
-          "contract '#{current_contract_name}' uses cross-module reference '#{target}' — " \
-          "cross-module typed refs require the import module table (deferred; use same-module contracts in v0)",
-          "uses_contract:#{target}"
-        )
+        dot_idx = target.rindex(".")
+        mod_path = target[0, dot_idx]
+        contract_name = target[(dot_idx + 1)..]
+        mod_registry = @cross_module_registry[mod_path]
+        unless mod_registry
+          type_errors << oof(
+            "OOF-REF1",
+            "contract '#{current_contract_name}' uses '#{target}' — " \
+            "module '#{mod_path}' is not in the compilation unit",
+            "uses_contract:#{target}"
+          )
+          return typed_decl(decl, type_ir("ContractRef"), nil, []).merge(
+            "target" => target, "resolution_status" => "unresolved", "resolution_kind" => "unresolved"
+          )
+        end
+        entry = mod_registry[contract_name]
+        unless entry
+          type_errors << oof(
+            "OOF-REF1",
+            "contract '#{current_contract_name}' uses '#{target}' — " \
+            "module '#{mod_path}' does not declare contract '#{contract_name}'",
+            "uses_contract:#{target}"
+          )
+          return typed_decl(decl, type_ir("ContractRef"), nil, []).merge(
+            "target" => target, "resolution_status" => "unresolved", "resolution_kind" => "unresolved"
+          )
+        end
         return typed_decl(decl, type_ir("ContractRef"), nil, []).merge(
-          "target" => target, "resolution_status" => "unresolved"
+          "target"            => target,
+          "resolution_status" => "resolved",
+          "resolution_kind"   => "qualified",
+          "resolved_ref"      => {
+            "contract_name" => contract_name,
+            "module_name"   => mod_path,
+            "modifier"      => entry.fetch("modifier"),
+            "input_count"   => entry.fetch("input_count"),
+            "input_names"   => entry.fetch("input_names"),
+            "output_names"  => entry.fetch("output_names")
+          }
         )
       end
 
+      # PATH 2a — Unqualified: same-module (local shadows imported)
+      # In multifile mode, per_contract_module tells us each contract's original module.
+      # A contract is "local" only if it comes from the same original module as the declaring contract.
+      declaring_module = @per_contract_module.fetch(current_contract_name, @classified_module)
       entry = @same_module_registry[target]
-      unless entry
+      if entry
+        target_module = @per_contract_module.fetch(target, nil)
+        if target_module.nil? || target_module == declaring_module
+          # Truly same-module: nil means single-file (per_contract_module empty), or explicit match
+          effective_module = target_module || @classified_module
+          return typed_decl(decl, type_ir("ContractRef"), nil, []).merge(
+            "target"            => target,
+            "resolution_status" => "resolved",
+            "resolution_kind"   => "local",
+            "resolved_ref"      => {
+              "contract_name" => target,
+              "module_name"   => effective_module,
+              "modifier"      => entry.fetch("modifier"),
+              "input_count"   => entry.fetch("input_count"),
+              "input_names"   => entry.fetch("input_names"),
+              "output_names"  => entry.fetch("output_names")
+            }
+          )
+        end
+        # Target is from a different original module but merged — fall through to PATH 2b
+      end
+
+      # PATH 2b — Unqualified: scan imported modules
+      import_scope = resolve_import_scope_for(declaring_module)
+      candidates = []
+      import_scope.each do |imp_mod, visibility|
+        next unless @cross_module_registry.key?(imp_mod)
+        mod_registry = @cross_module_registry[imp_mod]
+        next unless mod_registry.key?(target)
+        if visibility == :all || visibility.include?(target)
+          candidates << { "module_name" => imp_mod, "entry" => mod_registry[target] }
+        end
+      end
+
+      case candidates.size
+      when 0
         type_errors << oof(
           "OOF-REF1",
           "contract '#{current_contract_name}' uses unknown contract '#{target}' — " \
-          "no contract named '#{target}' is declared in this module",
+          "no contract named '#{target}' is declared in this module or any imported module",
           "uses_contract:#{target}"
         )
-        return typed_decl(decl, type_ir("ContractRef"), nil, []).merge(
-          "target" => target, "resolution_status" => "unresolved"
+        typed_decl(decl, type_ir("ContractRef"), nil, []).merge(
+          "target" => target, "resolution_status" => "unresolved", "resolution_kind" => "unresolved"
+        )
+      when 1
+        mod_path = candidates[0]["module_name"]
+        entry    = candidates[0]["entry"]
+        typed_decl(decl, type_ir("ContractRef"), nil, []).merge(
+          "target"            => target,
+          "resolution_status" => "resolved",
+          "resolution_kind"   => "imported",
+          "resolved_ref"      => {
+            "contract_name" => target,
+            "module_name"   => mod_path,
+            "modifier"      => entry.fetch("modifier"),
+            "input_count"   => entry.fetch("input_count"),
+            "input_names"   => entry.fetch("input_names"),
+            "output_names"  => entry.fetch("output_names")
+          }
+        )
+      else
+        mod_names = candidates.map { |c| c["module_name"] }
+        type_errors << oof(
+          "OOF-REF2",
+          "contract '#{current_contract_name}' uses '#{target}' — ambiguous: contract '#{target}' " \
+          "is exported by multiple imported modules: #{mod_names.join(", ")}; " \
+          "qualify the reference, e.g. uses #{mod_names[0]}.#{target}",
+          "uses_contract:#{target}"
+        )
+        typed_decl(decl, type_ir("ContractRef"), nil, []).merge(
+          "target" => target, "resolution_status" => "unresolved", "resolution_kind" => "unresolved"
         )
       end
+    end
 
-      typed_decl(decl, type_ir("ContractRef"), nil, []).merge(
-        "target"            => target,
-        "resolution_status" => "resolved",
-        "resolved_ref"      => {
-          "contract_name" => target,
-          "module_name"   => @classified_module,
-          "modifier"      => entry.fetch("modifier"),
-          "input_count"   => entry.fetch("input_count"),
-          "input_names"   => entry.fetch("input_names"),
-          "output_names"  => entry.fetch("output_names")
-        }
-      )
+    # LANG-TYPED-CONTRACT-REF-PROP-P5: import scope for a given module.
+    # Returns { module_path => :all | Set<contract_name> }.
+    def resolve_import_scope_for(module_name)
+      imports = @per_module_imports.fetch(module_name, [])
+      imports.each_with_object({}) do |import, scope|
+        mod_path = import.fetch("module_path", nil)
+        next unless mod_path
+        names = import.fetch("names", nil)
+        scope[mod_path] = names ? names.to_set : :all
+      end
+    end
+
+    # LANG-TYPED-CONTRACT-REF-PROP-P5: detect same-module or merged-unit uses-cycles.
+    # Runs a DFS over the resolved dependency graph after all contracts are typed.
+    def detect_uses_cycles(typed_contracts)
+      graph = {}
+      typed_contracts.each do |contract|
+        name = contract.fetch("name")
+        targets = contract.fetch("contract_ref_declarations", [])
+          .select { |r| r.fetch("resolution_status", "unresolved") == "resolved" }
+          .map { |r| r.dig("resolved_ref", "contract_name") }
+          .compact
+        graph[name] = targets
+      end
+
+      color = graph.keys.each_with_object({}) { |n, h| h[n] = :white }
+      reported = {}
+      errors = []
+
+      graph.each_key do |start|
+        next unless color[start] == :white
+        dfs_visit(start, graph, color, [], errors, reported)
+      end
+
+      errors
+    end
+
+    def dfs_visit(node, graph, color, path, errors, reported)
+      return unless color[node] == :white
+      color[node] = :gray
+      current_path = path + [node]
+
+      (graph[node] || []).each do |neighbor|
+        next unless graph.key?(neighbor)
+        if color[neighbor] == :gray
+          idx   = current_path.index(neighbor) || 0
+          cycle = current_path[idx..] + [neighbor]
+          key   = cycle.sort.join(",")
+          unless reported.key?(key)
+            reported[key] = true
+            errors << oof(
+              "OOF-REF4",
+              "typed-ref cycle detected: #{cycle.join(" → ")} — " \
+              "contracts cannot form circular uses-dependency chains",
+              "uses_contract:cycle"
+            )
+          end
+        elsif color[neighbor] == :white
+          dfs_visit(neighbor, graph, color, current_path, errors, reported)
+        end
+      end
+
+      color[node] = :black
     end
 
     def assumption_errors_by_name(registry)

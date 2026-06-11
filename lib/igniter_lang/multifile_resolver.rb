@@ -45,11 +45,48 @@ module IgniterLang
         "parsed_program" => merged,
         "source_units" => source_units_evidence(sorted),
         "source_hash" => source_hash,
-        "source_path" => merged.fetch("source_path")
+        "source_path" => merged.fetch("source_path"),
+        "cross_module_registry" => build_cross_module_registry(sorted),
+        "per_module_imports" => build_per_module_imports(sorted),
+        "per_contract_module" => build_per_contract_module(sorted)
       }
     end
 
     private
+
+    # LANG-TYPED-CONTRACT-REF-PROP-P5: build per-module contract signature registry.
+    # Built from parsed (pre-merge) units so module attribution is preserved.
+    def build_cross_module_registry(sorted)
+      sorted.each_with_object({}) do |unit, registry|
+        mod_name = unit.fetch("module")
+        contracts = unit.fetch("parsed").fetch("contracts", [])
+        registry[mod_name] = contracts.each_with_object({}) do |contract, mod_reg|
+          body = contract.fetch("body", [])
+          inputs  = body.select { |d| d.fetch("kind", "") == "input" }
+          outputs = body.select { |d| d.fetch("kind", "") == "output" }
+          mod_reg[contract.fetch("name")] = {
+            "modifier"     => contract.fetch("modifier", "pure"),
+            "input_count"  => inputs.size,
+            "input_names"  => inputs.map { |d| d.fetch("name") },
+            "output_names" => outputs.map { |d| d.fetch("name") },
+            "source_hash"  => unit.fetch("source_hash"),
+            "source_path"  => unit.fetch("source_path")
+          }
+        end
+      end
+    end
+
+    def build_per_module_imports(sorted)
+      sorted.each_with_object({}) do |unit, map|
+        map[unit.fetch("module")] = unit.fetch("imports", [])
+      end
+    end
+
+    def build_per_contract_module(sorted)
+      sorted.each_with_object({}) do |unit, map|
+        unit.fetch("contract_names").each { |name| map[name] = unit.fetch("module") }
+      end
+    end
 
     def source_unit(path)
       source = path.read

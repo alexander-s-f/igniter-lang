@@ -498,18 +498,34 @@ module IgniterLang
       port ? port.fetch("type_tag") : "Unknown"
     end
 
-    # LANG-TYPED-CONTRACT-REF-PROP-P3: collect typed contract reference edges from SemanticIR.
+    # LANG-TYPED-CONTRACT-REF-PROP-P3/P5: collect typed contract reference edges from SemanticIR.
     def dependency_edges(semantic_ir)
+      contract_module_map = build_contract_module_map(semantic_ir)
+      ir_module = semantic_ir.fetch("module")
       semantic_ir.fetch("contracts").flat_map do |contract|
+        from = contract.fetch("contract_name")
+        from_mod = contract_module_map.fetch(from, ir_module)
         (contract.fetch("contract_refs", [])).map do |ref|
-          {
-            "from"                 => contract.fetch("contract_name"),
+          edge = {
+            "from"                 => from,
             "to"                   => ref.fetch("contract_name"),
             "kind"                 => "typed_contract_ref",
             "execution_dependency" => false,
             "resolution"           => ref.fetch("resolution_status")
           }
+          edge["from_module"] = from_mod
+          edge["to_module"] = ref["module_name"] if ref.key?("module_name")
+          edge["resolution_kind"] = ref["resolution_kind"] if ref.key?("resolution_kind")
+          edge
         end
+      end
+    end
+
+    def build_contract_module_map(semantic_ir)
+      source_units = semantic_ir["source_units"]
+      return {} unless source_units
+      source_units.each_with_object({}) do |unit, map|
+        Array(unit["contracts"]).each { |name| map[name] = unit.fetch("module") }
       end
     end
 

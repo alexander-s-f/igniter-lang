@@ -187,11 +187,13 @@ module IgniterLang
       contract_ref_decls = contract.fetch("contract_ref_declarations", [])
       unless contract_ref_decls.empty?
         contract_ir["contract_refs"] = contract_ref_decls.map do |decl|
+          resolved_ref = decl["resolved_ref"]
           ref = {
-            "contract_name"     => decl.fetch("target"),
+            "contract_name"     => resolved_ref ? resolved_ref.fetch("contract_name") : decl.fetch("target"),
             "resolution_status" => decl.fetch("resolution_status", "unresolved")
           }
-          if (resolved = decl["resolved_ref"])
+          ref["resolution_kind"] = decl["resolution_kind"] if decl.key?("resolution_kind")
+          if (resolved = resolved_ref)
             ref["module_name"]   = resolved["module_name"]
             ref["modifier"]      = resolved["modifier"]
             ref["input_count"]   = resolved["input_count"]
