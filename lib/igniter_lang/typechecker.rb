@@ -87,6 +87,9 @@ module IgniterLang
       @assumption_errors = assumption_errors_by_name(@assumption_registry)
       @olap_env = olap_env(classified_program.fetch("olap_points", []))
       @olap_errors = olap_declaration_errors(@olap_env)
+      # LANG-TYPED-CONTRACT-REF-PROP-P3: build same-module contract registry for uses_contract resolution
+      @same_module_registry = build_same_module_registry(classified_program)
+      @classified_module = classified_program.fetch("module", nil)
       typed_contracts = classified_program.fetch("contracts").map do |contract|
         typecheck_contract(contract)
       end
@@ -334,6 +337,10 @@ module IgniterLang
           type = type_ir("Assumption")
           symbol_types[decl.fetch("name")] = type
           typed_decls << typed_decl(decl, type, nil, [])
+        when "uses_contract"
+          # LANG-TYPED-CONTRACT-REF-PROP-P3: resolve typed contract reference.
+          # Does NOT enter symbol_types — not a local symbol binding.
+          typed_decls << typecheck_uses_contract(decl, contract_name_str, type_errors)
         when "invariant"
           # TINV-1/2/3: Resolve predicate_ref, validate overridable_with, compute output_effect
           check_invariant(decl, symbol_types, type_errors, invariant_effects)
@@ -421,6 +428,9 @@ module IgniterLang
       result["via_profile"]       = via_profile       if via_profile
       result["profile_authority"] = profile_authority if profile_authority
       result["assumption_refs"] = assumption_refs unless assumption_refs.empty?
+      # LANG-TYPED-CONTRACT-REF-PROP-P3: propagate typed contract reference declarations
+      contract_ref_decls = typed_decls.select { |d| d["kind"] == "uses_contract" }
+      result["contract_ref_declarations"] = contract_ref_decls unless contract_ref_decls.empty?
       warnings = dedupe_errors(type_warnings)
       result["type_warnings"] = warnings unless warnings.empty?
       # PROP-039 OOF-R3: propagate clean (non-dotted) decreases variant for SemanticIR evidence
@@ -477,6 +487,75 @@ module IgniterLang
     def assumptions_present?(classified_program)
       @assumption_registry.any? ||
         classified_program.fetch("contracts").any? { |contract| contract.fetch("assumption_refs", []).any? }
+    end
+
+    # LANG-TYPED-CONTRACT-REF-PROP-P3: build same-module contract registry for typed ref resolution.
+    def build_same_module_registry(classified_program)
+      classified_program.fetch("contracts").each_with_object({}) do |contract, reg|
+        name = contract.fetch("name")
+        inputs  = contract.fetch("declarations").select { |d| d.fetch("kind") == "input" }
+        outputs = contract.fetch("declarations").select { |d| d.fetch("kind") == "output" }
+        reg[name] = {
+          "modifier"     => contract.fetch("modifier", "pure"),
+          "input_count"  => inputs.size,
+          "input_names"  => inputs.map { |d| d.fetch("name") },
+          "output_names" => outputs.map { |d| d.fetch("name") }
+        }
+      end
+    end
+
+    # LANG-TYPED-CONTRACT-REF-PROP-P3: resolve a uses_contract declaration.
+    def typecheck_uses_contract(decl, current_contract_name, type_errors)
+      target = decl.fetch("target")
+
+      if target == current_contract_name
+        type_errors << oof(
+          "OOF-REF4",
+          "contract '#{current_contract_name}' uses itself — self-reference is not allowed",
+          "uses_contract:#{target}"
+        )
+        return typed_decl(decl, type_ir("ContractRef"), nil, []).merge(
+          "target" => target, "resolution_status" => "unresolved"
+        )
+      end
+
+      if target.include?(".")
+        type_errors << oof(
+          "OOF-REF2",
+          "contract '#{current_contract_name}' uses cross-module reference '#{target}' — " \
+          "cross-module typed refs require the import module table (deferred; use same-module contracts in v0)",
+          "uses_contract:#{target}"
+        )
+        return typed_decl(decl, type_ir("ContractRef"), nil, []).merge(
+          "target" => target, "resolution_status" => "unresolved"
+        )
+      end
+
+      entry = @same_module_registry[target]
+      unless entry
+        type_errors << oof(
+          "OOF-REF1",
+          "contract '#{current_contract_name}' uses unknown contract '#{target}' — " \
+          "no contract named '#{target}' is declared in this module",
+          "uses_contract:#{target}"
+        )
+        return typed_decl(decl, type_ir("ContractRef"), nil, []).merge(
+          "target" => target, "resolution_status" => "unresolved"
+        )
+      end
+
+      typed_decl(decl, type_ir("ContractRef"), nil, []).merge(
+        "target"            => target,
+        "resolution_status" => "resolved",
+        "resolved_ref"      => {
+          "contract_name" => target,
+          "module_name"   => @classified_module,
+          "modifier"      => entry.fetch("modifier"),
+          "input_count"   => entry.fetch("input_count"),
+          "input_names"   => entry.fetch("input_names"),
+          "output_names"  => entry.fetch("output_names")
+        }
+      )
     end
 
     def assumption_errors_by_name(registry)

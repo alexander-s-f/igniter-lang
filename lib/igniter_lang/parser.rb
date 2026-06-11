@@ -979,10 +979,33 @@ module IgniterLang
 
     def parse_uses_decl
       tok = peek
-      unless peek_kw?("assumptions")
+      if peek_kw?("assumptions")
+        advance
+        name = name_token!(%i[ident])
+        return { "kind" => "uses_assumptions", "name" => name }
+      elsif peek_type?(:ident)
+        # LANG-TYPED-CONTRACT-REF-PROP-P3: `uses ContractName` or `uses Mod.Contract`
+        target = advance.value
+        while peek_type?(:dot)
+          advance  # consume dot
+          if peek_type?(:ident)
+            target = "#{target}.#{advance.value}"
+          else
+            add_parse_error(
+              rule: "OOF-P0",
+              message: "expected contract name after '.' in uses declaration",
+              token: peek&.value.to_s,
+              line: peek&.line || 0,
+              col: peek&.col || 0
+            )
+            break
+          end
+        end
+        return { "kind" => "uses_contract", "name" => target, "target" => target }
+      else
         add_parse_error(
           rule: "OOF-P0",
-          message: "uses declaration currently supports only 'uses assumptions NAME'",
+          message: "uses declaration requires 'uses assumptions NAME' or 'uses ContractName'",
           token: tok&.value.to_s,
           line: tok&.line || 0,
           col: tok&.col || 0
@@ -990,9 +1013,6 @@ module IgniterLang
         skip_until_body_boundary
         return nil
       end
-      advance
-      name = name_token!(%i[ident])
-      { "kind" => "uses_assumptions", "name" => name }
     end
 
     def parse_evidence_list

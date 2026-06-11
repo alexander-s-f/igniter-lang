@@ -257,6 +257,9 @@ module IgniterLang
       manifest["source_units"] = semantic_ir.fetch("source_units") if semantic_ir.key?("source_units")
       # PROP-036: top-level manifest field; only present when a valid source is supplied.
       manifest["compiler_profile_id"] = compiler_profile_id if compiler_profile_id
+      # LANG-TYPED-CONTRACT-REF-PROP-P3: emit dependency_edges when present
+      dep_edges = dependency_edges(semantic_ir)
+      manifest["dependency_edges"] = dep_edges unless dep_edges.empty?
 
       {
         "case" => case_name,
@@ -493,6 +496,21 @@ module IgniterLang
     def input_type(contract, input_name)
       port = contract.fetch("input_ports").find { |input| input.fetch("name") == input_name }
       port ? port.fetch("type_tag") : "Unknown"
+    end
+
+    # LANG-TYPED-CONTRACT-REF-PROP-P3: collect typed contract reference edges from SemanticIR.
+    def dependency_edges(semantic_ir)
+      semantic_ir.fetch("contracts").flat_map do |contract|
+        (contract.fetch("contract_refs", [])).map do |ref|
+          {
+            "from"                 => contract.fetch("contract_name"),
+            "to"                   => ref.fetch("contract_name"),
+            "kind"                 => "typed_contract_ref",
+            "execution_dependency" => false,
+            "resolution"           => ref.fetch("resolution_status")
+          }
+        end
+      end
     end
 
     def ports(port_irs)

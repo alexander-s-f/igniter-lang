@@ -102,6 +102,7 @@ module IgniterLang
       diagnostics = []
       declarations = []
       assumption_refs = []
+      contract_ref_declarations = []  # LANG-TYPED-CONTRACT-REF-PROP-P3
       symbol_fragments = {}
       symbol_kinds = {}
       compute_exprs = {}
@@ -172,6 +173,13 @@ module IgniterLang
             )
           end
           declarations << classified_decl(node, "epistemic", [], missing)
+        when "uses_contract"
+          # LANG-TYPED-CONTRACT-REF-PROP-P3: metadata-only typed contract reference.
+          # Does not produce a local symbol; does not affect fragment classification.
+          contract_ref_declarations << node
+          cd = classified_decl(node, "metadata", [], [])
+          cd["target"] = node.fetch("target")
+          declarations << cd
         when "fold_stream"
           bound = node.fetch("bound", nil)
           node_fragment = bound ? "stream" : "oof"
@@ -419,22 +427,26 @@ module IgniterLang
       result["via_profile"]       = via_profile       if via_profile
       result["profile_authority"] = profile_authority  if profile_authority
       result["assumption_refs"]   = assumption_refs.uniq unless assumption_refs.empty?
+      # LANG-TYPED-CONTRACT-REF-PROP-P3: propagate typed contract reference declarations
+      result["contract_ref_declarations"] = contract_ref_declarations unless contract_ref_declarations.empty?
       # PROP-045: propagate contract-level intent_text
       result["intent_text"] = contract_intent_text if contract_intent_text
       result
     end
 
     def contract_fragment_for(declarations, diagnostics, modifier: "pure")
+      # LANG-TYPED-CONTRACT-REF-PROP-P3: metadata-fragment declarations are transparent to fragment classification.
+      behavior_decls = declarations.reject { |decl| decl.fetch("fragment_class") == "metadata" }
       return "oof" unless diagnostics.empty?
-      return "core" if declarations.all? { |decl| decl.fetch("fragment_class") == "core" }
-      return "temporal" if declarations.any? { |decl| decl.fetch("fragment_class") == "temporal" } &&
-                           declarations.none? { |decl| decl.fetch("fragment_class") == "oof" }
-      return "stream" if declarations.any? { |decl| decl.fetch("fragment_class") == "stream" } &&
-                         declarations.none? { |decl| decl.fetch("fragment_class") == "oof" }
-      return "escape" if (modifier != "pure" || declarations.any? { |decl| decl.fetch("fragment_class") == "escape" }) &&
-                         declarations.none? { |decl| decl.fetch("fragment_class") == "oof" }
-      return "epistemic" if declarations.any? { |decl| decl.fetch("fragment_class") == "epistemic" } &&
-                            declarations.none? { |decl| decl.fetch("fragment_class") == "oof" }
+      return "core" if behavior_decls.all? { |decl| decl.fetch("fragment_class") == "core" }
+      return "temporal" if behavior_decls.any? { |decl| decl.fetch("fragment_class") == "temporal" } &&
+                           behavior_decls.none? { |decl| decl.fetch("fragment_class") == "oof" }
+      return "stream" if behavior_decls.any? { |decl| decl.fetch("fragment_class") == "stream" } &&
+                         behavior_decls.none? { |decl| decl.fetch("fragment_class") == "oof" }
+      return "escape" if (modifier != "pure" || behavior_decls.any? { |decl| decl.fetch("fragment_class") == "escape" }) &&
+                         behavior_decls.none? { |decl| decl.fetch("fragment_class") == "oof" }
+      return "epistemic" if behavior_decls.any? { |decl| decl.fetch("fragment_class") == "epistemic" } &&
+                            behavior_decls.none? { |decl| decl.fetch("fragment_class") == "oof" }
 
       "oof"
     end

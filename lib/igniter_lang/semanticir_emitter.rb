@@ -183,6 +183,24 @@ module IgniterLang
       contract_ir["intent_text"] = intent_text if intent_text
       assumption_refs = contract.fetch("assumption_refs", [])
       contract_ir["assumption_refs"] = assumption_refs unless assumption_refs.empty?
+      # LANG-TYPED-CONTRACT-REF-PROP-P3: emit typed contract reference declarations
+      contract_ref_decls = contract.fetch("contract_ref_declarations", [])
+      unless contract_ref_decls.empty?
+        contract_ir["contract_refs"] = contract_ref_decls.map do |decl|
+          ref = {
+            "contract_name"     => decl.fetch("target"),
+            "resolution_status" => decl.fetch("resolution_status", "unresolved")
+          }
+          if (resolved = decl["resolved_ref"])
+            ref["module_name"]   = resolved["module_name"]
+            ref["modifier"]      = resolved["modifier"]
+            ref["input_count"]   = resolved["input_count"]
+            ref["input_names"]   = resolved["input_names"]
+            ref["output_names"]  = resolved["output_names"]
+          end
+          ref
+        end
+      end
       # PROP-042 T3 / PROP-041 T2 / PROP-039 OOF-R3: emit termination evidence.
       # Dispatch priority (mutually exclusive — only one fires per contract):
       #   T3 numeric_measure_v0  — set by handle_t3_variant (PROP-042)
@@ -261,6 +279,8 @@ module IgniterLang
           fold_stream_node(decl, declarations)
         when "uses_assumptions"
           assumption_ref_node(decl)
+        when "uses_contract"
+          nil  # LANG-TYPED-CONTRACT-REF-PROP-P3: metadata only — not emitted as a runtime node
         when "invariant"
           invariant_node(decl)
         when "read"
