@@ -67,6 +67,22 @@ module IgniterLang
       "map_empty"      => { qualified_name: "stdlib.map.empty",      arity: 0 },
     }.freeze
 
+    # LANG-STDLIB-OUTCOME-PROP-P3: stdlib.outcome helper registry (v0 — exhaustive, not user-extensible).
+    # Source aliases → qualified SemanticIR canonical names. Follows MAP_STDLIB_FNS prefix pattern.
+    # All 7 entries: arity 1, input Map[String,String] (or Unknown), pure, authority_surface: none.
+    # SemanticIR fn is always the qualified_name; source alias never appears in SIR.
+    # is_retryable and route are permanently closed (LANG-STDLIB-OUTCOME-PROP-P1 §6/§7).
+    # Adding entries requires PROP amendment + P4+ authorization.
+    OUTCOME_STDLIB_FNS = {
+      "outcome_kind"                      => { qualified_name: "stdlib.outcome.kind",                      return_type: "String" },
+      "outcome_is_denied"                 => { qualified_name: "stdlib.outcome.is_denied",                 return_type: "Bool"   },
+      "outcome_is_unknown_external_state" => { qualified_name: "stdlib.outcome.is_unknown_external_state", return_type: "Bool"   },
+      "outcome_is_timed_out"              => { qualified_name: "stdlib.outcome.is_timed_out",              return_type: "Bool"   },
+      "outcome_is_system_error"           => { qualified_name: "stdlib.outcome.is_system_error",           return_type: "Bool"   },
+      "outcome_is_query_error"            => { qualified_name: "stdlib.outcome.is_query_error",            return_type: "Bool"   },
+      "outcome_is_partial_success"        => { qualified_name: "stdlib.outcome.is_partial_success",        return_type: "Bool"   },
+    }.freeze
+
     # PROP-042 T3: Matches "fn_name(arg_name)" — the T3 function-call decreases form.
     # Produced by parser.rb parse_decreases_decl when lparen follows the first identifier.
     T3_CALL_FORM_RE = /\A(\w+)\((\w+)\)\z/
@@ -123,6 +139,17 @@ module IgniterLang
         end
       end
 
+      # OOF-L4: self-recursive def functions must declare `decreases fuel` (parity with Rust T1.5)
+      function_errors = []
+      classified_program.fetch("functions", []).each do |fn|
+        next unless fn_self_recursive?(fn)
+        unless fn.fetch("decreases", nil) == "fuel"
+          function_errors << oof("OOF-L4",
+            "Recursive function '#{fn.fetch("name")}' must specify 'decreases fuel'",
+            fn.fetch("name"))
+        end
+      end
+
       result = {
         "kind" => "typed_program",
         "typechecker_version" => @typechecker_version,
@@ -134,7 +161,7 @@ module IgniterLang
         "module" => classified_program.fetch("module"),
         "type_env" => @type_shapes,
         "contracts" => typed_contracts,
-        "type_errors" => typed_contracts.flat_map { |contract| contract.fetch("type_errors") } + module_reserved_errors + entrypoint_errors + cycle_errors,
+        "type_errors" => typed_contracts.flat_map { |contract| contract.fetch("type_errors") } + module_reserved_errors + entrypoint_errors + cycle_errors + function_errors,
         "semantic_ir_ref" => nil
       }
       result["entrypoint"] = resolved_entrypoint if resolved_entrypoint
@@ -833,6 +860,9 @@ module IgniterLang
       when *MAP_STDLIB_FNS.keys
         # PROP-043: Map[String,V] stdlib — map_get/map_has_key/map_from_pairs/map_empty
         infer_map_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
+      when *OUTCOME_STDLIB_FNS.keys
+        # LANG-STDLIB-OUTCOME-PROP-P3: stdlib.outcome helpers — kind + 6 PROP-047 predicates
+        infer_outcome_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
       when "or_else"
         # PROP-043: Option[V] unwrap with default (or_else introduced alongside Map v0)
         infer_or_else(args, symbol_types, type_errors, type_warnings, node_name)
@@ -1307,6 +1337,44 @@ module IgniterLang
 
     def oof(rule, message, node_name)
       { "rule" => rule, "message" => message, "node" => node_name, "line" => nil }
+    end
+
+    # OOF-L4: detect self-recursion in a def function body (parity with Rust is_recursive()).
+    # Only self-recursion is checked; mutual recursion is a P2 design question (SCC detection).
+    def fn_self_recursive?(fn)
+      fn_name = fn.fetch("name")
+      fn_body_has_call?(fn.fetch("body", {}), fn_name)
+    end
+
+    def fn_body_has_call?(body, fn_name)
+      return false unless body.is_a?(Hash)
+      stmts = body.fetch("stmts", [])
+      return_expr = body.fetch("return_expr", nil)
+      stmts.any? { |stmt| fn_expr_has_call?(stmt.fetch("expr", stmt), fn_name) } ||
+        (return_expr && fn_expr_has_call?(return_expr, fn_name))
+    end
+
+    def fn_expr_has_call?(expr, fn_name)
+      return false unless expr.is_a?(Hash)
+      case expr.fetch("kind", nil)
+      when "call"
+        expr.fetch("fn", nil) == fn_name ||
+          expr.fetch("args", []).any? { |arg| fn_expr_has_call?(arg, fn_name) }
+      when "binary_op"
+        fn_expr_has_call?(expr["left"], fn_name) || fn_expr_has_call?(expr["right"], fn_name)
+      when "unary_op"
+        fn_expr_has_call?(expr["operand"], fn_name)
+      when "field_access"
+        fn_expr_has_call?(expr["object"], fn_name)
+      when "index_access"
+        fn_expr_has_call?(expr["object"], fn_name) || fn_expr_has_call?(expr["index"], fn_name)
+      when "if_expr"
+        fn_expr_has_call?(expr["cond"], fn_name) ||
+          fn_body_has_call?(expr["then"], fn_name) ||
+          fn_body_has_call?(expr["else"], fn_name)
+      else
+        false
+      end
     end
 
     def oof_alias(rule, message, node_name, aliases)
@@ -2085,6 +2153,39 @@ module IgniterLang
       typed_expr("call", map_type_ir("String", "Unknown"), [],
                  "fn" => "stdlib.map.empty", "args" => [],
                  "note" => "empty-type-context-inference-deferred-v1")
+    end
+
+    # ── LANG-STDLIB-OUTCOME-PROP-P3: stdlib.outcome helpers ─────────────────────
+
+    # Shared handler for all OUTCOME_STDLIB_FNS entries.
+    # All 7 helpers: arity 1, Map[String,String] or Unknown input, Bool or String output.
+    # OOF-TY0 for arity mismatch (consistent with TEXT and MAP stdlib patterns).
+    # OOF-OUT1 for non-Map argument type (first outcome-specific diagnostic code).
+    # Unknown input: accepted leniently to avoid cascading errors on unresolved refs.
+    # Domain-local kind values are not inspected at TypeChecker level — any Map passes.
+    # SemanticIR fn is always the qualified canonical name from OUTCOME_STDLIB_FNS.
+    def infer_outcome_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
+      spec           = OUTCOME_STDLIB_FNS.fetch(fn)
+      qualified_name = spec[:qualified_name]
+      return_type    = spec[:return_type]
+
+      unless args.length == 1
+        type_errors << oof("OOF-TY0",
+          "#{qualified_name}: expected 1 argument (Map[String, String]), got #{args.length}",
+          node_name)
+        return typed_expr("call", type_ir("Unknown"), [], "fn" => qualified_name, "args" => [])
+      end
+
+      outcome_arg = infer_expr(args[0], symbol_types, type_errors, type_warnings, node_name)
+      actual_name = type_name(outcome_arg.fetch("resolved_type"))
+      unless actual_name == "Unknown" || actual_name == "Map"
+        type_errors << oof("OOF-OUT1",
+          "#{qualified_name}: argument must be Map[String, String], got #{actual_name}",
+          node_name)
+      end
+
+      typed_expr("call", type_ir(return_type), outcome_arg.fetch("deps", []),
+                 "fn" => qualified_name, "args" => [outcome_arg])
     end
 
     # Rule OR-ELSE: or_else(Option[V], V) → V

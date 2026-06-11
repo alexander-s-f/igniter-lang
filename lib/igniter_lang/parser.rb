@@ -1338,9 +1338,17 @@ module IgniterLang
       params = parse_params
       expect_type!(:arrow)
       return_type = parse_type_ref
+      # OOF-L4: optional `decreases fuel` annotation between return type and body
+      decreases = nil
+      if peek_kw?("decreases")
+        advance
+        decreases = name_token!(%i[ident keyword])
+      end
       body = parse_block_body
-      { "kind" => "function", "name" => name, "params" => params,
-        "return_type" => return_type, "body" => body }
+      result = { "kind" => "function", "name" => name, "params" => params,
+                 "return_type" => return_type, "body" => body }
+      result["decreases"] = decreases if decreases
+      result
     end
 
     def parse_params
