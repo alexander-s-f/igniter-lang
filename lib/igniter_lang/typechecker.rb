@@ -90,6 +90,7 @@ module IgniterLang
       typed_contracts = classified_program.fetch("contracts").map do |contract|
         typecheck_contract(contract)
       end
+      entrypoint_errors, resolved_entrypoint = validate_entrypoint(classified_program)
 
       # PROP-044-P9: OOF-KIND6 — reserved __* field names in module-level declarations.
       module_reserved_errors = []
@@ -125,9 +126,10 @@ module IgniterLang
         "module" => classified_program.fetch("module"),
         "type_env" => @type_shapes,
         "contracts" => typed_contracts,
-        "type_errors" => typed_contracts.flat_map { |contract| contract.fetch("type_errors") } + module_reserved_errors,
+        "type_errors" => typed_contracts.flat_map { |contract| contract.fetch("type_errors") } + module_reserved_errors + entrypoint_errors,
         "semantic_ir_ref" => nil
       }
+      result["entrypoint"] = resolved_entrypoint if resolved_entrypoint
       result["assumption_registry"] = @assumption_registry unless @assumption_registry.empty?
       result["variant_env"] = @variant_shapes unless @variant_shapes.empty?  # PROP-044 P5
       result["olap_points"] = @olap_env.values.map { |decl| decl.fetch("semantic_node") } unless @olap_env.empty?
@@ -173,6 +175,37 @@ module IgniterLang
 
     def variant_type?(name)
       @variant_shapes.key?(name)
+    end
+
+    def validate_entrypoint(classified_program)
+      entrypoint = classified_program.fetch("entrypoint", nil)
+      return [[], nil] unless entrypoint
+
+      target = entrypoint.fetch("target", "")
+      contracts = classified_program.fetch("contracts")
+      target_contract = contracts.find do |contract|
+        target == contract.fetch("name") || target == contract.fetch("contract_id")
+      end
+
+      if target_contract
+        return [[], entrypoint.merge(
+          "kind" => "entrypoint_decl",
+          "resolved_contract" => target_contract.fetch("name"),
+          "resolved_contract_id" => target_contract.fetch("contract_id"),
+          "contract_fragment_class" => target_contract.fetch("fragment_class")
+        )]
+      end
+
+      if @type_shapes.key?(target)
+        return [[oof("OOF-EP5", "entrypoint target '#{target}' is a type, not a contract", target)], nil]
+      end
+
+      available = contracts.flat_map { |contract| [contract.fetch("name"), contract.fetch("contract_id")] }.uniq.sort
+      [[oof(
+        "OOF-EP2",
+        "entrypoint target '#{target}' does not resolve to a contract",
+        target
+      ).merge("available_contracts" => available)], nil]
     end
 
     def variant_arms(name)

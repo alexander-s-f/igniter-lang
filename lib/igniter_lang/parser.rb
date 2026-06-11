@@ -279,6 +279,7 @@ module IgniterLang
                   "contracts" => [], "types" => [], "variants" => [],  # PROP-044-P3
                   "functions" => [],
                   "pipelines" => [], "olap_points" => [], "assumptions" => [],
+                  "entrypoint" => nil, # PROP-ENTRYPOINT-P3
                   "profiles" => [],        # PROP-040
                   "size_relations" => [],  # PROP-041
                   "parse_errors" => [] }
@@ -320,6 +321,19 @@ module IgniterLang
         when "pipeline"       then program["pipelines"]       << decl
         when "olap_point"     then program["olap_points"]     << decl
         when "assumptions"    then program["assumptions"].concat(decl.fetch("assumptions", []))
+        when "entrypoint"
+          if program["entrypoint"]
+            @errors << {
+              "rule" => "OOF-EP1",
+              "severity" => "error",
+              "message" => "Duplicate entrypoint declaration: #{decl.fetch("target")}",
+              "token" => decl.fetch("target"),
+              "line" => decl.dig("source_span", "line"),
+              "col" => decl.dig("source_span", "col")
+            }
+          else
+            program["entrypoint"] = decl
+          end
         when "profile"        then program["profiles"]        << decl  # PROP-040
         when "size_relation"  then program["size_relations"]  << decl  # PROP-041
         end
@@ -430,6 +444,7 @@ module IgniterLang
       when "pipeline"       then advance; parse_pipeline_decl
       when "olap_point"     then advance; parse_olap_point_decl
       when "assumptions"    then advance; parse_assumptions_block
+      when "entrypoint"     then parse_entrypoint_decl
       when "profile"        then advance; parse_profile_decl         # PROP-040
       when "size_relation"  then advance; parse_size_relation_decl   # PROP-041
       else
@@ -437,6 +452,54 @@ module IgniterLang
         advance
         nil
       end
+    end
+
+    def parse_entrypoint_decl
+      tok = advance
+      target_tok = peek
+      unless target_tok && %i[ident keyword].include?(target_tok.type)
+        add_parse_error(
+          rule: "OOF-EP2",
+          message: "entrypoint declaration requires a contract target",
+          token: target_tok&.value.to_s,
+          line: tok.line,
+          col: tok.col
+        )
+        return { "kind" => "entrypoint", "target" => "", "qualified" => false,
+                 "source_span" => { "line" => tok.line, "col" => tok.col } }
+      end
+
+      target = parse_entrypoint_target
+      if peek && !peek_type?(:eof) && peek.line == tok.line
+        add_parse_error(
+          rule: "OOF-P0",
+          message: "Malformed entrypoint declaration after target '#{target}'",
+          token: peek.value.to_s,
+          line: peek.line,
+          col: peek.col
+        )
+        skip_same_line(tok.line)
+      end
+
+      {
+        "kind" => "entrypoint",
+        "target" => target,
+        "qualified" => target.include?("."),
+        "source_span" => { "line" => tok.line, "col" => tok.col }
+      }
+    end
+
+    def parse_entrypoint_target
+      parts = [name_token!(%i[ident keyword])]
+      while peek_type?(:dot)
+        advance
+        parts << name_token!(%i[ident keyword])
+      end
+      parts.join(".")
+    end
+
+    def skip_same_line(line)
+      advance while peek && !peek_type?(:eof) && peek.line == line
     end
 
     # PROP-040: profile declarations
@@ -1980,6 +2043,7 @@ module IgniterLang
         "assumptions"     => @ast.fetch("assumptions", []),
         "profiles"        => @ast.fetch("profiles", []),        # PROP-040
         "size_relations"  => @ast.fetch("size_relations", []),  # PROP-041
+        "entrypoint"      => @ast.fetch("entrypoint", nil),     # PROP-ENTRYPOINT-P3
         "intent_text"     => @ast.fetch("intent_text", nil),    # PROP-045
         "parse_errors"    => @errors
       }

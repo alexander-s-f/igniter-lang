@@ -205,6 +205,7 @@ module IgniterLang
       classified_ast = classified_ast_for(report, semantic_ir, contract_ids, fragment_class)
       diagnostics = { "diagnostics" => report.fetch("diagnostics") }
       compatibility_metadata = compatibility_metadata_for(report, semantic_ir)
+      entrypoint = manifest_entrypoint_for(semantic_ir, contracts)
 
       artifact_material = {
         "semantic_ir_program" => semantic_ir,
@@ -215,6 +216,7 @@ module IgniterLang
         "classified_ast" => classified_ast,
         "compatibility_metadata" => compatibility_metadata
       }
+      artifact_material["entrypoint"] = entrypoint if entrypoint
       # PROP-036: inject compiler_profile_id into hash material BEFORE artifact_hash
       # is computed. Adding it after Canonical.hash is called is forbidden.
       artifact_material["compiler_profile_id"] = compiler_profile_id if compiler_profile_id
@@ -250,6 +252,7 @@ module IgniterLang
         "warnings" => [],
         "diagnostics" => report.fetch("diagnostics")
       }
+      manifest["entrypoint"] = entrypoint if entrypoint
       # PROP-036: top-level manifest field; only present when a valid source is supplied.
       manifest["compiler_profile_id"] = compiler_profile_id if compiler_profile_id
 
@@ -415,6 +418,30 @@ module IgniterLang
         entry["temporal"] = temporal_contract_index(contract) if contract.fetch("fragment_class") == "temporal"
         [contract.fetch("contract_id"), entry]
       end
+    end
+
+    def manifest_entrypoint_for(semantic_ir, contracts)
+      entrypoint = semantic_ir.fetch("entrypoint", nil)
+      return nil unless entrypoint
+
+      contract = contracts.find { |item| item.fetch("contract_id") == entrypoint.fetch("resolved_contract") }
+      contract ||= contracts.find { |item| item.fetch("contract_id") == entrypoint.fetch("resolved_contract_id", nil) }
+
+      result = {
+        "kind" => "default_entrypoint",
+        "declared_target" => entrypoint.fetch("target"),
+        "resolved_contract" => entrypoint.fetch("resolved_contract"),
+        "source_span" => {
+          "source_path" => semantic_ir.fetch("source_path"),
+          "line" => entrypoint.dig("source_span", "line"),
+          "col" => entrypoint.dig("source_span", "col")
+        }
+      }
+      if contract
+        result["contract_ref"] = contract.fetch("source_contract_ref")
+        result["contract_path"] = "contracts/#{snake_case(contract.fetch("contract_id"))}.json"
+      end
+      result
     end
 
     def temporal_contract_index(contract)

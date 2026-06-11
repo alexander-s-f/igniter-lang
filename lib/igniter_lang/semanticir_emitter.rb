@@ -95,7 +95,24 @@ module IgniterLang
       # PROP-045: emit module-level intent_text when present
       module_intent = typed_program.fetch("intent_text", nil)
       result["intent_text"] = module_intent if module_intent
+      entrypoint = semantic_entrypoint(typed_program, result.fetch("contracts"))
+      result["entrypoint"] = entrypoint if entrypoint
       result
+    end
+
+    def semantic_entrypoint(typed_program, contracts)
+      entrypoint = typed_program.fetch("entrypoint", nil)
+      return nil unless entrypoint
+
+      contract = contracts.find do |contract_ir|
+        contract_ir.fetch("contract_name") == entrypoint.fetch("resolved_contract")
+      end
+      return entrypoint unless contract
+
+      entrypoint.merge(
+        "kind" => "entrypoint_decl",
+        "contract_ref" => contract.fetch("contract_ref")
+      )
     end
 
     def typed_compilation_report(typed_program, diagnostics, semantic_ir)

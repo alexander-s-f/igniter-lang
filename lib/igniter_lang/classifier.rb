@@ -38,6 +38,8 @@ module IgniterLang
       # PROP-041: pass size_relation declarations through to TypeChecker
       size_relations = parsed_program.fetch("size_relations", [])
       result["size_relations"] = size_relations unless size_relations.empty?
+      entrypoint = parsed_program.fetch("entrypoint", nil)
+      result["entrypoint"] = entrypoint if entrypoint
       # PROP-044 P5: variant declarations for TypeChecker @variant_shapes
       variant_decls = variant_declarations(parsed_program)
       result["variant_declarations"] = variant_decls unless variant_decls.empty?
