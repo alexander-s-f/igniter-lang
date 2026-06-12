@@ -900,6 +900,9 @@ module IgniterLang
       when "append"
         # LANG-STDLIB-COLLECTION-APPEND-PROP-P3: stdlib.collection.append
         infer_append_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
+      when "is_empty", "non_empty"
+        # LANG-STDLIB-IS-EMPTY-PROP-P3: stdlib.collection.is_empty + stdlib.collection.non_empty
+        infer_is_empty_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
       when "or_else"
         # PROP-043: Option[V] unwrap with default (or_else introduced alongside Map v0)
         infer_or_else(args, symbol_types, type_errors, type_warnings, node_name)
@@ -2578,6 +2581,38 @@ module IgniterLang
       all_deps = (collection_arg.fetch("deps", []) + item_arg.fetch("deps", [])).uniq
       typed_expr("call", collection_type_ir_from(elem_type), all_deps,
                  "fn" => qualified, "args" => [collection_arg, item_arg])
+    end
+
+    # LANG-STDLIB-IS-EMPTY-PROP-P3: stdlib.collection.is_empty + stdlib.collection.non_empty
+    # is_empty(Collection[T]) -> Bool  — true iff collection has zero elements
+    # non_empty(Collection[T]) -> Bool — true iff collection has one or more elements
+    # non_empty cannot be derived as !is_empty(x): unary_op not dispatched in infer_expr.
+    # Bool returned on ALL paths including OOF error paths (no Unknown propagation).
+    # OOF-COL1: arity != 1; OOF-COL2: non-Collection, non-Unknown first arg.
+    def infer_is_empty_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
+      qualified = fn == "is_empty" ? "stdlib.collection.is_empty" : "stdlib.collection.non_empty"
+
+      # ── OOF-COL1: arity ──────────────────────────────────────────────────────
+      unless args.length == 1
+        type_errors << oof("OOF-COL1",
+          "#{qualified}: expected 1 argument (collection), got #{args.length}", node_name)
+        return typed_expr("call", type_ir("Bool"), [], "fn" => qualified, "args" => [])
+      end
+
+      # ── Infer collection arg ──────────────────────────────────────────────────
+      collection_typed = infer_expr(args[0], symbol_types, type_errors, type_warnings, node_name)
+      col_type_name    = type_name(collection_typed.fetch("resolved_type"))
+
+      # ── OOF-COL2: first arg must be Collection or Unknown ─────────────────────
+      unless col_type_name == "Collection" || col_type_name == "Unknown"
+        type_errors << oof("OOF-COL2",
+          "#{qualified}: first argument must be Collection[T], got #{col_type_name}", node_name)
+        return typed_expr("call", type_ir("Bool"), collection_typed.fetch("deps", []),
+                          "fn" => qualified, "args" => [collection_typed])
+      end
+
+      typed_expr("call", type_ir("Bool"), collection_typed.fetch("deps", []),
+                 "fn" => qualified, "args" => [collection_typed])
     end
 
     # Rule OR-ELSE: or_else(Option[V], V) → V
