@@ -3,6 +3,7 @@
 require "digest"
 require "json"
 require "pathname"
+require "set"
 
 require_relative "parser"
 
@@ -21,6 +22,9 @@ module IgniterLang
       sorted = units.sort_by { |unit| [unit.fetch("module"), unit.fetch("source_path")] }
       duplicate_module = duplicate_by(sorted, "module")
       return failure(sorted, [duplicate_module_diagnostic(duplicate_module)]) if duplicate_module
+
+      stdlib_shadow = sorted.find { |u| u.fetch("module").to_s.start_with?("stdlib.") }
+      return failure(sorted, [stdlib_shadow_diagnostic(stdlib_shadow)]) if stdlib_shadow
 
       by_module = sorted.to_h { |unit| [unit.fetch("module"), unit] }
       import_diagnostics = validate_imports(sorted, by_module)
@@ -130,6 +134,31 @@ module IgniterLang
       units.flat_map do |unit|
         unit.fetch("imports").flat_map do |import|
           import_path = import.fetch("module_path")
+          if stdlib_path?(import_path)
+            unless stdlib_module_known?(import_path)
+              next [diagnostic(
+                "OOF-IMP2",
+                "unknown stdlib module path '#{import_path}' from module '#{unit.fetch("module")}'",
+                "import:#{import_path}",
+                source_path: unit.fetch("source_path"),
+                module_path: unit.fetch("module"),
+                import_path: import_path
+              )]
+            end
+            names = import.fetch("names", nil)
+            next [] unless names
+            next names.reject { |name| stdlib_name_known?(import_path, name) }.map do |name|
+              diagnostic(
+                "OOF-IMP3",
+                "unknown name '#{name}' in stdlib module '#{import_path}'",
+                "import:#{import_path}.{#{name}}",
+                source_path: unit.fetch("source_path"),
+                module_path: unit.fetch("module"),
+                import_path: import_path,
+                missing_name: name
+              )
+            end
+          end
           target = by_module[import_path]
           unless target
             next [diagnostic(
@@ -159,6 +188,47 @@ module IgniterLang
           end
         end
       end
+    end
+
+    def stdlib_path?(import_path)
+      import_path.start_with?("stdlib.")
+    end
+
+    def stdlib_module_known?(import_path)
+      stdlib_module_table.key?(import_path)
+    end
+
+    def stdlib_name_known?(import_path, name)
+      stdlib_module_table.fetch(import_path, Set.new).include?(name)
+    end
+
+    def stdlib_module_table
+      @stdlib_module_table ||= begin
+        inventory_path = File.expand_path("../../docs/spec/stdlib-inventory.json", __dir__)
+        inventory = JSON.parse(File.read(inventory_path, encoding: "utf-8"))
+        table = Hash.new { |h, k| h[k] = Set.new }
+        inventory.fetch("entries", []).each do |entry|
+          canon = entry.fetch("canonical_name")
+          parts = canon.split(".")
+          next unless parts.length >= 3 && parts[0] == "stdlib"
+          module_path = parts[0...-1].join(".")
+          table[module_path]
+          entry.fetch("aliases", []).each do |al|
+            table[module_path].add(al.fetch("name")) if al.fetch("kind") == "source_alias"
+          end
+        end
+        table.transform_values { |set| set.freeze }.freeze
+      end
+    end
+
+    def stdlib_shadow_diagnostic(unit)
+      diagnostic(
+        "OOF-IMP6",
+        "user source file declares stdlib namespace path '#{unit.fetch("module")}' — stdlib.* is reserved",
+        "module:#{unit.fetch("module")}",
+        source_path: unit.fetch("source_path"),
+        module_path: unit.fetch("module")
+      )
     end
 
     def import_cycle(units)
