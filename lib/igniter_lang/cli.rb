@@ -80,7 +80,7 @@ module IgniterLang
       raise ArgumentError, "compiler profile source path not found" unless path.exist?
       raise ArgumentError, "compiler profile source path must be a regular file" unless path.file?
 
-      parsed = JSON.parse(path.read)
+      parsed = JSON.parse(path.read(encoding: "utf-8"))
       raise ArgumentError, "compiler profile source JSON must be an object" unless parsed.is_a?(Hash)
 
       parsed

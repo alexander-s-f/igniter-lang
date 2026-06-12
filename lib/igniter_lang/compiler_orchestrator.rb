@@ -53,7 +53,7 @@ module IgniterLang
     )
       source_path = Pathname.new(source_path)
       out_path = Pathname.new(out_path)
-      parsed = ParsedProgram.parse(File.read(source_path), source_path: source_path.to_s).to_h
+      parsed = ParsedProgram.parse(File.read(source_path, encoding: "utf-8"), source_path: source_path.to_s).to_h
       return parse_failure(parsed, source_path, out_path) unless parsed.fetch("parse_errors").empty?
 
       compile_parsed(

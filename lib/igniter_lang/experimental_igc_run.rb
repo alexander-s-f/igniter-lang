@@ -133,7 +133,7 @@ module IgniterLang
     end
 
     def load_passport(path)
-      parsed = JSON.parse(path.read)
+      parsed = JSON.parse(path.read(encoding: "utf-8"))
       raise RunFailure.new("malformed_passport", "passport JSON must be an object") unless parsed.is_a?(Hash)
 
       parsed
@@ -144,7 +144,7 @@ module IgniterLang
     end
 
     def load_input(path)
-      parsed = JSON.parse(path.read)
+      parsed = JSON.parse(path.read(encoding: "utf-8"))
       raise RunFailure.new("input_not_object", "input JSON must be an object") unless parsed.is_a?(Hash)
 
       parsed

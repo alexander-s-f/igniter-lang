@@ -410,8 +410,8 @@ module IgniterLang
         when "output"
           expected = type_ir(decl.fetch("type_annotation"))
           actual = symbol_types.fetch(decl.fetch("name"), type_ir("Unknown"))
-          if type_name(actual) != type_name(expected) && !blocking_rule_present?(type_errors)
-            type_errors << type_mismatch(expected, actual, decl.fetch("name"))
+          unless structurally_assignable?(actual, expected) || blocking_rule_present?(type_errors)
+            type_errors << structural_mismatch(expected, actual, decl.fetch("name"))
           end
           # TINV-4: propagate invariant output effects to output nodes
           typed_decls << typed_decl_output(decl, expected, invariant_effects)
@@ -1205,6 +1205,15 @@ module IgniterLang
       when ">"
         type_errors << type_mismatch(type_ir("Integer"), type_ir("#{left_name}+#{right_name}"), node_name) unless unknown?(left, right) || left_name == "Integer" && right_name == "Integer"
         ["stdlib.integer.gt", type_ir("Bool")]
+      when "<"
+        type_errors << type_mismatch(type_ir("Integer"), type_ir("#{left_name}<#{right_name}"), node_name) unless unknown?(left, right) || left_name == "Integer" && right_name == "Integer"
+        ["stdlib.integer.lt", type_ir("Bool")]
+      when "<="
+        type_errors << type_mismatch(type_ir("Integer"), type_ir("#{left_name}<=#{right_name}"), node_name) unless unknown?(left, right) || left_name == "Integer" && right_name == "Integer"
+        ["stdlib.integer.lte", type_ir("Bool")]
+      when ">="
+        type_errors << type_mismatch(type_ir("Integer"), type_ir("#{left_name}>=#{right_name}"), node_name) unless unknown?(left, right) || left_name == "Integer" && right_name == "Integer"
+        ["stdlib.integer.gte", type_ir("Bool")]
       when "&&"
         type_errors << type_mismatch(type_ir("Bool"), type_ir("#{left_name}+#{right_name}"), node_name) unless unknown?(left, right) || left_name == "Bool" && right_name == "Bool"
         ["stdlib.bool.and", type_ir("Bool")]
@@ -1384,6 +1393,22 @@ module IgniterLang
 
     def type_mismatch(expected, actual, node)
       oof("OOF-TY0", "Type mismatch: expected #{type_name(expected)}, got #{type_name(actual)}", node)
+    end
+
+    def structurally_assignable?(actual, expected)
+      return true  if type_name(expected) == "Unknown"
+      return false if type_name(actual)   == "Unknown"
+      return false if type_name(actual)   != type_name(expected)
+      actual_params   = actual.fetch("params",   [])
+      expected_params = expected.fetch("params", [])
+      return false if actual_params.length != expected_params.length
+      actual_params.zip(expected_params).all? { |a, e| structurally_assignable?(a, e) }
+    end
+
+    def structural_mismatch(expected, actual, node)
+      oof("OOF-TY1",
+          "Output type mismatch: expected #{type_display(expected)}, got #{type_display(actual)}",
+          node)
     end
 
     def oof(rule, message, node_name)

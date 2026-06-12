@@ -914,8 +914,8 @@
       "legacy_sir": null,
       "aliases": [],
       "category": "numeric",
-      "lifecycle_status": "orphaned",
-      "semantic_stability": "sketch",
+      "lifecycle_status": "lab-implemented",
+      "semantic_stability": "stable",
       "lowering_status": "dual-toolchain",
       "compatibility_status": "pre-v1-none",
       "fragment_class": "core",
@@ -928,17 +928,131 @@
         "Integer"
       ],
       "output_signature": "Bool",
-      "diagnostics": [],
+      "diagnostics": [
+        "OOF-TY0"
+      ],
       "failure_behavior": "none",
       "authority_surface": "none",
       "proof_lineage": [
-        "operator lowering: > -> stdlib.integer.gt (typechecker.rb operator_type)"
+        "operator lowering: > -> stdlib.integer.gt (typechecker.rb operator_type)",
+        "LANG-STDLIB-NUMERIC-COMPARISON-P1 readiness proof 37/37 PASS",
+        "LANG-STDLIB-NUMERIC-COMPARISON-P2 implementation planning closed",
+        "LANG-STDLIB-NUMERIC-COMPARISON-P3 Ruby+Rust implemented"
       ],
       "examples": [
         "3 > 2 -> true (lowered to stdlib.integer.gt)"
       ],
-      "compatibility_note": "Emitted by Ruby TC via > operator lowering; not a user-callable stdlib function. Numeric category is HOLD (STAB-P4 operator parity gate). Triage route required before any promotion.",
-      "owner_surface": "operator-lowering-implicit",
+      "compatibility_note": "Ruby TC: binary_op > lowers to call{fn:stdlib.integer.gt, resolved_type:Bool}. Rust TC: (stdlib.integer.gt, Bool) returned; SIR emitter stores raw op > not qualified fn (SIR qualification gap — deferred). OOF-TY0 for non-Integer on both sides unless Unknown permissive. Integer/Integer only.",
+      "owner_surface": "LANG-STDLIB-NUMERIC-COMPARISON-P1",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.integer.lt",
+      "semantic_ir_name": "stdlib.integer.lt",
+      "legacy_sir": null,
+      "aliases": [],
+      "category": "numeric",
+      "lifecycle_status": "lab-implemented",
+      "semantic_stability": "stable",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "total",
+      "type_params": [],
+      "input_signature": [
+        "Integer",
+        "Integer"
+      ],
+      "output_signature": "Bool",
+      "diagnostics": [
+        "OOF-TY0"
+      ],
+      "failure_behavior": "none",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "LANG-STDLIB-NUMERIC-COMPARISON-P1 readiness proof — Rust TC live, Ruby gap confirmed",
+        "LANG-STDLIB-NUMERIC-COMPARISON-P2 implementation planning closed",
+        "LANG-STDLIB-NUMERIC-COMPARISON-P3 Ruby TC added; dual-toolchain"
+      ],
+      "examples": [
+        "1 < 3 -> true (lowered to stdlib.integer.lt)"
+      ],
+      "compatibility_note": "Ruby TC: binary_op < lowers to call{fn:stdlib.integer.lt, resolved_type:Bool}. Rust TC: (stdlib.integer.lt, Bool) returned; SIR emitter stores raw op < not qualified fn (SIR qualification gap — deferred). OOF-TY0 for non-Integer on both sides unless Unknown permissive. Integer/Integer only.",
+      "owner_surface": "LANG-STDLIB-NUMERIC-COMPARISON-P1",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.integer.lte",
+      "semantic_ir_name": "stdlib.integer.lte",
+      "legacy_sir": null,
+      "aliases": [],
+      "category": "numeric",
+      "lifecycle_status": "lab-implemented",
+      "semantic_stability": "stable",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "total",
+      "type_params": [],
+      "input_signature": [
+        "Integer",
+        "Integer"
+      ],
+      "output_signature": "Bool",
+      "diagnostics": [
+        "OOF-TY0"
+      ],
+      "failure_behavior": "none",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "LANG-STDLIB-NUMERIC-COMPARISON-P2 implementation planning closed",
+        "LANG-STDLIB-NUMERIC-COMPARISON-P3 Ruby+Rust implemented; dual-toolchain"
+      ],
+      "examples": [
+        "2 <= 2 -> true (lowered to stdlib.integer.lte)"
+      ],
+      "compatibility_note": "Ruby TC: binary_op <= lowers to call{fn:stdlib.integer.lte, resolved_type:Bool}. Rust TC: (stdlib.integer.lte, Bool) returned; SIR emitter stores raw op <= not qualified fn (SIR qualification gap — deferred). OOF-TY0 for non-Integer on both sides unless Unknown permissive. Integer/Integer only.",
+      "owner_surface": "LANG-STDLIB-NUMERIC-COMPARISON-P2",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.integer.gte",
+      "semantic_ir_name": "stdlib.integer.gte",
+      "legacy_sir": null,
+      "aliases": [],
+      "category": "numeric",
+      "lifecycle_status": "lab-implemented",
+      "semantic_stability": "stable",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "total",
+      "type_params": [],
+      "input_signature": [
+        "Integer",
+        "Integer"
+      ],
+      "output_signature": "Bool",
+      "diagnostics": [
+        "OOF-TY0"
+      ],
+      "failure_behavior": "none",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "LANG-STDLIB-NUMERIC-COMPARISON-P2 implementation planning closed",
+        "LANG-STDLIB-NUMERIC-COMPARISON-P3 Ruby+Rust implemented; dual-toolchain"
+      ],
+      "examples": [
+        "3 >= 3 -> true (lowered to stdlib.integer.gte)"
+      ],
+      "compatibility_note": "Ruby TC: binary_op >= lowers to call{fn:stdlib.integer.gte, resolved_type:Bool}. Rust TC: (stdlib.integer.gte, Bool) returned; SIR emitter stores raw op >= not qualified fn (SIR qualification gap — deferred). OOF-TY0 for non-Integer on both sides unless Unknown permissive. Integer/Integer only.",
+      "owner_surface": "LANG-STDLIB-NUMERIC-COMPARISON-P2",
       "entry_digest": null
     },
     {
@@ -1219,7 +1333,7 @@
       "category": "primitive",
       "lifecycle_status": "lab-implemented",
       "semantic_stability": "experiment-pass",
-      "lowering_status": "ruby-only",
+      "lowering_status": "dual-toolchain",
       "compatibility_status": "pre-v1-none",
       "fragment_class": "core",
       "purity": "pure",
@@ -1238,13 +1352,14 @@
       "proof_lineage": [
         "LANG-UNARY-OPERATORS-P1 proposal authored",
         "LANG-UNARY-OPERATORS-P2 implementation planning closed",
-        "LANG-UNARY-OPERATORS-P3 Ruby TC implemented"
+        "LANG-UNARY-OPERATORS-P3 Ruby TC implemented",
+        "LANG-UNARY-OPERATORS-P4 Rust parity implemented"
       ],
       "examples": [
         "!true -> false",
         "!false -> true"
       ],
-      "compatibility_note": "Unary logical negation: Bool -> Bool. SIR fn = stdlib.primitive.not. OOF-TY0 for non-Bool operand; Bool returned on all paths. Unknown permissive. Ruby P3 only; Rust P4 pending (LANG-UNARY-OPERATORS-P4).",
+      "compatibility_note": "Unary logical negation: Bool -> Bool. SIR fn = stdlib.primitive.not. OOF-TY0 for non-Bool operand; Bool returned on all paths. Unknown permissive. Dual-toolchain (Ruby P3 + Rust P4).",
       "owner_surface": "LANG-UNARY-OPERATORS-P1",
       "entry_digest": null
     },
@@ -1261,7 +1376,7 @@
       "category": "numeric",
       "lifecycle_status": "lab-implemented",
       "semantic_stability": "experiment-pass",
-      "lowering_status": "ruby-only",
+      "lowering_status": "dual-toolchain",
       "compatibility_status": "pre-v1-none",
       "fragment_class": "core",
       "purity": "pure",
@@ -1281,13 +1396,14 @@
         "LAB-UNARY-MINUS-P1 readiness proof 34/34 PASS",
         "LANG-UNARY-OPERATORS-P1 proposal authored",
         "LANG-UNARY-OPERATORS-P2 implementation planning closed",
-        "LANG-UNARY-OPERATORS-P3 Ruby TC implemented"
+        "LANG-UNARY-OPERATORS-P3 Ruby TC implemented",
+        "LANG-UNARY-OPERATORS-P4 Rust parity implemented"
       ],
       "examples": [
         "-500 -> -500",
         "-x where x=3 -> -3"
       ],
-      "compatibility_note": "Unary integer negation: Integer -> Integer. SIR fn = stdlib.integer.neg. OOF-TY0 for non-Integer operand; Integer returned on all paths. Unknown permissive. No Decimal/Float negation. Ruby P3 only; Rust P4 pending (LANG-UNARY-OPERATORS-P4).",
+      "compatibility_note": "Unary integer negation: Integer -> Integer. SIR fn = stdlib.integer.neg. OOF-TY0 for non-Integer operand; Integer returned on all paths. Unknown permissive. No Decimal/Float negation. Dual-toolchain (Ruby P3 + Rust P4).",
       "owner_surface": "LANG-UNARY-OPERATORS-P1",
       "entry_digest": null
     }

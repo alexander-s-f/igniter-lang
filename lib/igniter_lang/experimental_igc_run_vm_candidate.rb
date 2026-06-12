@@ -257,7 +257,7 @@ module IgniterLang
     end
 
     def load_json(path, label)
-      JSON.parse(path.read)
+      JSON.parse(path.read(encoding: "utf-8"))
     rescue Errno::ENOENT
       raise Slice1Failure.new("missing_#{label}", "#{label} not found")
     rescue JSON::ParserError

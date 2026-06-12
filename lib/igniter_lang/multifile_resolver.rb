@@ -93,7 +93,7 @@ module IgniterLang
     end
 
     def source_unit(path)
-      source = path.read
+      source = path.read(encoding: "utf-8")
       parsed = ParsedProgram.parse(source, source_path: path.to_s).to_h
       {
         "source_path" => path.to_s,

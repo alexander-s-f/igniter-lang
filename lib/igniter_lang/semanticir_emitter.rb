@@ -1002,6 +1002,21 @@ module IgniterLang
           diagnostics << oof("OOF-TY0", "Integer comparison requires Integer operands", node_name)
         end
         ["stdlib.integer.gt", "Bool"]
+      when "<"
+        unless unknown_type?(left_type, right_type) || (left_type == "Integer" && right_type == "Integer")
+          diagnostics << oof("OOF-TY0", "Integer comparison requires Integer operands", node_name)
+        end
+        ["stdlib.integer.lt", "Bool"]
+      when "<="
+        unless unknown_type?(left_type, right_type) || (left_type == "Integer" && right_type == "Integer")
+          diagnostics << oof("OOF-TY0", "Integer comparison requires Integer operands", node_name)
+        end
+        ["stdlib.integer.lte", "Bool"]
+      when ">="
+        unless unknown_type?(left_type, right_type) || (left_type == "Integer" && right_type == "Integer")
+          diagnostics << oof("OOF-TY0", "Integer comparison requires Integer operands", node_name)
+        end
+        ["stdlib.integer.gte", "Bool"]
       when "&&"
         unless unknown_type?(left_type, right_type) || (left_type == "Bool" && right_type == "Bool")
           diagnostics << oof("OOF-TY0", "Boolean and requires Bool operands", node_name)
