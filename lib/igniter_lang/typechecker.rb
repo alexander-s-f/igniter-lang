@@ -139,14 +139,28 @@ module IgniterLang
         end
       end
 
-      # OOF-L4: self-recursive def functions must declare `decreases fuel` (parity with Rust T1.5)
+      # OOF-L4: per-SCC rule — every member of a nontrivial SCC must declare `decreases fuel`.
+      # Replaces the self-only fn_self_recursive? check (LAB-FUNCTION-RECURSION-P3 ACCEPT decision).
       function_errors = []
-      classified_program.fetch("functions", []).each do |fn|
-        next unless fn_self_recursive?(fn)
-        unless fn.fetch("decreases", nil) == "fuel"
-          function_errors << oof("OOF-L4",
-            "Recursive function '#{fn.fetch("name")}' must specify 'decreases fuel'",
-            fn.fetch("name"))
+      fns = classified_program.fetch("functions", [])
+      unless fns.empty?
+        fn_names_set = fns.map { |f| f.fetch("name") }.to_set
+        fn_adj = fns.to_h do |f|
+          [f.fetch("name"), fn_extract_all_calls(f.fetch("body", {}), fn_names_set)]
+        end
+        sccs = tarjan_sccs(fns.map { |f| f.fetch("name") }, fn_adj)
+        fn_map = fns.to_h { |f| [f.fetch("name"), f] }
+        sccs.each do |scc|
+          is_nontrivial = scc.length > 1 || (fn_adj[scc.first] || []).include?(scc.first)
+          next unless is_nontrivial
+          scc.sort.each do |fn_name|
+            f = fn_map[fn_name]
+            unless f.fetch("decreases", nil) == "fuel"
+              function_errors << oof("OOF-L4",
+                "Recursive function '#{fn_name}' must specify 'decreases fuel'",
+                fn_name)
+            end
+          end
         end
       end
 
@@ -1375,6 +1389,72 @@ module IgniterLang
       else
         false
       end
+    end
+
+    # Collect all calls to known def functions reachable from a body (SCC graph edges).
+    # Returns a sorted, deduplicated Array of function names called within body_hash.
+    def fn_extract_all_calls(body_hash, fn_names_set)
+      found = Set.new
+      fn_collect_calls_body(body_hash, fn_names_set, found)
+      found.to_a.sort
+    end
+
+    def fn_collect_calls_expr(expr, fn_names_set, found)
+      return unless expr.is_a?(Hash)
+      case expr.fetch("kind", nil)
+      when "call"
+        callee = expr.fetch("fn", nil)
+        found.add(callee) if callee && fn_names_set.include?(callee)
+        expr.fetch("args", []).each { |arg| fn_collect_calls_expr(arg, fn_names_set, found) }
+      when "binary_op"
+        fn_collect_calls_expr(expr["left"], fn_names_set, found)
+        fn_collect_calls_expr(expr["right"], fn_names_set, found)
+      when "unary_op"
+        fn_collect_calls_expr(expr["operand"], fn_names_set, found)
+      when "field_access"
+        fn_collect_calls_expr(expr["object"], fn_names_set, found)
+      when "index_access"
+        fn_collect_calls_expr(expr["object"], fn_names_set, found)
+        fn_collect_calls_expr(expr["index"], fn_names_set, found)
+      when "if_expr"
+        fn_collect_calls_expr(expr["cond"], fn_names_set, found)
+        fn_collect_calls_body(expr["then"], fn_names_set, found)
+        fn_collect_calls_body(expr["else"], fn_names_set, found)
+      end
+    end
+
+    def fn_collect_calls_body(body, fn_names_set, found)
+      return unless body.is_a?(Hash)
+      stmts = body.fetch("stmts", [])
+      return_expr = body.fetch("return_expr", nil)
+      stmts.each { |stmt| fn_collect_calls_expr(stmt.fetch("expr", stmt), fn_names_set, found) }
+      fn_collect_calls_expr(return_expr, fn_names_set, found) if return_expr
+    end
+
+    # Tarjan's SCC algorithm — deterministic (sorted nodes, sorted neighbors, sorted SCC members).
+    # Returns Array[Array[String]] — each inner array is one SCC, members sorted alphabetically.
+    def tarjan_sccs(nodes, adj)
+      idx = {}; low = {}; on_stack = Set.new
+      stack = []; counter = [0]; sccs = []
+      visit = nil
+      visit = lambda do |v|
+        idx[v] = low[v] = counter[0]; counter[0] += 1
+        stack.push(v); on_stack.add(v)
+        (adj[v] || []).sort.each do |w|
+          if !idx.key?(w)
+            visit.call(w); low[v] = [low[v], low[w]].min
+          elsif on_stack.include?(w)
+            low[v] = [low[v], idx[w]].min
+          end
+        end
+        if low[v] == idx[v]
+          scc = []
+          loop { w = stack.pop; on_stack.delete(w); scc << w; break if w == v }
+          sccs << scc.sort
+        end
+      end
+      nodes.sort.each { |n| visit.call(n) unless idx.key?(n) }
+      sccs
     end
 
     def oof_alias(rule, message, node_name, aliases)
