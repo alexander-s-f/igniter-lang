@@ -891,6 +891,12 @@ module IgniterLang
       when *COLLECTION_HOF_FNS.keys
         # LANG-STDLIB-COLLECTION-MAP-FILTER-PROP-P1: Collection HOF — map/filter/count
         infer_collection_hof_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
+      when "sum"
+        # LANG-STDLIB-SUM-PROP-P3: stdlib.collection.sum two-arg field-projection form
+        infer_sum_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
+      when "fold"
+        # LANG-STDLIB-FOLD-PROP-P1/P3: stdlib.collection.fold — accumulator HOF
+        infer_fold_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
       when "or_else"
         # PROP-043: Option[V] unwrap with default (or_else introduced alongside Map v0)
         infer_or_else(args, symbol_types, type_errors, type_warnings, node_name)
@@ -2364,6 +2370,67 @@ module IgniterLang
                  "fn" => qualified, "args" => [collection_arg])
     end
 
+    # LANG-STDLIB-SUM-PROP-P3: stdlib.collection.sum two-arg field-projection form.
+    # sum(Collection[T], Symbol) -> F where F = @type_shapes[T][field_name]
+    # Scale-preserving for Decimal[N]: F is the declared type_ir, not an arithmetic result.
+    # OOF-COL1: arity != 2
+    # OOF-COL2: non-Collection first arg
+    # OOF-COL5: non-Symbol second arg OR field not found in type_shapes (Unknown elem exempt)
+    def infer_sum_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
+      qualified = "stdlib.collection.sum"
+
+      # ── OOF-COL1: arity must be exactly 2 ───────────────────────────────────
+      unless args.length == 2
+        type_errors << oof("OOF-COL1",
+          "#{qualified}: expected 2 arguments (collection, :field), got #{args.length}",
+          node_name)
+        return typed_expr("call", type_ir("Unknown"), [], "fn" => qualified, "args" => [])
+      end
+
+      # ── Infer collection argument ────────────────────────────────────────────
+      collection_arg = infer_expr(args[0], symbol_types, type_errors, type_warnings, node_name)
+      col_type_name  = type_name(collection_arg.fetch("resolved_type"))
+
+      # ── OOF-COL2: first arg must be Collection or Unknown ───────────────────
+      unless col_type_name == "Collection" || col_type_name == "Unknown"
+        type_errors << oof("OOF-COL2",
+          "#{qualified}: first argument must be Collection[T], got #{col_type_name}",
+          node_name)
+        return typed_expr("call", type_ir("Unknown"), collection_arg.fetch("deps", []),
+                          "fn" => qualified, "args" => [collection_arg])
+      end
+
+      # ── OOF-COL5: second arg must be a Symbol literal ───────────────────────
+      sym_node = args[1]
+      unless sym_node.is_a?(Hash) && sym_node.fetch("kind", nil) == "symbol"
+        got = sym_node.is_a?(Hash) ? sym_node.fetch("kind", "non-symbol") : "non-symbol"
+        type_errors << oof("OOF-COL5",
+          "#{qualified}: second argument must be a Symbol field name (:field), got #{got}",
+          node_name)
+        return typed_expr("call", type_ir("Unknown"), collection_arg.fetch("deps", []),
+                          "fn" => qualified, "args" => [collection_arg])
+      end
+      field_name = sym_node.fetch("value")
+
+      # ── Field type lookup from @type_shapes ─────────────────────────────────
+      elem_type      = element_type_from_collection(collection_arg.fetch("resolved_type"))
+      elem_type_name = type_name(elem_type)
+      field_type     = @type_shapes.fetch(elem_type_name, {})[field_name]
+
+      # ── OOF-COL5: missing field (Unknown elem type is permissive) ────────────
+      if field_type.nil?
+        unless elem_type_name == "Unknown"
+          type_errors << oof("OOF-COL5",
+            "#{qualified}: field ':#{field_name}' not found in type #{elem_type_name}",
+            node_name)
+        end
+        field_type = type_ir("Unknown")
+      end
+
+      typed_expr("call", field_type, collection_arg.fetch("deps", []),
+                 "fn" => qualified, "args" => [collection_arg])
+    end
+
     # Infer the return type of a lambda body.
     # Handles both single-expression bodies and block-form bodies.
     def infer_lambda_body(body, local_symbols, type_errors, type_warnings, node_name)
@@ -2385,6 +2452,75 @@ module IgniterLang
       else
         infer_expr(body, local_symbols, type_errors, type_warnings, node_name)
       end
+    end
+
+    # LANG-STDLIB-FOLD-PROP-P1/P3: stdlib.collection.fold
+    # Signature: Collection[T] × Acc × ((Acc, T) -> Acc) -> Acc
+    # Acc type inferred from seed expression (args[1]).
+    # Lambda must have exactly 2 params: acc → Acc, elem → T.
+    # OOF-COL4 for all fold-family errors.
+    def infer_fold_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
+      qualified = "stdlib.collection.fold"
+
+      unless args.length == 3
+        type_errors << oof("OOF-COL4",
+          "#{qualified}: expected 3 arguments (collection, seed, lambda), got #{args.length}",
+          node_name)
+        return typed_expr("call", type_ir("Unknown"), [], "fn" => qualified, "args" => [])
+      end
+
+      collection_typed = infer_expr(args[0], symbol_types, type_errors, type_warnings, node_name)
+      col_type_name    = type_name(collection_typed.fetch("resolved_type"))
+
+      unless col_type_name == "Collection" || col_type_name == "Unknown"
+        type_errors << oof("OOF-COL4",
+          "#{qualified}: first argument must be Collection[T], got #{col_type_name}",
+          node_name)
+        return typed_expr("call", type_ir("Unknown"), collection_typed.fetch("deps", []),
+                          "fn" => qualified, "args" => [collection_typed])
+      end
+
+      seed_typed = infer_expr(args[1], symbol_types, type_errors, type_warnings, node_name)
+      acc_type   = seed_typed.fetch("resolved_type")
+
+      lambda_node = args[2]
+      unless lambda_node.is_a?(Hash) && lambda_node.fetch("kind", nil) == "lambda"
+        bad_kind = lambda_node.is_a?(Hash) ? lambda_node.fetch("kind", "non-lambda") : "non-lambda"
+        type_errors << oof("OOF-COL4",
+          "#{qualified}: third argument must be a lambda, got #{bad_kind}",
+          node_name)
+        col_seed_deps = (collection_typed.fetch("deps", []) + seed_typed.fetch("deps", [])).uniq
+        return typed_expr("call", acc_type, col_seed_deps, "fn" => qualified,
+                          "args" => [collection_typed, seed_typed])
+      end
+
+      lambda_params = lambda_node.fetch("params", [])
+      unless lambda_params.length == 2
+        type_errors << oof("OOF-COL4",
+          "#{qualified}: lambda must have exactly 2 parameters (acc, elem), got #{lambda_params.length}",
+          node_name)
+        col_seed_deps = (collection_typed.fetch("deps", []) + seed_typed.fetch("deps", [])).uniq
+        return typed_expr("call", acc_type, col_seed_deps, "fn" => qualified,
+                          "args" => [collection_typed, seed_typed])
+      end
+
+      elem_type     = element_type_from_collection(collection_typed.fetch("resolved_type"))
+      local_symbols = symbol_types.merge(lambda_params[0] => acc_type, lambda_params[1] => elem_type)
+
+      lambda_body = lambda_node.fetch("body")
+      body_typed  = infer_lambda_body(lambda_body, local_symbols, type_errors, type_warnings, node_name)
+      body_type   = body_typed.fetch("resolved_type")
+
+      body_name = type_name(body_type)
+      acc_name  = type_name(acc_type)
+      unless body_name == acc_name || body_name == "Unknown" || acc_name == "Unknown"
+        type_errors << oof("OOF-COL4",
+          "#{qualified}: lambda return type #{body_name} does not match accumulator type #{acc_name}",
+          node_name)
+      end
+
+      all_deps = (collection_typed.fetch("deps", []) + seed_typed.fetch("deps", []) + body_typed.fetch("deps", [])).uniq
+      typed_expr("call", acc_type, all_deps, "fn" => qualified, "args" => [collection_typed, seed_typed])
     end
 
     # Rule OR-ELSE: or_else(Option[V], V) → V
