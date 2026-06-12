@@ -1719,6 +1719,11 @@ module IgniterLang
         expr = parse_postfix
         return { "kind" => "unary_op", "op" => op, "operand" => expr }
       end
+      if peek_type?(:op) && peek&.value == "-"
+        op = advance.value
+        expr = parse_postfix
+        return { "kind" => "unary_op", "op" => op, "operand" => expr }
+      end
       parse_postfix
     end
 

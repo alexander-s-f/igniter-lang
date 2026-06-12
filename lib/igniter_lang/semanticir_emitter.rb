@@ -904,6 +904,8 @@ module IgniterLang
           "deps" => object.fetch("deps") }
       when "binary_op"
         lower_binary(expr, type_env, diagnostics, node_name)
+      when "unary_op"
+        lower_unary(expr, type_env, diagnostics, node_name)
       when "call"
         fn = expr.fetch("fn")
         diagnostics << oof("OOF-P1", "Unresolved function: #{fn}", node_name)
@@ -937,6 +939,40 @@ module IgniterLang
         "type" => result_type,
         "deps" => left.fetch("deps") + right.fetch("deps")
       }
+    end
+
+    def lower_unary(expr, type_env, diagnostics, node_name)
+      operand  = lower_expr(expr.fetch("operand"), type_env, diagnostics, node_name)
+      op       = expr.fetch("op")
+      fn_name, result_type = unary_operator_for(op, operand.fetch("type"), diagnostics, node_name)
+      { "expr" => {
+          "kind"          => "call",
+          "fn"            => fn_name,
+          "args"          => [operand.fetch("expr")],
+          "resolved_type" => type_ir(result_type)
+        },
+        "type" => result_type,
+        "deps" => operand.fetch("deps") }
+    end
+
+    def unary_operator_for(op, operand_type, diagnostics, node_name)
+      case op
+      when "!"
+        unless operand_type == "Unknown" || operand_type == "Bool"
+          diagnostics << oof("OOF-TY0",
+            "stdlib.primitive.not: expected Bool operand, got #{operand_type}", node_name)
+        end
+        ["stdlib.primitive.not", "Bool"]
+      when "-"
+        unless operand_type == "Unknown" || operand_type == "Integer"
+          diagnostics << oof("OOF-TY0",
+            "stdlib.integer.neg: expected Integer operand, got #{operand_type}", node_name)
+        end
+        ["stdlib.integer.neg", "Integer"]
+      else
+        diagnostics << oof("OOF-P0", "Unsupported unary operator: #{op}", node_name)
+        ["stdlib.unsupported.#{op}", "Unknown"]
+      end
     end
 
     def operator_for(op, left_type, right_type, diagnostics, node_name)

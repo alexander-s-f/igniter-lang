@@ -861,6 +861,8 @@ module IgniterLang
         infer_variant_construct(expr, symbol_types, type_errors, type_warnings, node_name)
       when "match_expr"         # PROP-044 P5
         infer_match_expr(expr, symbol_types, type_errors, type_warnings, node_name)
+      when "unary_op"
+        infer_unary_op(expr, symbol_types, type_errors, type_warnings, node_name)
       else
         type_errors << oof("OOF-TY0", "Unsupported expression kind: #{expr.fetch("kind")}", node_name)
         typed_expr("unsupported", type_ir("Unknown"), [], "source_kind" => expr.fetch("kind"))
@@ -2945,6 +2947,33 @@ module IgniterLang
       typed_expr("match_expr", type_ir("Unknown"), subject_node.fetch("deps", []),
                  "subject" => subject_node, "arms" => [], "exhaustive" => false,
                  "has_wildcard" => false)
+    end
+
+    def infer_unary_op(expr, symbol_types, type_errors, type_warnings, node_name)
+      op      = expr.fetch("op")
+      operand = infer_expr(expr.fetch("operand"), symbol_types, type_errors, type_warnings, node_name)
+      op_type = type_name(operand.fetch("resolved_type"))
+
+      case op
+      when "!"
+        unless op_type == "Unknown" || op_type == "Bool"
+          type_errors << oof("OOF-TY0",
+            "stdlib.primitive.not: expected Bool operand, got #{op_type}", node_name)
+        end
+        typed_expr("call", type_ir("Bool"), operand.fetch("deps"),
+                   "fn" => "stdlib.primitive.not", "args" => [operand])
+      when "-"
+        unless op_type == "Unknown" || op_type == "Integer"
+          type_errors << oof("OOF-TY0",
+            "stdlib.integer.neg: expected Integer operand, got #{op_type}", node_name)
+        end
+        typed_expr("call", type_ir("Integer"), operand.fetch("deps"),
+                   "fn" => "stdlib.integer.neg", "args" => [operand])
+      else
+        type_errors << oof("OOF-TY0", "Unsupported unary operator: #{op}", node_name)
+        typed_expr("call", type_ir("Unknown"), operand.fetch("deps"),
+                   "fn" => "stdlib.unsupported.#{op}", "args" => [operand])
+      end
     end
 
     def unify_match_arm_types(arm_types, subject_type, node_name, type_errors)
