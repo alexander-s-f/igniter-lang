@@ -1,7 +1,7 @@
 {
   "kind": "stdlib_inventory",
   "format_version": "v0",
-  "stdlib_surface_digest": "f0e592fc5c6781dff24cf5a590b7938f21b80bdb0dc5c6aceb1b907cc5391a75",
+  "stdlib_surface_digest": "a94ef6fea90bd8d14f210df323bc4250086c52f9ffe62909f2323702a2521c44",
   "note": "Normatively referenced by Ch8. Digest is computed from canonical re-serialization of entries sorted by canonical_name with entry_digest fields stripped — never from raw file bytes. P3 proof verifies determinism. P5 adds stdlib.collection.map + stdlib.collection.filter entries and updates stdlib.collection.count proof_lineage.",
   "entries": [
     {
@@ -1066,7 +1066,7 @@
       "category": "collection",
       "lifecycle_status": "lab-implemented",
       "semantic_stability": "experiment-pass",
-      "lowering_status": "ruby-only",
+      "lowering_status": "dual-toolchain",
       "compatibility_status": "pre-v1-none",
       "fragment_class": "core",
       "purity": "pure",
@@ -1090,7 +1090,8 @@
       "proof_lineage": [
         "LANG-STDLIB-COLLECTION-APPEND-PROP-P1 proposal authored",
         "LANG-STDLIB-COLLECTION-APPEND-PROP-P2 implementation planning closed",
-        "LANG-STDLIB-COLLECTION-APPEND-PROP-P3 Ruby TC implemented"
+        "LANG-STDLIB-COLLECTION-APPEND-PROP-P3 Ruby TC implemented",
+        "LANG-STDLIB-COLLECTION-APPEND-PROP-P4 Rust TC implemented + emitter SIR qualification"
       ],
       "examples": [
         "append([1, 2], 3) -> Collection[Integer]"
