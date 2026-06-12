@@ -1,7 +1,7 @@
 {
   "kind": "stdlib_inventory",
   "format_version": "v0",
-  "stdlib_surface_digest": "34671fb37f3ba302e906148aa433c313da1968a0cd9d019f8f4a5b4ac92136c4",
+  "stdlib_surface_digest": "f0e592fc5c6781dff24cf5a590b7938f21b80bdb0dc5c6aceb1b907cc5391a75",
   "note": "Normatively referenced by Ch8. Digest is computed from canonical re-serialization of entries sorted by canonical_name with entry_digest fields stripped — never from raw file bytes. P3 proof verifies determinism. P5 adds stdlib.collection.map + stdlib.collection.filter entries and updates stdlib.collection.count proof_lineage.",
   "entries": [
     {
@@ -1051,6 +1051,52 @@
       ],
       "compatibility_note": "Predicate must return Bool; OOF-COL3 raised otherwise. Unknown passes permissively — pre-existing == gap returns Unknown so equality predicates pass. Result type is passthrough Collection[T] (same element type as input).",
       "owner_surface": "LANG-STDLIB-COLLECTION-MAP-FILTER-PROP-P1",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.collection.append",
+      "semantic_ir_name": "stdlib.collection.append",
+      "legacy_sir": null,
+      "aliases": [
+        {
+          "kind": "source_alias",
+          "name": "append"
+        }
+      ],
+      "category": "collection",
+      "lifecycle_status": "lab-implemented",
+      "semantic_stability": "experiment-pass",
+      "lowering_status": "ruby-only",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "total",
+      "type_params": [
+        "T"
+      ],
+      "input_signature": [
+        "Collection[T]",
+        "T"
+      ],
+      "output_signature": "Collection[T]",
+      "diagnostics": [
+        "OOF-COL1",
+        "OOF-COL2",
+        "OOF-COL6"
+      ],
+      "failure_behavior": "none",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "LANG-STDLIB-COLLECTION-APPEND-PROP-P1 proposal authored",
+        "LANG-STDLIB-COLLECTION-APPEND-PROP-P2 implementation planning closed",
+        "LANG-STDLIB-COLLECTION-APPEND-PROP-P3 Ruby TC implemented"
+      ],
+      "examples": [
+        "append([1, 2], 3) -> Collection[Integer]"
+      ],
+      "compatibility_note": "Single-item append Collection[T] × T → Collection[T]. Item appended at end; order-preserving. OOF-COL6 fires when both collection element type and item type are concrete and differ. Unknown permissive on both sides. Bootstrap form append(T, T) → Collection[T] (via call_contract) is outside canonical type — stays call_contract until stdlib.collection.empty exists. Ruby-only in P3; Rust parity is P4.",
+      "owner_surface": "LANG-STDLIB-COLLECTION-APPEND-P1",
       "entry_digest": null
     }
   ]

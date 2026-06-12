@@ -897,6 +897,9 @@ module IgniterLang
       when "fold"
         # LANG-STDLIB-FOLD-PROP-P1/P3: stdlib.collection.fold — accumulator HOF
         infer_fold_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
+      when "append"
+        # LANG-STDLIB-COLLECTION-APPEND-PROP-P3: stdlib.collection.append
+        infer_append_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
       when "or_else"
         # PROP-043: Option[V] unwrap with default (or_else introduced alongside Map v0)
         infer_or_else(args, symbol_types, type_errors, type_warnings, node_name)
@@ -2521,6 +2524,54 @@ module IgniterLang
 
       all_deps = (collection_typed.fetch("deps", []) + seed_typed.fetch("deps", []) + body_typed.fetch("deps", [])).uniq
       typed_expr("call", acc_type, all_deps, "fn" => qualified, "args" => [collection_typed, seed_typed])
+    end
+
+    # LANG-STDLIB-COLLECTION-APPEND-PROP-P3: stdlib.collection.append
+    # append(Collection[T], T) -> Collection[T]
+    # OOF-COL1: arity != 2
+    # OOF-COL2: non-Collection / non-Unknown first arg
+    # OOF-COL6: item type concrete mismatch (both concrete, different names)
+    # Unknown permissive on both sides — no COL6 when either is Unknown.
+    def infer_append_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
+      qualified = "stdlib.collection.append"
+
+      # ── OOF-COL1: arity ──────────────────────────────────────────────────────
+      unless args.length == 2
+        type_errors << oof("OOF-COL1",
+          "#{qualified}: expected 2 arguments, got #{args.length}",
+          node_name)
+        return typed_expr("call", type_ir("Unknown"), [], "fn" => qualified, "args" => [])
+      end
+
+      # ── Infer collection arg ──────────────────────────────────────────────────
+      collection_arg = infer_expr(args[0], symbol_types, type_errors, type_warnings, node_name)
+      col_type_name  = type_name(collection_arg.fetch("resolved_type"))
+
+      # ── OOF-COL2: first arg must be Collection or Unknown ─────────────────────
+      unless col_type_name == "Collection" || col_type_name == "Unknown"
+        type_errors << oof("OOF-COL2",
+          "#{qualified}: first argument must be Collection[T], got #{col_type_name}",
+          node_name)
+        return typed_expr("call", type_ir("Unknown"), collection_arg.fetch("deps", []),
+                          "fn" => qualified, "args" => [collection_arg])
+      end
+
+      # ── Infer item arg ────────────────────────────────────────────────────────
+      item_arg  = infer_expr(args[1], symbol_types, type_errors, type_warnings, node_name)
+      elem_type = element_type_from_collection(collection_arg.fetch("resolved_type"))
+      elem_name = type_name(elem_type)
+      item_name = type_name(item_arg.fetch("resolved_type"))
+
+      # ── OOF-COL6: concrete type mismatch (Unknown permissive on both sides) ───
+      unless elem_name == "Unknown" || item_name == "Unknown" || elem_name == item_name
+        type_errors << oof("OOF-COL6",
+          "#{qualified}: item type #{item_name} does not match collection element type #{elem_name}",
+          node_name)
+      end
+
+      all_deps = (collection_arg.fetch("deps", []) + item_arg.fetch("deps", [])).uniq
+      typed_expr("call", collection_type_ir_from(elem_type), all_deps,
+                 "fn" => qualified, "args" => [collection_arg, item_arg])
     end
 
     # Rule OR-ELSE: or_else(Option[V], V) → V
