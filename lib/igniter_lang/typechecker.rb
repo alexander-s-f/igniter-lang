@@ -83,6 +83,17 @@ module IgniterLang
       "outcome_is_partial_success"        => { qualified_name: "stdlib.outcome.is_partial_success",        return_type: "Bool"   },
     }.freeze
 
+    # LANG-STDLIB-COLLECTION-MAP-FILTER-PROP-P1: stdlib.collection HOF registry (v0 — exhaustive).
+    # Source aliases → qualified SemanticIR names. All pure/core/authority_surface:none.
+    # map/filter: 2-arg (collection, lambda). count: 1-arg (collection). No predicate-count in v0.
+    # SemanticIR fn is always the qualified_name. Source alias never appears in SIR.
+    # Adding entries requires PROP amendment + P4+ authorization.
+    COLLECTION_HOF_FNS = {
+      "map"    => { qualified_name: "stdlib.collection.map",    arity: 2, has_lambda: true  },
+      "filter" => { qualified_name: "stdlib.collection.filter", arity: 2, has_lambda: true  },
+      "count"  => { qualified_name: "stdlib.collection.count",  arity: 1, has_lambda: false },
+    }.freeze
+
     # PROP-042 T3: Matches "fn_name(arg_name)" — the T3 function-call decreases form.
     # Produced by parser.rb parse_decreases_decl when lparen follows the first identifier.
     T3_CALL_FORM_RE = /\A(\w+)\((\w+)\)\z/
@@ -877,6 +888,9 @@ module IgniterLang
       when *OUTCOME_STDLIB_FNS.keys
         # LANG-STDLIB-OUTCOME-PROP-P3: stdlib.outcome helpers — kind + 6 PROP-047 predicates
         infer_outcome_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
+      when *COLLECTION_HOF_FNS.keys
+        # LANG-STDLIB-COLLECTION-MAP-FILTER-PROP-P1: Collection HOF — map/filter/count
+        infer_collection_hof_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
       when "or_else"
         # PROP-043: Option[V] unwrap with default (or_else introduced alongside Map v0)
         infer_or_else(args, symbol_types, type_errors, type_warnings, node_name)
@@ -2266,6 +2280,111 @@ module IgniterLang
 
       typed_expr("call", type_ir(return_type), outcome_arg.fetch("deps", []),
                  "fn" => qualified_name, "args" => [outcome_arg])
+    end
+
+    # LANG-STDLIB-COLLECTION-MAP-FILTER-PROP-P1: Collection HOF dispatch.
+    # map(Collection[T],  (T→U))    → Collection[U]
+    # filter(Collection[T], (T→Bool)) → Collection[T]
+    # count(Collection[T])           → Integer
+    def infer_collection_hof_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
+      spec           = COLLECTION_HOF_FNS.fetch(fn)
+      qualified      = spec[:qualified_name]
+      expected_arity = spec[:arity]
+      has_lambda     = spec[:has_lambda]
+
+      # ── OOF-COL1: arity check ────────────────────────────────────────────────
+      unless args.length == expected_arity
+        type_errors << oof("OOF-COL1",
+          "#{qualified}: expected #{expected_arity} argument(s), got #{args.length}",
+          node_name)
+        return typed_expr("call", type_ir("Unknown"), [], "fn" => qualified, "args" => [])
+      end
+
+      # ── Infer collection argument ─────────────────────────────────────────────
+      collection_arg = infer_expr(args[0], symbol_types, type_errors, type_warnings, node_name)
+      col_type_name  = type_name(collection_arg.fetch("resolved_type"))
+
+      # ── OOF-COL2: first arg must be Collection or Unknown ─────────────────────
+      unless col_type_name == "Collection" || col_type_name == "Unknown"
+        type_errors << oof("OOF-COL2",
+          "#{qualified}: first argument must be Collection[T], got #{col_type_name}",
+          node_name)
+        return typed_expr("call", type_ir("Unknown"), collection_arg.fetch("deps", []),
+                          "fn" => qualified, "args" => [collection_arg])
+      end
+
+      # ── count: no lambda, return Integer ─────────────────────────────────────
+      unless has_lambda
+        return typed_expr("call", type_ir("Integer"), collection_arg.fetch("deps", []),
+                          "fn" => qualified, "args" => [collection_arg])
+      end
+
+      # ── map / filter: validate lambda argument ────────────────────────────────
+      lambda_node = args[1]
+      unless lambda_node.is_a?(Hash) && lambda_node.fetch("kind", nil) == "lambda"
+        type_errors << oof("OOF-COL1",
+          "#{qualified}: second argument must be a lambda, got #{lambda_node.fetch("kind", "non-lambda") rescue "non-lambda"}",
+          node_name)
+        return typed_expr("call", type_ir("Unknown"), collection_arg.fetch("deps", []),
+                          "fn" => qualified, "args" => [collection_arg])
+      end
+
+      # ── Bind lambda parameter to element type ─────────────────────────────────
+      elem_type     = element_type_from_collection(collection_arg.fetch("resolved_type"))
+      lambda_params = lambda_node.fetch("params", [])
+      local_symbols = lambda_params.each_with_object(symbol_types.dup) do |param, acc|
+        acc[param] = elem_type
+      end
+
+      # ── Infer lambda body ─────────────────────────────────────────────────────
+      lambda_body = lambda_node.fetch("body")
+      body_typed  = infer_lambda_body(lambda_body, local_symbols, type_errors, type_warnings, node_name)
+      body_type   = body_typed.fetch("resolved_type")
+
+      # ── OOF-COL3: filter predicate must return Bool ───────────────────────────
+      if fn == "filter"
+        pred_name = type_name(body_type)
+        unless pred_name == "Bool" || pred_name == "Unknown"
+          type_errors << oof("OOF-COL3",
+            "#{qualified}: predicate must return Bool, got #{pred_name}",
+            node_name)
+        end
+      end
+
+      lambda_deps = body_typed.fetch("deps", [])
+      all_deps    = (collection_arg.fetch("deps", []) + lambda_deps).uniq
+
+      # ── Build output type ─────────────────────────────────────────────────────
+      output_type = case fn
+      when "map"    then collection_type_ir_from(body_type)
+      when "filter" then collection_type_ir_from(elem_type)
+      end
+
+      typed_expr("call", output_type, all_deps,
+                 "fn" => qualified, "args" => [collection_arg])
+    end
+
+    # Infer the return type of a lambda body.
+    # Handles both single-expression bodies and block-form bodies.
+    def infer_lambda_body(body, local_symbols, type_errors, type_warnings, node_name)
+      if body.is_a?(Hash) && body.fetch("kind", nil) == "block"
+        stmts       = body.fetch("stmts", [])
+        return_expr = body.fetch("return_expr", nil)
+        block_syms  = local_symbols.dup
+        stmts.each do |stmt|
+          case stmt.fetch("kind", nil)
+          when "let"
+            val_typed = infer_expr(stmt.fetch("expr"), block_syms, type_errors, type_warnings, node_name)
+            block_syms[stmt.fetch("name")] = val_typed.fetch("resolved_type")
+          when "expr_stmt"
+            infer_expr(stmt.fetch("expr"), block_syms, type_errors, type_warnings, node_name)
+          end
+        end
+        return_expr ? infer_expr(return_expr, block_syms, type_errors, type_warnings, node_name)
+                    : typed_expr("literal", type_ir("Unknown"), [], "value" => nil, "literal_type" => "nil")
+      else
+        infer_expr(body, local_symbols, type_errors, type_warnings, node_name)
+      end
     end
 
     # Rule OR-ELSE: or_else(Option[V], V) → V
