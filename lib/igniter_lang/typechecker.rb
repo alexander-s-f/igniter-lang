@@ -879,6 +879,9 @@ module IgniterLang
         infer_olap_rollup(fn, args, symbol_types, type_errors, type_warnings, node_name)
       when "recur"
         infer_recur_call(expr, symbol_types, type_errors, type_warnings, node_name)
+      when "concat"
+        # LANG-STDLIB-COLLECTION-CONCAT-PROP-P3: shared source alias — route by first-arg type
+        infer_concat_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
       when *TEXT_STDLIB_FNS.keys
         # igniter-string-core-units-and-pure-stdlib-boundary-v0
         infer_text_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
@@ -2613,6 +2616,76 @@ module IgniterLang
 
       typed_expr("call", type_ir("Bool"), collection_typed.fetch("deps", []),
                  "fn" => qualified, "args" => [collection_typed])
+    end
+
+    # LANG-STDLIB-COLLECTION-CONCAT-PROP-P3: stdlib.collection.concat
+    # concat(Collection[T], Collection[T]) → Collection[T]
+    # Source alias `concat` is shared with stdlib.text.concat — disambiguated here by first-arg type.
+    # Collection or Unknown first arg → collection path.
+    # Other concrete first arg → delegate to infer_text_call (stdlib.text.concat).
+    # OOF-COL1: arity != 2  (collection path; early-return)
+    # OOF-COL2: second arg not Collection/Unknown  (early-return)
+    # OOF-COL7: element type mismatch — Collection[T] ++ Collection[U] where T ≠ U, both concrete
+    # Unknown permissive on routing and on both element type positions.
+    def infer_concat_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
+      qualified = "stdlib.collection.concat"
+
+      # ── Routing: infer first arg to determine collection vs text path ─────────
+      # args empty → cannot route; default to collection path for OOF-COL1
+      if args.empty?
+        type_errors << oof("OOF-COL1",
+          "#{qualified}: expected 2 arguments, got 0", node_name)
+        return typed_expr("call", type_ir("Unknown"), [], "fn" => qualified, "args" => [])
+      end
+
+      first_arg       = infer_expr(args[0], symbol_types, type_errors, type_warnings, node_name)
+      first_type_name = type_name(first_arg.fetch("resolved_type"))
+
+      # Text/String/other concrete → delegate to stdlib.text.concat
+      unless first_type_name == "Collection" || first_type_name == "Unknown"
+        return infer_text_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
+      end
+
+      # ── OOF-COL1: arity (collection path) ────────────────────────────────────
+      unless args.length == 2
+        type_errors << oof("OOF-COL1",
+          "#{qualified}: expected 2 arguments, got #{args.length}", node_name)
+        return typed_expr("call", type_ir("Unknown"), first_arg.fetch("deps", []),
+                          "fn" => qualified, "args" => [first_arg])
+      end
+
+      # ── Infer second arg ──────────────────────────────────────────────────────
+      second_arg       = infer_expr(args[1], symbol_types, type_errors, type_warnings, node_name)
+      second_type_name = type_name(second_arg.fetch("resolved_type"))
+
+      # ── OOF-COL2: second arg must be Collection or Unknown ────────────────────
+      unless second_type_name == "Collection" || second_type_name == "Unknown"
+        type_errors << oof("OOF-COL2",
+          "#{qualified}: second argument must be Collection[T], got #{second_type_name}", node_name)
+        all_deps = (first_arg.fetch("deps", []) + second_arg.fetch("deps", [])).uniq
+        return typed_expr("call", type_ir("Unknown"), all_deps,
+                          "fn" => qualified, "args" => [first_arg, second_arg])
+      end
+
+      # ── Element type extraction ───────────────────────────────────────────────
+      elem1      = element_type_from_collection(first_arg.fetch("resolved_type"))
+      elem2      = element_type_from_collection(second_arg.fetch("resolved_type"))
+      elem1_name = type_name(elem1)
+      elem2_name = type_name(elem2)
+
+      # ── OOF-COL7: element type mismatch (first activation) ───────────────────
+      # Only when both element types are concrete and different (Unknown permissive).
+      unless elem1_name == "Unknown" || elem2_name == "Unknown" || elem1_name == elem2_name
+        type_errors << oof("OOF-COL7",
+          "#{qualified}: element type mismatch — first collection contains #{elem1_name}, second contains #{elem2_name}",
+          node_name)
+      end
+
+      # Result type: prefer first arg's element type; fall back to second's if Unknown
+      result_elem = elem1_name == "Unknown" ? elem2 : elem1
+      all_deps = (first_arg.fetch("deps", []) + second_arg.fetch("deps", [])).uniq
+      typed_expr("call", collection_type_ir_from(result_elem), all_deps,
+                 "fn" => qualified, "args" => [first_arg, second_arg])
     end
 
     # Rule OR-ELSE: or_else(Option[V], V) → V

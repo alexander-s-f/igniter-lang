@@ -1,7 +1,7 @@
 {
   "kind": "stdlib_inventory",
   "format_version": "v0",
-  "stdlib_surface_digest": "ebf9ad74c4de05b9521783ea1d7a0628ac7b0f649e2d0cbe4c3f9455dab6ad74",
+  "stdlib_surface_digest": "9163d103e13cb99752ed017e30f19813e3b30edbcb69b14d420cdc7a5e10d65c",
   "note": "Normatively referenced by Ch8. Digest is computed from canonical re-serialization of entries sorted by canonical_name with entry_digest fields stripped — never from raw file bytes. P3 proof verifies determinism. P5 adds stdlib.collection.map + stdlib.collection.filter entries and updates stdlib.collection.count proof_lineage.",
   "entries": [
     {
@@ -865,11 +865,16 @@
       "canonical_name": "stdlib.collection.concat",
       "semantic_ir_name": "stdlib.collection.concat",
       "legacy_sir": null,
-      "aliases": [],
+      "aliases": [
+        {
+          "kind": "source_alias",
+          "name": "concat"
+        }
+      ],
       "category": "collection",
-      "lifecycle_status": "orphaned",
-      "semantic_stability": "sketch",
-      "lowering_status": "single-toolchain",
+      "lifecycle_status": "lab-implemented",
+      "semantic_stability": "experiment-pass",
+      "lowering_status": "ruby-only",
       "compatibility_status": "pre-v1-none",
       "fragment_class": "core",
       "purity": "pure",
@@ -883,15 +888,23 @@
         "Collection[T]"
       ],
       "output_signature": "Collection[T]",
-      "diagnostics": [],
+      "diagnostics": [
+        "OOF-COL1",
+        "OOF-COL2",
+        "OOF-COL7"
+      ],
       "failure_behavior": "none",
       "authority_surface": "none",
       "proof_lineage": [
-        "single-surface invention; found via lab-stdlib-like-name inventory subtask"
+        "single-surface invention; found via lab-stdlib-like-name inventory subtask",
+        "LANG-STDLIB-COLLECTION-CONCAT-P1: readiness proved 45/45 PASS",
+        "LANG-STDLIB-COLLECTION-CONCAT-PROP-P3: Ruby TC implementation proved"
       ],
-      "examples": [],
-      "compatibility_note": "Single-surface orphan. Appears in Rust VM dispatch without Ruby TC counterpart. No governance authority. Triage route required before any promotion.",
-      "owner_surface": "orphan",
+      "examples": [
+        "concat([1,2],[3,4]) -> [1,2,3,4]"
+      ],
+      "compatibility_note": "Ruby TC implemented (P3). Source alias concat shared with stdlib.text.concat — disambiguated by first-arg resolved_type (Collection/Unknown -> collection path). OOF-COL7 first activation. Rust parity pending P4.",
+      "owner_surface": "lang-stdlib-collection",
       "entry_digest": null
     },
     {
