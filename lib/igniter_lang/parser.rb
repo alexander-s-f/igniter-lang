@@ -947,14 +947,14 @@ module IgniterLang
     end
 
     def parse_input_decl
-      name = name_token!(%i[ident])
+      name = name_token!(%i[ident keyword])
       expect_type!(:colon)
       type_ref = parse_type_ref
       { "kind" => "input", "name" => name, "type_annotation" => type_ref }
     end
 
     def parse_output_decl
-      name = name_token!(%i[ident])
+      name = name_token!(%i[ident keyword])
       expect_type!(:colon)
       type_ref = parse_type_ref
       lifecycle = peek_kw?("lifecycle") ? (advance; parse_lifecycle) : nil
@@ -1028,7 +1028,7 @@ module IgniterLang
     end
 
     def parse_compute_decl
-      name = name_token!(%i[ident])
+      name = name_token!(%i[ident keyword])
       type_ref = nil
       if peek_type?(:colon)
         advance
@@ -1355,7 +1355,7 @@ module IgniterLang
       expect_type!(:lparen)
       params = []
       until peek_type?(:rparen) || peek_type?(:eof)
-        pname = name_token!(%i[ident])
+        pname = name_token!(%i[ident keyword])
         expect_type!(:colon)
         ptype = parse_type_ref
         params << { "name" => pname, "type_annotation" => ptype }
@@ -1385,7 +1385,7 @@ module IgniterLang
 
     def parse_let_stmt
       expect_kw!("let")
-      name = name_token!(%i[ident])
+      name = name_token!(%i[ident keyword])
       expect_type!(:assign)
       expr = parse_expr
       { "kind" => "let", "name" => name, "expr" => expr }
@@ -1778,7 +1778,7 @@ module IgniterLang
       # Check for lambda: "name ->" or "(params) ->"
       if peek_type?(:lparen) && lambda_ahead?
         parse_lambda
-      elsif peek_type?(:ident) && peek(1)&.type == :arrow
+      elsif (peek_type?(:ident) || peek_type?(:keyword)) && peek(1)&.type == :arrow
         parse_lambda
       else
         parse_expr
@@ -1813,12 +1813,12 @@ module IgniterLang
       if peek_type?(:lparen)
         advance
         until peek_type?(:rparen) || peek_type?(:eof)
-          pname = name_token!(%i[ident])
+          pname = name_token!(%i[ident keyword])
           params << pname
           advance if peek_type?(:comma)
         end
         expect_type!(:rparen)
-      elsif peek_type?(:ident)
+      elsif peek_type?(:ident) || peek_type?(:keyword)
         params << advance.value
       end
       expect_type!(:arrow)

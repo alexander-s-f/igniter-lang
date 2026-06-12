@@ -116,6 +116,8 @@ module IgniterLang
       @olap_errors = olap_declaration_errors(@olap_env)
       # LANG-TYPED-CONTRACT-REF-PROP-P3: build same-module contract registry for uses_contract resolution
       @same_module_registry = build_same_module_registry(classified_program)
+      # LAB-RUBY-CALL-CONTRACT-PARITY-P3: build call_contract dispatch registry (separate from same_module_registry)
+      @call_contract_registry = build_call_contract_registry(classified_program)
       @classified_module = classified_program.fetch("module", nil)
       # LANG-TYPED-CONTRACT-REF-PROP-P5: cross-module resolution state (per-call, not constructor)
       @cross_module_registry = cross_module_registry
@@ -289,6 +291,7 @@ module IgniterLang
       # PROP-039 gate 5: recur() context for validation
       contract_modifier = classified_contract.fetch("modifier", "pure")
       contract_name_str = classified_contract.fetch("name")
+      @current_contract_name = contract_name_str  # LAB-RUBY-CALL-CONTRACT-PARITY-P3: self-recursion guard
       recur_authorized  = %w[recursive fuel_bounded].include?(contract_modifier)
       all_decls = classified_contract.fetch("declarations")
       recur_inputs = all_decls.select { |d| d.fetch("kind","") == "input" }
@@ -558,6 +561,99 @@ module IgniterLang
           "input_names"  => inputs.map { |d| d.fetch("name") },
           "output_names" => outputs.map { |d| d.fetch("name") }
         }
+      end
+    end
+
+    # LAB-RUBY-CALL-CONTRACT-PARITY-P3: registry for call_contract dispatch.
+    # Maps contract_name → entry with modifier, input_count, single_output_type/name.
+    # Separate from @same_module_registry (which is authoritative for uses_contract).
+    def build_call_contract_registry(classified_program)
+      classified_program.fetch("contracts").each_with_object({}) do |contract, reg|
+        name    = contract.fetch("name")
+        decls   = contract.fetch("declarations")
+        inputs  = decls.select { |d| d.fetch("kind") == "input" }
+        outputs = decls.select { |d| d.fetch("kind") == "output" }
+        single_output_type = outputs.size == 1 ? outputs[0].fetch("type_annotation", nil) : nil
+        single_output_name = outputs.size == 1 ? outputs[0].fetch("name") : nil
+        reg[name] = {
+          "modifier"           => contract.fetch("modifier", "pure"),
+          "input_count"        => inputs.size,
+          "input_names"        => inputs.map { |d| d.fetch("name") },
+          "single_output_type" => single_output_type,
+          "single_output_name" => single_output_name,
+          "contract_name"      => name
+        }
+      end
+    end
+
+    # LAB-RUBY-CALL-CONTRACT-PARITY-P3: infer call_contract(...) call.
+    # Tier 1 — literal String callee: registry lookup, purity/arity/self-recursion checks, resolve output type.
+    # Tier 2 — non-literal callee: Unknown, no error (VM fail-closed from LAB-RACK-P9).
+    def infer_call_contract(expr, symbol_types, type_errors, type_warnings, node_name)
+      fn   = expr.fetch("fn")
+      args = expr.fetch("args")
+
+      if args.empty?
+        type_errors << oof("OOF-TY0",
+          "call_contract requires at least one argument (contract name as String)",
+          node_name)
+        return typed_expr("call", type_ir("Unknown"), [], "fn" => fn, "args" => [])
+      end
+
+      typed_name_arg = infer_expr(args[0], symbol_types, type_errors, type_warnings, node_name)
+      name_arg_type  = type_name(typed_name_arg.fetch("resolved_type"))
+
+      unless name_arg_type == "String" || name_arg_type == "Unknown"
+        type_errors << oof("OOF-TY0",
+          "call_contract: first argument must be String (contract name), got #{name_arg_type}",
+          node_name)
+        return typed_expr("call", type_ir("Unknown"), [], "fn" => fn, "args" => [])
+      end
+
+      first_raw = args[0]
+      if first_raw.fetch("kind", nil) == "literal" && first_raw.fetch("type_tag", nil) == "String"
+        callee_name      = first_raw.fetch("value")
+        positional_count = args.size - 1
+        entry = @call_contract_registry[callee_name]
+
+        if entry.nil?
+          type_errors << oof("OOF-TY0",
+            "call_contract: unknown callee '#{callee_name}' — not found in this module",
+            node_name)
+          return typed_expr("call", type_ir("Unknown"), [], "fn" => fn, "args" => [])
+        end
+
+        if entry["modifier"] != "pure"
+          type_errors << oof("OOF-TY0",
+            "call_contract: callee '#{callee_name}' is not pure (modifier: #{entry["modifier"]}); only pure contracts may be called via call_contract in v0",
+            node_name)
+          return typed_expr("call", type_ir("Unknown"), [], "fn" => fn, "args" => [])
+        end
+
+        if callee_name == @current_contract_name
+          type_errors << oof("OOF-TY0",
+            "call_contract: self-recursion via '#{callee_name}' is closed in v0; use recur() for recursive contracts",
+            node_name)
+          return typed_expr("call", type_ir("Unknown"), [], "fn" => fn, "args" => [])
+        end
+
+        if positional_count != entry["input_count"]
+          type_errors << oof("OOF-TY0",
+            "call_contract: callee '#{callee_name}' expects #{entry["input_count"]} input(s), got #{positional_count}",
+            node_name)
+          return typed_expr("call", type_ir("Unknown"), [], "fn" => fn, "args" => [])
+        end
+
+        # All checks pass — resolve output type.
+        # LANG-OUTPUT-TYPE-ASSIGNABILITY-P3 is implemented; structurally_assignable?
+        # covers parametric types at the output boundary so we resolve fully here.
+        out_type = entry["single_output_type"] ? type_ir(entry["single_output_type"]) : type_ir("Unknown")
+        typed_positional = args[1..].map { |a| infer_expr(a, symbol_types, type_errors, type_warnings, node_name) }
+        all_deps = typed_name_arg.fetch("deps", []) + typed_positional.flat_map { |a| a.fetch("deps", []) }
+        typed_expr("call", out_type, all_deps, "fn" => fn, "args" => [typed_name_arg] + typed_positional)
+      else
+        # Tier 2 — dynamic / variable callee: Unknown, no error.
+        typed_expr("call", type_ir("Unknown"), typed_name_arg.fetch("deps", []), "fn" => fn, "args" => [typed_name_arg])
       end
     end
 
@@ -911,6 +1007,9 @@ module IgniterLang
       when "or_else"
         # PROP-043: Option[V] unwrap with default (or_else introduced alongside Map v0)
         infer_or_else(args, symbol_types, type_errors, type_warnings, node_name)
+      when "call_contract"
+        # LAB-RUBY-CALL-CONTRACT-PARITY-P3: Tier 1 literal same-module + Tier 2 dynamic
+        infer_call_contract(expr, symbol_types, type_errors, type_warnings, node_name)
       else
         type_errors << oof("OOF-TY0", "Unknown function: #{fn}", node_name)
         typed_expr("call", type_ir("Unknown"), [], "fn" => fn, "args" => [])

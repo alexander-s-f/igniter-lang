@@ -937,12 +937,13 @@
         "operator lowering: > -> stdlib.integer.gt (typechecker.rb operator_type)",
         "LANG-STDLIB-NUMERIC-COMPARISON-P1 readiness proof 37/37 PASS",
         "LANG-STDLIB-NUMERIC-COMPARISON-P2 implementation planning closed",
-        "LANG-STDLIB-NUMERIC-COMPARISON-P3 Ruby+Rust implemented"
+        "LANG-STDLIB-NUMERIC-COMPARISON-P3 Ruby+Rust implemented",
+        "LANG-STDLIB-NUMERIC-COMPARISON-P4 Rust SIR qualification parity 44/44 PASS"
       ],
       "examples": [
         "3 > 2 -> true (lowered to stdlib.integer.gt)"
       ],
-      "compatibility_note": "Ruby TC: binary_op > lowers to call{fn:stdlib.integer.gt, resolved_type:Bool}. Rust TC: (stdlib.integer.gt, Bool) returned; SIR emitter stores raw op > not qualified fn (SIR qualification gap — deferred). OOF-TY0 for non-Integer on both sides unless Unknown permissive. Integer/Integer only.",
+      "compatibility_note": "Ruby TC: binary_op > lowers to call{fn:stdlib.integer.gt, resolved_type:Bool}. Rust TC: (stdlib.integer.gt, Bool) returned; Rust SIR emitter now emits qualified call{fn:stdlib.integer.gt, resolved_type:Bool, args:[left,right]} — SIR qualification gap closed by P4. OOF-TY0 for non-Integer on both sides unless Unknown permissive. Integer/Integer only.",
       "owner_surface": "LANG-STDLIB-NUMERIC-COMPARISON-P1",
       "entry_digest": null
     },
@@ -974,12 +975,13 @@
       "proof_lineage": [
         "LANG-STDLIB-NUMERIC-COMPARISON-P1 readiness proof — Rust TC live, Ruby gap confirmed",
         "LANG-STDLIB-NUMERIC-COMPARISON-P2 implementation planning closed",
-        "LANG-STDLIB-NUMERIC-COMPARISON-P3 Ruby TC added; dual-toolchain"
+        "LANG-STDLIB-NUMERIC-COMPARISON-P3 Ruby TC added; dual-toolchain",
+        "LANG-STDLIB-NUMERIC-COMPARISON-P4 Rust SIR qualification parity 44/44 PASS"
       ],
       "examples": [
         "1 < 3 -> true (lowered to stdlib.integer.lt)"
       ],
-      "compatibility_note": "Ruby TC: binary_op < lowers to call{fn:stdlib.integer.lt, resolved_type:Bool}. Rust TC: (stdlib.integer.lt, Bool) returned; SIR emitter stores raw op < not qualified fn (SIR qualification gap — deferred). OOF-TY0 for non-Integer on both sides unless Unknown permissive. Integer/Integer only.",
+      "compatibility_note": "Ruby TC: binary_op < lowers to call{fn:stdlib.integer.lt, resolved_type:Bool}. Rust TC: (stdlib.integer.lt, Bool) returned; Rust SIR emitter now emits qualified call{fn:stdlib.integer.lt, resolved_type:Bool, args:[left,right]} — SIR qualification gap closed by P4. OOF-TY0 for non-Integer on both sides unless Unknown permissive. Integer/Integer only.",
       "owner_surface": "LANG-STDLIB-NUMERIC-COMPARISON-P1",
       "entry_digest": null
     },
@@ -1010,12 +1012,13 @@
       "authority_surface": "none",
       "proof_lineage": [
         "LANG-STDLIB-NUMERIC-COMPARISON-P2 implementation planning closed",
-        "LANG-STDLIB-NUMERIC-COMPARISON-P3 Ruby+Rust implemented; dual-toolchain"
+        "LANG-STDLIB-NUMERIC-COMPARISON-P3 Ruby+Rust implemented; dual-toolchain",
+        "LANG-STDLIB-NUMERIC-COMPARISON-P4 Rust SIR qualification parity 44/44 PASS"
       ],
       "examples": [
         "2 <= 2 -> true (lowered to stdlib.integer.lte)"
       ],
-      "compatibility_note": "Ruby TC: binary_op <= lowers to call{fn:stdlib.integer.lte, resolved_type:Bool}. Rust TC: (stdlib.integer.lte, Bool) returned; SIR emitter stores raw op <= not qualified fn (SIR qualification gap — deferred). OOF-TY0 for non-Integer on both sides unless Unknown permissive. Integer/Integer only.",
+      "compatibility_note": "Ruby TC: binary_op <= lowers to call{fn:stdlib.integer.lte, resolved_type:Bool}. Rust TC: (stdlib.integer.lte, Bool) returned; Rust SIR emitter now emits qualified call{fn:stdlib.integer.lte, resolved_type:Bool, args:[left,right]} — SIR qualification gap closed by P4. OOF-TY0 for non-Integer on both sides unless Unknown permissive. Integer/Integer only.",
       "owner_surface": "LANG-STDLIB-NUMERIC-COMPARISON-P2",
       "entry_digest": null
     },
@@ -1046,12 +1049,13 @@
       "authority_surface": "none",
       "proof_lineage": [
         "LANG-STDLIB-NUMERIC-COMPARISON-P2 implementation planning closed",
-        "LANG-STDLIB-NUMERIC-COMPARISON-P3 Ruby+Rust implemented; dual-toolchain"
+        "LANG-STDLIB-NUMERIC-COMPARISON-P3 Ruby+Rust implemented; dual-toolchain",
+        "LANG-STDLIB-NUMERIC-COMPARISON-P4 Rust SIR qualification parity 44/44 PASS"
       ],
       "examples": [
         "3 >= 3 -> true (lowered to stdlib.integer.gte)"
       ],
-      "compatibility_note": "Ruby TC: binary_op >= lowers to call{fn:stdlib.integer.gte, resolved_type:Bool}. Rust TC: (stdlib.integer.gte, Bool) returned; SIR emitter stores raw op >= not qualified fn (SIR qualification gap — deferred). OOF-TY0 for non-Integer on both sides unless Unknown permissive. Integer/Integer only.",
+      "compatibility_note": "Ruby TC: binary_op >= lowers to call{fn:stdlib.integer.gte, resolved_type:Bool}. Rust TC: (stdlib.integer.gte, Bool) returned; Rust SIR emitter now emits qualified call{fn:stdlib.integer.gte, resolved_type:Bool, args:[left,right]} — SIR qualification gap closed by P4. OOF-TY0 for non-Integer on both sides unless Unknown permissive. Integer/Integer only.",
       "owner_surface": "LANG-STDLIB-NUMERIC-COMPARISON-P2",
       "entry_digest": null
     },
