@@ -2938,6 +2938,29 @@ module IgniterLang
         end
       end
 
+      # P3: structural field-set matching against @type_shapes when no hint was available.
+      # Finds all type shapes whose field names exactly equal the literal's field names and
+      # whose field types are compatible (Unknown literal values are permissive).
+      literal_field_names = typed_fields.keys.sort
+      candidates = @type_shapes.select do |tn, shape_fields|
+        shape_fields.keys.sort == literal_field_names &&
+          shape_fields.all? do |fname, exp_type|
+            act_type = typed_fields[fname].fetch("resolved_type")
+            type_name(act_type) == "Unknown" || structurally_assignable?(act_type, exp_type)
+          end
+      end
+
+      if candidates.length == 1
+        matched_name, = candidates.first
+        return typed_expr("record_literal", type_ir(matched_name), deps, "fields" => typed_fields)
+      elsif candidates.length > 1
+        type_errors << oof(
+          "OOF-TY0",
+          "Ambiguous record literal type: fields {#{literal_field_names.join(", ")}} match #{candidates.keys.join(", ")}",
+          node_name
+        )
+      end
+
       typed_expr("record_literal", type_ir("Unknown"), deps, "fields" => typed_fields)
     end
 
