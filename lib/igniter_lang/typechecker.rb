@@ -1039,6 +1039,9 @@ module IgniterLang
       when "char_at"
         # LANG-STDLIB-STRING-SURFACE-P3: char_at(String, Integer) -> String
         infer_char_at_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
+      when "substring"
+        # LANG-STDLIB-STRING-SUBSTRING-P2: substring(String, Integer, Integer) -> String
+        infer_substring_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
       when "range"
         # LANG-STDLIB-COLLECTION-RANGE-P2: range(start, stop) -> Collection[Integer]
         infer_range_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
@@ -2852,6 +2855,45 @@ module IgniterLang
       deps = (source_arg.fetch("deps", []) + index_arg.fetch("deps", [])).uniq
       typed_expr("call", type_ir("String"), deps,
                  "fn" => qualified, "args" => [source_arg, index_arg])
+    end
+
+    # LANG-STDLIB-STRING-SUBSTRING-P2: substring(String, Integer, Integer) -> String
+    # (source, start, length) — byte-based, 0-based, length form not stop.
+    # OOF-TY0: arity != 3 (early-return); arg1 not String/Unknown; arg2/arg3 not Integer/Unknown.
+    # String returned on ALL paths including OOF. Unknown permissive all 3 positions.
+    def infer_substring_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
+      qualified = "stdlib.string.substring"
+
+      unless args.length == 3
+        type_errors << oof("OOF-TY0",
+          "#{qualified}: expected 3 argument(s), got #{args.length}", node_name)
+        return typed_expr("call", type_ir("String"), [], "fn" => qualified, "args" => [])
+      end
+
+      source_arg  = infer_expr(args[0], symbol_types, type_errors, type_warnings, node_name)
+      source_name = type_name(source_arg.fetch("resolved_type"))
+      unless source_name == "Unknown" || source_name == "String"
+        type_errors << oof("OOF-TY0",
+          "#{qualified} arg 1: expected String, got #{source_name}", node_name)
+      end
+
+      start_arg  = infer_expr(args[1], symbol_types, type_errors, type_warnings, node_name)
+      start_name = type_name(start_arg.fetch("resolved_type"))
+      unless start_name == "Unknown" || start_name == "Integer"
+        type_errors << oof("OOF-TY0",
+          "#{qualified} arg 2: expected Integer, got #{start_name}", node_name)
+      end
+
+      length_arg  = infer_expr(args[2], symbol_types, type_errors, type_warnings, node_name)
+      length_name = type_name(length_arg.fetch("resolved_type"))
+      unless length_name == "Unknown" || length_name == "Integer"
+        type_errors << oof("OOF-TY0",
+          "#{qualified} arg 3: expected Integer, got #{length_name}", node_name)
+      end
+
+      deps = (source_arg.fetch("deps", []) + start_arg.fetch("deps", []) + length_arg.fetch("deps", [])).uniq
+      typed_expr("call", type_ir("String"), deps,
+                 "fn" => qualified, "args" => [source_arg, start_arg, length_arg])
     end
 
     # LANG-STDLIB-COLLECTION-CONCAT-PROP-P3: stdlib.collection.concat
