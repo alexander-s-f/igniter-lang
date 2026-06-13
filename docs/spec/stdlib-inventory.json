@@ -1,7 +1,7 @@
 {
   "kind": "stdlib_inventory",
   "format_version": "v0",
-  "stdlib_surface_digest": "db5b8555401d1bd40553096487d7d7545edee5614e3b6f7d95acb02a8884c1f9",
+  "stdlib_surface_digest": "160999932e9e1dde0a4aa37bdee8969cecd3969db7a11c97879f017cd776b52c",
   "note": "Normatively referenced by Ch8. Digest is computed from canonical re-serialization of entries sorted by canonical_name with entry_digest fields stripped — never from raw file bytes. P3 proof verifies determinism. P5 adds stdlib.collection.map + stdlib.collection.filter entries and updates stdlib.collection.count proof_lineage.",
   "entries": [
     {
@@ -1452,6 +1452,49 @@
       ],
       "compatibility_note": "byte-indexed, 0-based; out-of-bounds behavior unspecified v0. String returned on all TC paths including OOF error paths. Dual-toolchain (Ruby + Rust P3).",
       "owner_surface": "LANG-STDLIB-STRING-SURFACE-P1",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.string.substring",
+      "semantic_ir_name": "stdlib.string.substring",
+      "legacy_sir": null,
+      "aliases": [
+        {
+          "kind": "source_alias",
+          "name": "substring"
+        }
+      ],
+      "category": "string",
+      "lifecycle_status": "lab-implemented",
+      "semantic_stability": "proposal-only",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "partial",
+      "type_params": [],
+      "input_signature": [
+        "String",
+        "Integer",
+        "Integer"
+      ],
+      "output_signature": "String",
+      "diagnostics": [
+        "OOF-TY0"
+      ],
+      "failure_behavior": "out-of-bounds: unspecified v0; runtime behavior deferred",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "LANG-STDLIB-STRING-SUBSTRING-P1 readiness proof 49/49 PASS",
+        "LANG-STDLIB-STRING-SUBSTRING-P2 dual-toolchain implementation"
+      ],
+      "examples": [
+        "substring(\"module\", 0, 6) -> \"module\"",
+        "substring(\"module\", 2, 3) -> \"dul\""
+      ],
+      "compatibility_note": "byte-indexed, 0-based start, length in bytes; (source, start, length) not (source, start, stop); out-of-bounds unspecified v0; String returned on all TC paths including OOF.",
+      "owner_surface": "LANG-STDLIB-STRING-SUBSTRING-P1",
       "entry_digest": null
     },
     {
