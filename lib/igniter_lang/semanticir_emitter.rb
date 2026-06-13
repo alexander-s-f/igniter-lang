@@ -173,6 +173,9 @@ module IgniterLang
         "nodes" => typed_nodes(contract),
         "escape_boundaries" => typed_escape_boundaries(contract)
       }
+      # LANG-EFFECT-SURFACE-RUNTIME-BRIDGE-P3: emit effect_surface_v0_stub for IO effect contracts
+      effect_surface = io_effect_surface_stub(contract)
+      contract_ir["effect_surface"] = effect_surface if effect_surface
       # PROP-033/040: emit profile_binding and profile_authority when via_profile is present
       via_profile       = contract.fetch("via_profile", nil)
       profile_authority = contract.fetch("profile_authority", nil)
@@ -462,7 +465,9 @@ module IgniterLang
           "produces" => [capability == "bihistory_read" ? "bihistory_access_observation" : "history_access_observation"]
         }
       end
-      return boundaries unless contract.fetch("declarations").any? { |decl| decl.fetch("kind") == "stream" }
+      unless contract.fetch("declarations").any? { |decl| decl.fetch("kind") == "stream" }
+        return boundaries + io_capability_escape_boundaries(contract)
+      end
 
       boundaries + [
         {
@@ -470,7 +475,57 @@ module IgniterLang
           "required_caps" => ["stream_input"],
           "produces" => ["stream_window_observation"]
         }
-      ]
+      ] + io_capability_escape_boundaries(contract)
+    end
+
+    def io_effect_surface_stub(contract)
+      modifier = contract.fetch("modifier", "pure")
+      return nil unless %w[effect privileged irreversible].include?(modifier)
+
+      decls     = contract.fetch("declarations", [])
+      cap_decls = decls.select { |d| d.fetch("kind") == "capability" }
+      return nil if cap_decls.empty?
+
+      eff_decls = decls.select { |d| d.fetch("kind") == "effect_binding" }
+      bindings  = cap_decls.map do |cap|
+        cap_name = cap.fetch("name")
+        eff      = eff_decls.find { |e| e.fetch("deps", []).include?(cap_name) }
+        {
+          "capability_name" => cap_name,
+          "capability_type" => cap.fetch("type", {}).fetch("name", "IO.Capability"),
+          "effect_name"     => eff&.fetch("name")
+        }
+      end
+
+      {
+        "kind"                 => "effect_surface_v0_stub",
+        "capability_bindings"  => bindings,
+        "affects_scope"        => "external",
+        "affects_target"       => "IO.Capability",
+        "authority_ref"        => nil,
+        "idempotency_mode"     => "none",
+        "idempotency_key_expr" => nil,
+        "receipt_type"         => nil,
+        "failure_type"         => nil
+      }
+    end
+
+    def io_capability_escape_boundaries(contract)
+      decls     = contract.fetch("declarations", [])
+      cap_decls = decls.select { |d| d.fetch("kind") == "capability" }
+      eff_decls = decls.select { |d| d.fetch("kind") == "effect_binding" }
+
+      cap_decls.map do |cap|
+        cap_name = cap.fetch("name")
+        eff      = eff_decls.find { |e| e.fetch("deps", []).include?(cap_name) }
+        {
+          "kind"            => "io_capability",
+          "name"            => eff&.fetch("name") || cap_name,
+          "required_caps"   => ["IO.Capability"],
+          "capability_name" => cap_name,
+          "capability_type" => cap.fetch("type", {}).fetch("name", "IO.Capability")
+        }
+      end
     end
 
     def temporal_input_node(decl)
