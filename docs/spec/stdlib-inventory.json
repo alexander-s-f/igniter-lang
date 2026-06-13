@@ -1,7 +1,7 @@
 {
   "kind": "stdlib_inventory",
   "format_version": "v0",
-  "stdlib_surface_digest": "cfe520dc02138b5cd0cb2d7e78096c2e908187efed5da6e5be773543b803a3f2",
+  "stdlib_surface_digest": "db5b8555401d1bd40553096487d7d7545edee5614e3b6f7d95acb02a8884c1f9",
   "note": "Normatively referenced by Ch8. Digest is computed from canonical re-serialization of entries sorted by canonical_name with entry_digest fields stripped — never from raw file bytes. P3 proof verifies determinism. P5 adds stdlib.collection.map + stdlib.collection.filter entries and updates stdlib.collection.count proof_lineage.",
   "entries": [
     {
@@ -1467,7 +1467,7 @@
       "category": "collection",
       "lifecycle_status": "lab-implemented",
       "semantic_stability": "experiment-pass",
-      "lowering_status": "ruby-only",
+      "lowering_status": "dual-toolchain",
       "compatibility_status": "pre-v1-none",
       "fragment_class": "core",
       "purity": "pure",
@@ -1486,7 +1486,8 @@
       "authority_surface": "none",
       "proof_lineage": [
         "LANG-STDLIB-COLLECTION-RANGE-P1 proposal + readiness proof 42/42 PASS",
-        "LANG-STDLIB-COLLECTION-RANGE-P2 Ruby TC implemented"
+        "LANG-STDLIB-COLLECTION-RANGE-P2 Ruby TC implemented",
+        "LANG-STDLIB-COLLECTION-RANGE-P3 Rust TC parity + SIR qualification 50/50 PASS"
       ],
       "examples": [
         "range(0, 5) -> [0, 1, 2, 3, 4]",

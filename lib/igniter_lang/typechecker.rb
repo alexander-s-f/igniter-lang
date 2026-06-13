@@ -2877,8 +2877,19 @@ module IgniterLang
       first_arg       = infer_expr(args[0], symbol_types, type_errors, type_warnings, node_name)
       first_type_name = type_name(first_arg.fetch("resolved_type"))
 
-      # Text/String/other concrete → delegate to stdlib.text.concat
+      # Text/String/other concrete → delegate to stdlib.text.concat.
+      # LANG-STRING-TEXT-ALIAS-P2: when both args are String, route to stdlib.string.concat → String.
+      # String literals and String-typed refs both have type_name "String".
       unless first_type_name == "Collection" || first_type_name == "Unknown"
+        if first_type_name == "String" && args.length == 2
+          second_arg       = infer_expr(args[1], symbol_types, type_errors, type_warnings, node_name)
+          second_type_name = type_name(second_arg.fetch("resolved_type"))
+          if second_type_name == "String"
+            deps = (first_arg.fetch("deps", []) + second_arg.fetch("deps", [])).uniq
+            return typed_expr("call", type_ir("String"), deps,
+                              "fn" => "stdlib.string.concat", "args" => [first_arg, second_arg])
+          end
+        end
         return infer_text_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
       end
 
