@@ -408,8 +408,26 @@ module IgniterLang
         when "compute"
           typed_expr = infer_expr(decl.fetch("expr"), symbol_types, type_errors, type_warnings, decl.fetch("name"))
           validate_declared_olap_type(decl, typed_expr, type_errors)
-          symbol_types[decl.fetch("name")] = typed_expr.fetch("resolved_type")
-          typed_decls << typed_decl(decl, typed_expr.fetch("resolved_type"), typed_expr, typed_expr.fetch("deps"))
+
+          inferred_type = typed_expr.fetch("resolved_type")
+          bind_type = if decl["type_annotation"]
+            expected_type = type_ir(decl["type_annotation"])
+            if unknown_or_unknown_bearing?(inferred_type)
+              expected_type
+            elsif structurally_assignable?(inferred_type, expected_type)
+              inferred_type
+            else
+              type_errors << oof("OOF-TY0",
+                "Binding type mismatch: declared #{type_display(expected_type)}, got #{type_display(inferred_type)}",
+                decl.fetch("name"))
+              expected_type
+            end
+          else
+            inferred_type
+          end
+
+          symbol_types[decl.fetch("name")] = bind_type
+          typed_decls << typed_decl(decl, bind_type, typed_expr, typed_expr.fetch("deps"))
         when "output"
           expected = type_ir(decl.fetch("type_annotation"))
           actual = symbol_types.fetch(decl.fetch("name"), type_ir("Unknown"))
@@ -1488,6 +1506,11 @@ module IgniterLang
 
     def unknown?(*types)
       types.any? { |type| type_name(type) == "Unknown" }
+    end
+
+    def unknown_or_unknown_bearing?(t)
+      return true if type_name(t) == "Unknown"
+      t.fetch("params", []).any? { |p| unknown_or_unknown_bearing?(p) }
     end
 
     def type_mismatch(expected, actual, node)
