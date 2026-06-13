@@ -1036,6 +1036,12 @@ module IgniterLang
       when "is_empty", "non_empty"
         # LANG-STDLIB-IS-EMPTY-PROP-P3: stdlib.collection.is_empty + stdlib.collection.non_empty
         infer_is_empty_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
+      when "char_at"
+        # LANG-STDLIB-STRING-SURFACE-P3: char_at(String, Integer) -> String
+        infer_char_at_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
+      when "range"
+        # LANG-STDLIB-COLLECTION-RANGE-P2: range(start, stop) -> Collection[Integer]
+        infer_range_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
       when "or_else"
         # PROP-043: Option[V] unwrap with default (or_else introduced alongside Map v0)
         infer_or_else(args, symbol_types, type_errors, type_warnings, node_name)
@@ -1539,6 +1545,19 @@ module IgniterLang
       expected_params = expected.fetch("params", [])
       return false if actual_params.length != expected_params.length
       actual_params.zip(expected_params).all? { |a, e| structurally_assignable?(a, e) }
+    end
+
+    # True when `actual` is a parameterised Collection whose params are all Unknown —
+    # the "empty array literal" shape — and `expected` is a Collection of the same arity.
+    # Used only inside record literal structural candidate matching so that [] is accepted
+    # as a field-local wildcard. The output boundary continues to use the strict
+    # structurally_assignable? policy and is unaffected by this helper.
+    def empty_collection_assignable?(actual, expected)
+      return false unless type_name(actual) == "Collection" && type_name(expected) == "Collection"
+      ap = actual.fetch("params",   [])
+      ep = expected.fetch("params", [])
+      return false unless ap.length == ep.length && !ap.empty?
+      ap.all? { |p| type_name(p) == "Unknown" }
     end
 
     def structural_mismatch(expected, actual, node)
@@ -2781,6 +2800,60 @@ module IgniterLang
                  "fn" => qualified, "args" => [collection_typed])
     end
 
+    # LANG-STDLIB-COLLECTION-RANGE-P2: stdlib.collection.range
+    # range(start: Integer, stop: Integer) -> Collection[Integer]
+    # Generates the exclusive interval [start, stop). Total: range(a, a) = []; range(b, a) where b>a = [].
+    # OOF-COL1: arity != 2 (only diagnostic in v0 — arg types Unknown-permissive, not validated).
+    def infer_range_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
+      qualified   = "stdlib.collection.range"
+      result_type = collection_type_ir_from(type_ir("Integer"))
+
+      # ── OOF-COL1: arity must be exactly 2 ───────────────────────────────────
+      unless args.length == 2
+        type_errors << oof("OOF-COL1",
+          "#{qualified}: expected 2 arguments (start, stop), got #{args.length}", node_name)
+        return typed_expr("call", result_type, [], "fn" => qualified, "args" => [])
+      end
+
+      # ── Infer both args — Unknown-permissive (no type validation in v0) ──────
+      start_typed = infer_expr(args[0], symbol_types, type_errors, type_warnings, node_name)
+      stop_typed  = infer_expr(args[1], symbol_types, type_errors, type_warnings, node_name)
+      deps        = (start_typed.fetch("deps", []) + stop_typed.fetch("deps", [])).uniq
+
+      typed_expr("call", result_type, deps, "fn" => qualified, "args" => [start_typed, stop_typed])
+    end
+
+    def infer_char_at_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
+      qualified = "stdlib.string.char_at"
+
+      # OOF-TY0: arity must be exactly 2
+      unless args.length == 2
+        type_errors << oof("OOF-TY0",
+          "#{qualified}: expected 2 argument(s), got #{args.length}", node_name)
+        return typed_expr("call", type_ir("String"), [], "fn" => qualified, "args" => [])
+      end
+
+      # Infer and validate first arg — must be String or Unknown
+      source_arg  = infer_expr(args[0], symbol_types, type_errors, type_warnings, node_name)
+      source_name = type_name(source_arg.fetch("resolved_type"))
+      unless source_name == "Unknown" || source_name == "String"
+        type_errors << oof("OOF-TY0",
+          "#{qualified} arg 1: expected String, got #{source_name}", node_name)
+      end
+
+      # Infer and validate second arg — must be Integer or Unknown
+      index_arg  = infer_expr(args[1], symbol_types, type_errors, type_warnings, node_name)
+      index_name = type_name(index_arg.fetch("resolved_type"))
+      unless index_name == "Unknown" || index_name == "Integer"
+        type_errors << oof("OOF-TY0",
+          "#{qualified} arg 2: expected Integer, got #{index_name}", node_name)
+      end
+
+      deps = (source_arg.fetch("deps", []) + index_arg.fetch("deps", [])).uniq
+      typed_expr("call", type_ir("String"), deps,
+                 "fn" => qualified, "args" => [source_arg, index_arg])
+    end
+
     # LANG-STDLIB-COLLECTION-CONCAT-PROP-P3: stdlib.collection.concat
     # concat(Collection[T], Collection[T]) → Collection[T]
     # Source alias `concat` is shared with stdlib.text.concat — disambiguated here by first-arg type.
@@ -2946,7 +3019,9 @@ module IgniterLang
         shape_fields.keys.sort == literal_field_names &&
           shape_fields.all? do |fname, exp_type|
             act_type = typed_fields[fname].fetch("resolved_type")
-            type_name(act_type) == "Unknown" || structurally_assignable?(act_type, exp_type)
+            type_name(act_type) == "Unknown" ||
+              structurally_assignable?(act_type, exp_type) ||
+              empty_collection_assignable?(act_type, exp_type)
           end
       end
 

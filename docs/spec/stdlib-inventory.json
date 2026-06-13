@@ -1,7 +1,7 @@
 {
   "kind": "stdlib_inventory",
   "format_version": "v0",
-  "stdlib_surface_digest": "0bece8e2ac0b396b5de4788e652efd4f4b16176b6dd69d758dd24de22a0ec9e5",
+  "stdlib_surface_digest": "cfe520dc02138b5cd0cb2d7e78096c2e908187efed5da6e5be773543b803a3f2",
   "note": "Normatively referenced by Ch8. Digest is computed from canonical re-serialization of entries sorted by canonical_name with entry_digest fields stripped — never from raw file bytes. P3 proof verifies determinism. P5 adds stdlib.collection.map + stdlib.collection.filter entries and updates stdlib.collection.count proof_lineage.",
   "entries": [
     {
@@ -1409,6 +1409,92 @@
       ],
       "compatibility_note": "Unary integer negation: Integer -> Integer. SIR fn = stdlib.integer.neg. OOF-TY0 for non-Integer operand; Integer returned on all paths. Unknown permissive. No Decimal/Float negation. Dual-toolchain (Ruby P3 + Rust P4).",
       "owner_surface": "LANG-UNARY-OPERATORS-P1",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.string.char_at",
+      "semantic_ir_name": "stdlib.string.char_at",
+      "legacy_sir": null,
+      "aliases": [
+        {
+          "kind": "source_alias",
+          "name": "char_at"
+        }
+      ],
+      "category": "string",
+      "lifecycle_status": "lab-implemented",
+      "semantic_stability": "proposal-only",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "partial",
+      "type_params": [],
+      "input_signature": [
+        "String",
+        "Integer"
+      ],
+      "output_signature": "String",
+      "diagnostics": [
+        "OOF-TY0"
+      ],
+      "failure_behavior": "out-of-bounds: unspecified v0; runtime behavior deferred",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "LANG-STDLIB-STRING-SURFACE-P1 readiness proof 55/55 PASS",
+        "LANG-STDLIB-STRING-SURFACE-P2 implementation planning closed",
+        "LANG-STDLIB-STRING-SURFACE-P3 dual-toolchain implementation"
+      ],
+      "examples": [
+        "char_at(\"module\", 0) -> \"m\"",
+        "char_at(\"module\", 1) -> \"o\""
+      ],
+      "compatibility_note": "byte-indexed, 0-based; out-of-bounds behavior unspecified v0. String returned on all TC paths including OOF error paths. Dual-toolchain (Ruby + Rust P3).",
+      "owner_surface": "LANG-STDLIB-STRING-SURFACE-P1",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.collection.range",
+      "semantic_ir_name": "stdlib.collection.range",
+      "legacy_sir": null,
+      "aliases": [
+        {
+          "kind": "source_alias",
+          "name": "range"
+        }
+      ],
+      "category": "collection",
+      "lifecycle_status": "lab-implemented",
+      "semantic_stability": "experiment-pass",
+      "lowering_status": "ruby-only",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "total",
+      "type_params": [],
+      "input_signature": [
+        "Integer",
+        "Integer"
+      ],
+      "output_signature": "Collection[Integer]",
+      "diagnostics": [
+        "OOF-COL1"
+      ],
+      "failure_behavior": "none",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "LANG-STDLIB-COLLECTION-RANGE-P1 proposal + readiness proof 42/42 PASS",
+        "LANG-STDLIB-COLLECTION-RANGE-P2 Ruby TC implemented"
+      ],
+      "examples": [
+        "range(0, 5) -> [0, 1, 2, 3, 4]",
+        "range(3, 6) -> [3, 4, 5]",
+        "range(5, 5) -> []"
+      ],
+      "compatibility_note": "Generator: exclusive [start, stop) interval as Collection[Integer]. Total: range(a, a) and range(b, a where b>a) both return empty collection. OOF-COL1 on arity != 2; arg types Unknown-permissive in v0 (no OOF-COL2 — arg must be Integer not Collection). Ruby-only in P2; Rust parity in P3.",
+      "owner_surface": "LANG-STDLIB-COLLECTION-RANGE-P1",
       "entry_digest": null
     }
   ]
