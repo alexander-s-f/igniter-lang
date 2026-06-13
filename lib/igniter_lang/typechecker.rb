@@ -406,7 +406,21 @@ module IgniterLang
           check_invariant(decl, symbol_types, type_errors, invariant_effects)
           typed_decls << typed_decl_invariant(decl, symbol_types)
         when "compute"
-          typed_expr = infer_expr(decl.fetch("expr"), symbol_types, type_errors, type_warnings, decl.fetch("name"))
+          name = decl.fetch("name")
+          temp_hint_installed = false
+          if decl["type_annotation"] && decl.fetch("expr", {}).fetch("kind", nil) == "record_literal"
+            declared_type = type_ir(decl["type_annotation"])
+            tn = type_name(declared_type)
+            if @type_shapes.key?(tn) && !@output_type_hints.key?(name)
+              @output_type_hints[name] = declared_type
+              temp_hint_installed = true
+            end
+          end
+          begin
+            typed_expr = infer_expr(decl.fetch("expr"), symbol_types, type_errors, type_warnings, name)
+          ensure
+            @output_type_hints.delete(name) if temp_hint_installed
+          end
           validate_declared_olap_type(decl, typed_expr, type_errors)
 
           inferred_type = typed_expr.fetch("resolved_type")
