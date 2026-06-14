@@ -83,6 +83,12 @@ TOTAL: 83/83 PASS
 The runner builds the Rust compiler with `cargo build --release` and also runs
 the P3 runner.
 
+P2 fixed-state proof was also refreshed after P4 and remains green:
+
+```text
+Result: 64/64 PASS
+```
+
 ## P3 Note Resolved
 
 P3 recorded that Rust emitter source already contained the structured fold helper
