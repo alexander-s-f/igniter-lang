@@ -1569,6 +1569,10 @@ module IgniterLang
           node)
     end
 
+    def record_literal_field_node_name(node_name, field_name)
+      node_name ? "#{node_name}.#{field_name}" : field_name.to_s
+    end
+
     def oof(rule, message, node_name)
       { "rule" => rule, "message" => message, "node" => node_name, "line" => nil }
     end
@@ -3022,15 +3026,43 @@ module IgniterLang
     # Falls back to Unknown if no hint or on field mismatch.
     def infer_record_literal(expr, symbol_types, type_errors, type_warnings, node_name)
       fields = expr.fetch("fields", {})
-      typed_fields = fields.transform_values do |val_expr|
-        infer_expr(val_expr, symbol_types, type_errors, type_warnings, node_name)
+      hint_type = @output_type_hints&.fetch(node_name, nil)
+      expected_fields_for_hint =
+        if hint_type && type_name(hint_type) != "Unknown"
+          @type_shapes.fetch(type_name(hint_type), {})
+        else
+          {}
+        end
+
+      typed_fields = fields.each_with_object({}) do |(fname, val_expr), acc|
+        field_node_name = record_literal_field_node_name(node_name, fname)
+        expected_field_type = expected_fields_for_hint[fname]
+
+        if val_expr.is_a?(Hash) &&
+           val_expr.fetch("kind", nil) == "record_literal" &&
+           expected_field_type &&
+           @type_shapes.key?(type_name(expected_field_type))
+          had_previous_hint = @output_type_hints.key?(field_node_name)
+          previous_hint = @output_type_hints[field_node_name]
+          @output_type_hints[field_node_name] = expected_field_type
+          begin
+            acc[fname] = infer_expr(val_expr, symbol_types, type_errors, type_warnings, field_node_name)
+          ensure
+            if had_previous_hint
+              @output_type_hints[field_node_name] = previous_hint
+            else
+              @output_type_hints.delete(field_node_name)
+            end
+          end
+        else
+          acc[fname] = infer_expr(val_expr, symbol_types, type_errors, type_warnings, field_node_name)
+        end
       end
       deps = typed_fields.values.flat_map { |tf| tf.fetch("deps", []) }.uniq
 
-      hint_type = @output_type_hints&.fetch(node_name, nil)
       if hint_type && type_name(hint_type) != "Unknown"
         type_name_str   = type_name(hint_type)
-        expected_fields = @type_shapes.fetch(type_name_str, {})
+        expected_fields = expected_fields_for_hint
         field_errors    = []
 
         expected_fields.each do |fname, expected_type|
