@@ -1,7 +1,7 @@
 {
   "kind": "stdlib_inventory",
   "format_version": "v0",
-  "stdlib_surface_digest": "160999932e9e1dde0a4aa37bdee8969cecd3969db7a11c97879f017cd776b52c",
+  "stdlib_surface_digest": "dee6b9c11be05cd727b1ac678102d7d63cc42ec175762c307c819fc7bc4ca4a6",
   "note": "Normatively referenced by Ch8. Digest is computed from canonical re-serialization of entries sorted by canonical_name with entry_digest fields stripped — never from raw file bytes. P3 proof verifies determinism. P5 adds stdlib.collection.map + stdlib.collection.filter entries and updates stdlib.collection.count proof_lineage.",
   "entries": [
     {
@@ -826,6 +826,92 @@
       ],
       "compatibility_note": "Regular-call count(items) dispatch active in Ruby (P3) and Rust (P4). T3 decreases-count path goes through NUMERIC_MEASURE_BUILTINS/handle_t3_variant — independent from HOF dispatch. Semantic_stability experiment-pass pending collection governance.",
       "owner_surface": "PROP-042 §T3",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.collection.first",
+      "semantic_ir_name": "stdlib.collection.first",
+      "legacy_sir": null,
+      "aliases": [
+        {
+          "kind": "source_alias",
+          "name": "first"
+        }
+      ],
+      "category": "collection",
+      "lifecycle_status": "lab-implemented",
+      "semantic_stability": "experiment-pass",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "total",
+      "type_params": [
+        "T"
+      ],
+      "input_signature": [
+        "Collection[T]"
+      ],
+      "output_signature": "Option[T]",
+      "diagnostics": [],
+      "failure_behavior": "none; empty collection returns None at runtime",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "Ch8 §8.2 collection operations",
+        "LANG-STDLIB-COLLECTION-FIRST-LAST-OPTION-P1 readiness proof 54/54 PASS",
+        "LANG-STDLIB-COLLECTION-FIRST-LAST-P2 Ruby parity proof",
+        "Rust TC stdlib.collection.first existing behavior"
+      ],
+      "examples": [
+        "first([1, 2, 3]) -> Some(1)",
+        "first([]) -> None"
+      ],
+      "compatibility_note": "Ruby P2 mirrors current Rust TC behavior: first(Collection[T]) returns Option[T]; malformed, missing, or non-inferable first argument falls back to Option[Unknown] without adding OOF-COL diagnostics. Source match on Option remains deferred; callers can read ergonomically only through dual-clean or_else until LANG-SUMTYPE-CONSTRUCT-MATCH-P3+.",
+      "owner_surface": "LANG-STDLIB-COLLECTION-FIRST-LAST-P2",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.collection.last",
+      "semantic_ir_name": "stdlib.collection.last",
+      "legacy_sir": null,
+      "aliases": [
+        {
+          "kind": "source_alias",
+          "name": "last"
+        }
+      ],
+      "category": "collection",
+      "lifecycle_status": "lab-implemented",
+      "semantic_stability": "experiment-pass",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "total",
+      "type_params": [
+        "T"
+      ],
+      "input_signature": [
+        "Collection[T]"
+      ],
+      "output_signature": "Option[T]",
+      "diagnostics": [],
+      "failure_behavior": "none; empty collection returns None at runtime",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "Ch8 §8.2 collection operations",
+        "LANG-STDLIB-COLLECTION-FIRST-LAST-OPTION-P1 readiness proof 54/54 PASS",
+        "LANG-STDLIB-COLLECTION-FIRST-LAST-P2 Ruby parity proof",
+        "Rust TC stdlib.collection.last existing behavior"
+      ],
+      "examples": [
+        "last([1, 2, 3]) -> Some(3)",
+        "last([]) -> None"
+      ],
+      "compatibility_note": "Ruby P2 mirrors current Rust TC behavior: last(Collection[T]) returns Option[T]; malformed, missing, or non-inferable first argument falls back to Option[Unknown] without adding OOF-COL diagnostics. Source match on Option remains deferred; callers can read ergonomically only through dual-clean or_else until LANG-SUMTYPE-CONSTRUCT-MATCH-P3+.",
+      "owner_surface": "LANG-STDLIB-COLLECTION-FIRST-LAST-P2",
       "entry_digest": null
     },
     {

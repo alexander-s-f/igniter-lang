@@ -94,6 +94,14 @@ module IgniterLang
       "count"  => { qualified_name: "stdlib.collection.count",  arity: 1, has_lambda: false },
     }.freeze
 
+    # LANG-STDLIB-COLLECTION-FIRST-LAST-P2: source aliases for Rust-parity
+    # collection edge readers. These intentionally do not share HOF diagnostics:
+    # Rust currently returns Option[Unknown] on malformed/non-inferable inputs.
+    COLLECTION_FIRST_LAST_FNS = {
+      "first" => { qualified_name: "stdlib.collection.first" },
+      "last"  => { qualified_name: "stdlib.collection.last"  },
+    }.freeze
+
     # PROP-042 T3: Matches "fn_name(arg_name)" — the T3 function-call decreases form.
     # Produced by parser.rb parse_decreases_decl when lparen follows the first identifier.
     T3_CALL_FORM_RE = /\A(\w+)\((\w+)\)\z/
@@ -1024,6 +1032,9 @@ module IgniterLang
       when *COLLECTION_HOF_FNS.keys
         # LANG-STDLIB-COLLECTION-MAP-FILTER-PROP-P1: Collection HOF — map/filter/count
         infer_collection_hof_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
+      when *COLLECTION_FIRST_LAST_FNS.keys
+        # LANG-STDLIB-COLLECTION-FIRST-LAST-P2: first/last -> Option[T], Rust-parity fallback Option[Unknown].
+        infer_collection_first_last_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
       when "sum"
         # LANG-STDLIB-SUM-PROP-P3: stdlib.collection.sum two-arg field-projection form
         infer_sum_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
@@ -2572,6 +2583,24 @@ module IgniterLang
 
       typed_expr("call", output_type, all_deps,
                  "fn" => qualified, "args" => [collection_arg])
+    end
+
+    # LANG-STDLIB-COLLECTION-FIRST-LAST-P2: first(Collection[T]) / last(Collection[T]) -> Option[T].
+    # Mirrors the current Rust TC behavior: no new arity/non-Collection diagnostics
+    # here; malformed or non-inferable input falls back to Option[Unknown].
+    def infer_collection_first_last_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
+      qualified = COLLECTION_FIRST_LAST_FNS.fetch(fn).fetch(:qualified_name)
+      typed_args = args.map { |arg| infer_expr(arg, symbol_types, type_errors, type_warnings, node_name) }
+      deps = typed_args.flat_map { |arg| arg.fetch("deps", []) }.uniq
+
+      inner_type = type_ir("Unknown")
+      if typed_args.any?
+        extracted = element_type_from_collection(typed_args[0].fetch("resolved_type"))
+        inner_type = extracted if extracted.is_a?(Hash) && !extracted.empty?
+      end
+
+      typed_expr("call", option_type_ir(inner_type), deps,
+                 "fn" => qualified, "args" => typed_args)
     end
 
     # LANG-STDLIB-SUM-PROP-P3: stdlib.collection.sum two-arg field-projection form.
