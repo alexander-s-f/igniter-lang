@@ -170,7 +170,8 @@ module IgniterLang
       attach_source_units!(compilation, source_units)
       report = CompilationReport.enrich(
         report: compilation.fetch("compilation_report"),
-        parsed: parsed
+        parsed: parsed,
+        typed: typed
       )
       semantic_ir = compilation.fetch("semantic_ir")
       report_for_assembly = report

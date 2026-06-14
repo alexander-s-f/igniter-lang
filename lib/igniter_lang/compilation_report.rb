@@ -54,14 +54,17 @@ module IgniterLang
       }
     end
 
-    def enrich(report:, parsed:)
+    def enrich(report:, parsed:, typed: nil)
       contract_name = parsed.fetch("contracts", []).fetch(0, {}).fetch("name", nil)
+      diagnostic_contracts = diagnostic_contracts_for(report.fetch("diagnostics", []), typed)
       report.merge(
-        "diagnostics" => Diagnostics.enrich(
-          report.fetch("diagnostics", []),
-          category: diagnostic_category_for(report),
-          contract: contract_name
-        )
+        "diagnostics" => report.fetch("diagnostics", []).each_with_index.map do |entry, index|
+          Diagnostics.enrich(
+            [entry],
+            category: diagnostic_category_for(report),
+            contract: diagnostic_contracts.fetch(index, nil) || contract_name
+          ).first
+        end
       )
     end
 
@@ -79,6 +82,33 @@ module IgniterLang
       return "emitter_error" if stages.fetch("emit", nil) == "error"
 
       "classifier_oof"
+    end
+
+    def diagnostic_contracts_for(diagnostics, typed)
+      return [] unless typed.is_a?(Hash)
+
+      queues = Hash.new { |hash, key| hash[key] = [] }
+      typed.fetch("contracts", []).each do |contract|
+        contract_name = contract.fetch("name", nil)
+        contract.fetch("type_errors", []).each do |entry|
+          queues[diagnostic_key(entry)] << contract_name
+        end
+      end
+
+      diagnostics.map do |entry|
+        queue = queues[diagnostic_key(entry)]
+        queue.empty? ? nil : queue.shift
+      end
+    end
+
+    def diagnostic_key(entry)
+      normalized = Diagnostics.stringify_keys(entry)
+      [
+        normalized.fetch("rule", nil),
+        normalized.fetch("message", nil),
+        normalized.fetch("node", nil),
+        normalized.fetch("line", nil)
+      ]
     end
 
     def internal_error_diagnostics(rule, error)
