@@ -2724,7 +2724,13 @@ module IgniterLang
       end
 
       all_deps = (collection_typed.fetch("deps", []) + seed_typed.fetch("deps", []) + body_typed.fetch("deps", [])).uniq
-      typed_expr("call", acc_type, all_deps, "fn" => qualified, "args" => [collection_typed, seed_typed])
+      lambda_typed = {
+        "kind" => "lambda",
+        "params" => lambda_params,
+        "body" => body_typed,
+        "resolved_type" => acc_type
+      }
+      typed_expr("call", acc_type, all_deps, "fn" => qualified, "args" => [collection_typed, seed_typed, lambda_typed])
     end
 
     # LANG-STDLIB-COLLECTION-APPEND-PROP-P3: stdlib.collection.append

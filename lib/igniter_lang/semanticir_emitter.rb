@@ -356,18 +356,54 @@ module IgniterLang
             "args"        => (expr.fetch("args", []) || []).map { |a| semantic_expr(a) },
             "return_type" => (expr.fetch("resolved_type", {}) || {}).fetch("name", "Unknown")
           }
+        elsif fold_call_expr?(expr)
+          fold_aggregate_node(expr) || semantic_generic_expr(expr)
         else
-          expr.each_with_object({}) do |(key, value), result|
-            next if key == "deps"
-
-            result[key] = semantic_expr(value)
-          end
+          semantic_generic_expr(expr)
         end
       when Array
         expr.map { |item| semantic_expr(item) }
       else
         expr
       end
+    end
+
+    def semantic_generic_expr(expr)
+      expr.each_with_object({}) do |(key, value), result|
+        next if key == "deps"
+
+        result[key] = semantic_expr(value)
+      end
+    end
+
+    def fold_call_expr?(expr)
+      expr.fetch("kind", nil) == "call" &&
+        ["fold", "stdlib.collection.fold"].include?(expr.fetch("fn", nil))
+    end
+
+    def fold_aggregate_node(expr)
+      args = expr.fetch("args", [])
+      return nil unless args.length >= 3
+
+      lambda_expr = args[2]
+      return nil unless lambda_expr.is_a?(Hash)
+
+      {
+        "kind" => "map_reduce_aggregate",
+        "source" => semantic_expr(args[0]),
+        "pipeline" => [fold_node(args[1], lambda_expr)]
+      }
+    end
+
+    def fold_node(init_expr, lambda_expr)
+      params = lambda_expr.fetch("params", [])
+      {
+        "kind" => "fold",
+        "param_acc" => params.fetch(0, "acc"),
+        "param_val" => params.fetch(1, "x"),
+        "init" => semantic_expr(init_expr),
+        "body" => semantic_expr(lambda_expr.fetch("body", nil))
+      }
     end
 
     # Lower a TypeChecker if_expr (cond/then/else with branch wrappers) to the
