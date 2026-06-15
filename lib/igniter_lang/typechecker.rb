@@ -102,6 +102,28 @@ module IgniterLang
       "last"  => { qualified_name: "stdlib.collection.last"  },
     }.freeze
 
+    # LANG-SUMTYPE-CONSTRUCT-MATCH-P3: sealed built-in sumtypes.
+    # Registry shape mirrors the 3-level user variant_shapes (variant→arm→field→type)
+    # but is held SEPARATELY from @variant_shapes so it is NOT emitted into the
+    # SemanticIR `variant_env` (which must stay user-variant-only for byte-parity).
+    # Field types are Unknown placeholders: the concrete payload type for a match
+    # binding is substituted from the subject's params at match time
+    # (sealed_arm_field_types); constructors set the concrete resolved_type directly.
+    # Payload labels are locked to `value` / `error` (P2 closure).
+    SEALED_VARIANT_SHAPES = {
+      "Option" => {
+        "Some" => { "value" => { "name" => "Unknown", "params" => [] } },
+        "None" => {},
+      },
+      "Result" => {
+        "Ok"  => { "value" => { "name" => "Unknown", "params" => [] } },
+        "Err" => { "error" => { "name" => "Unknown", "params" => [] } },
+      },
+    }.freeze
+
+    # Source aliases admitted as sealed constructors (function-form only, P3 v0).
+    SEALED_CONSTRUCTORS = %w[some none ok err].freeze
+
     # PROP-042 T3: Matches "fn_name(arg_name)" — the T3 function-call decreases form.
     # Produced by parser.rb parse_decreases_decl when lparen follows the first identifier.
     T3_CALL_FORM_RE = /\A(\w+)\((\w+)\)\z/
@@ -244,7 +266,31 @@ module IgniterLang
     end
 
     def variant_type?(name)
-      @variant_shapes.key?(name)
+      @variant_shapes.key?(name) || sealed_builtin?(name)
+    end
+
+    # LANG-SUMTYPE-CONSTRUCT-MATCH-P3: admission for sealed built-in sumtypes.
+    # Registration in SEALED_VARIANT_SHAPES IS the OOF-KIND4 relax: only Option /
+    # Result are admitted to the variant match path; arbitrary named types remain
+    # rejected. User variants take precedence (a user `variant Option {…}` would
+    # shadow the built-in via @variant_shapes).
+    def sealed_builtin?(name)
+      !@variant_shapes.key?(name) && SEALED_VARIANT_SHAPES.key?(name)
+    end
+
+    # Concrete payload types for a sealed match arm, substituted from the subject's
+    # type params: Option[P0] → Some{value:P0}; Result[P0,P1] → Ok{value:P0},
+    # Err{error:P1}. Missing params degrade to Unknown.
+    def sealed_arm_field_types(subject_type_ir, arm_name)
+      params = subject_type_ir.fetch("params", [])
+      p0 = params.fetch(0, type_ir("Unknown"))
+      p1 = params.fetch(1, type_ir("Unknown"))
+      case [type_name(subject_type_ir), arm_name]
+      when %w[Option Some] then { "value" => p0 }
+      when %w[Result Ok]   then { "value" => p0 }
+      when %w[Result Err]  then { "error" => p1 }
+      else {}
+      end
     end
 
     def validate_entrypoint(classified_program)
@@ -279,7 +325,8 @@ module IgniterLang
     end
 
     def variant_arms(name)
-      @variant_shapes.fetch(name, {})
+      return @variant_shapes[name] if @variant_shapes.key?(name)
+      SEALED_VARIANT_SHAPES.fetch(name, {})
     end
 
     def find_variant_for_arm(arm_name)
@@ -338,6 +385,21 @@ module IgniterLang
         next unless ann
         tn = ann.is_a?(Hash) ? ann.fetch("name", nil) : ann.to_s
         @output_type_hints[od.fetch("name")] = type_ir(ann) if @type_shapes.key?(tn)
+      end
+
+      # LANG-SUMTYPE-CONSTRUCT-MATCH-P3: expected-type hints for sealed constructors.
+      # Pre-scan output/compute decls annotated Option[...] / Result[...]; keyed by
+      # name (output and its producing compute share a name). Read by
+      # infer_sealed_construct to recover the param none()/ok()/err() cannot infer
+      # from their arguments. Held separately so record-literal hint behaviour and
+      # the emitted SIR are untouched.
+      @sealed_output_hints = {}
+      all_decls.each do |d|
+        next unless %w[output compute].include?(d.fetch("kind", ""))
+        ann = d.fetch("type_annotation", nil)
+        next unless ann
+        tn = ann.is_a?(Hash) ? ann.fetch("name", nil) : ann.to_s
+        @sealed_output_hints[d.fetch("name")] = type_ir(ann) if %w[Option Result].include?(tn)
       end
 
       # PROP-043: OOF-MAP1/2/3 — check all declarations for Map annotation violations.
@@ -1059,6 +1121,15 @@ module IgniterLang
       when "or_else"
         # PROP-043: Option[V] unwrap with default (or_else introduced alongside Map v0)
         infer_or_else(args, symbol_types, type_errors, type_warnings, node_name)
+      when *SEALED_CONSTRUCTORS
+        # LANG-SUMTYPE-CONSTRUCT-MATCH-P3: sealed built-in constructors some/none/ok/err
+        infer_sealed_construct(fn, args, symbol_types, type_errors, type_warnings, node_name)
+      when "unwrap_or"
+        # LANG-SUMTYPE-CONSTRUCT-MATCH-P3: unwrap_or(Result[T,E]|Option[T], default) -> T
+        infer_unwrap_or(args, symbol_types, type_errors, type_warnings, node_name)
+      when "and_then"
+        # LANG-SUMTYPE-CONSTRUCT-MATCH-P3: and_then(Result[T,E], (T -> Result[U,E])) -> Result[U,E]
+        infer_and_then(args, symbol_types, type_errors, type_warnings, node_name)
       when "call_contract"
         # LAB-RUBY-CALL-CONTRACT-PARITY-P3: Tier 1 literal same-module + Tier 2 dynamic
         infer_call_contract(expr, symbol_types, type_errors, type_warnings, node_name)
@@ -3041,6 +3112,121 @@ module IgniterLang
                  "fn" => "or_else", "args" => [opt_arg, default_arg])
     end
 
+    # LANG-SUMTYPE-CONSTRUCT-MATCH-P3: sealed built-in constructors.
+    # Lowers some/none/ok/err to a sealed `variant_construct` node (SIR marker
+    # `sealed: true`), reusing the user-variant construct/emit machinery. Payload
+    # labels are locked to value/error. Missing type params are recovered from the
+    # expected-type hint (@sealed_output_hints) keyed on node_name; otherwise Unknown.
+    def infer_sealed_construct(fn, args, symbol_types, type_errors, type_warnings, node_name)
+      expected = sealed_arity(fn)
+      unless args.length == expected
+        type_errors << oof("OOF-TY0",
+          "#{fn} requires #{expected} argument#{expected == 1 ? "" : "s"}", node_name)
+        return typed_expr("call", type_ir("Unknown"), [], "fn" => fn, "args" => [])
+      end
+
+      typed_args = args.map { |a| infer_expr(a, symbol_types, type_errors, type_warnings, node_name) }
+      deps = typed_args.flat_map { |a| a.fetch("deps", []) }.uniq
+      hint = @sealed_output_hints&.fetch(node_name, nil)
+
+      case fn
+      when "some"
+        inner = typed_args[0].fetch("resolved_type")
+        build_sealed_construct("Some", "Option", { "value" => typed_args[0] }, option_type_ir(inner), deps)
+      when "none"
+        inner = hint_param(hint, "Option", 0)
+        build_sealed_construct("None", "Option", {}, option_type_ir(inner), deps)
+      when "ok"
+        t = typed_args[0].fetch("resolved_type")
+        e = hint_param(hint, "Result", 1)
+        build_sealed_construct("Ok", "Result", { "value" => typed_args[0] }, result_type_ir(t, e), deps)
+      when "err"
+        e = typed_args[0].fetch("resolved_type")
+        t = hint_param(hint, "Result", 0)
+        build_sealed_construct("Err", "Result", { "error" => typed_args[0] }, result_type_ir(t, e), deps)
+      end
+    end
+
+    def sealed_arity(fn) = fn == "none" ? 0 : 1
+
+    # Recover param[idx] from an expected-type hint of the given family, else Unknown.
+    def hint_param(hint, family, idx)
+      return type_ir("Unknown") unless hint && type_name(hint) == family
+      hint.fetch("params", []).fetch(idx, type_ir("Unknown"))
+    end
+
+    def build_sealed_construct(arm, variant, typed_fields, resolved_type, deps)
+      typed_expr("variant_construct", resolved_type, deps,
+                 "arm" => arm, "variant" => variant,
+                 "typed_fields" => typed_fields, "sealed" => true)
+    end
+
+    # LANG-SUMTYPE-CONSTRUCT-MATCH-P3: unwrap_or(Result[T,E]|Option[T], default) -> T.
+    # Mirrors or_else; extracts params[0] from Option/Result, else falls back to the
+    # default argument's type. SIR call shape parallels or_else (both args carried).
+    def infer_unwrap_or(args, symbol_types, type_errors, type_warnings, node_name)
+      unless args.length == 2
+        type_errors << oof("OOF-TY0", "unwrap_or requires 2 arguments (outcome, default)", node_name)
+        return typed_expr("call", type_ir("Unknown"), [], "fn" => "unwrap_or", "args" => [])
+      end
+
+      outcome_arg = infer_expr(args[0], symbol_types, type_errors, type_warnings, node_name)
+      default_arg = infer_expr(args[1], symbol_types, type_errors, type_warnings, node_name)
+
+      out_type = outcome_arg.fetch("resolved_type")
+      inner_type = if %w[Option Result].include?(type_name(out_type))
+        params = out_type.fetch("params", [])
+        params.length >= 1 ? params[0] : default_arg.fetch("resolved_type")
+      else
+        default_arg.fetch("resolved_type")
+      end
+
+      deps = (outcome_arg.fetch("deps", []) + default_arg.fetch("deps", [])).uniq
+      typed_expr("call", inner_type, deps,
+                 "fn" => "unwrap_or", "args" => [outcome_arg, default_arg])
+    end
+
+    # LANG-SUMTYPE-CONSTRUCT-MATCH-P3: and_then(Result[T,E], (T -> Result[U,E])) -> Result[U,E].
+    # Fixed-error-family: the lambda param binds to T (the ok-type of the first arg);
+    # the result keeps the input error type E and takes U from the lambda body's
+    # Result[U,_]. A static call_contract may appear inside the lambda; no dynamic
+    # callee dispatch is authorized here.
+    def infer_and_then(args, symbol_types, type_errors, type_warnings, node_name)
+      unless args.length == 2
+        type_errors << oof("OOF-TY0", "and_then requires 2 arguments (result, lambda)", node_name)
+        return typed_expr("call", type_ir("Unknown"), [], "fn" => "and_then", "args" => [])
+      end
+
+      result_arg = infer_expr(args[0], symbol_types, type_errors, type_warnings, node_name)
+      res_type   = result_arg.fetch("resolved_type")
+      res_params = res_type.fetch("params", [])
+      t_type     = res_params.fetch(0, type_ir("Unknown"))
+      e_type     = res_params.fetch(1, type_ir("Unknown"))
+
+      lambda_node = args[1]
+      unless lambda_node.is_a?(Hash) && lambda_node.fetch("kind", nil) == "lambda"
+        type_errors << oof("OOF-TY0",
+          "and_then: second argument must be a lambda (T -> Result[U,E])", node_name)
+        return typed_expr("call", type_ir("Unknown"), result_arg.fetch("deps", []),
+                          "fn" => "and_then", "args" => [result_arg])
+      end
+
+      lambda_params = lambda_node.fetch("params", [])
+      local_symbols = lambda_params.each_with_object(symbol_types.dup) { |p, acc| acc[p] = t_type }
+      body_typed = infer_lambda_body(lambda_node.fetch("body"), local_symbols, type_errors, type_warnings, node_name)
+      body_type  = body_typed.fetch("resolved_type")
+
+      u_type = if type_name(body_type) == "Result"
+        body_type.fetch("params", []).fetch(0, type_ir("Unknown"))
+      else
+        type_ir("Unknown")
+      end
+
+      deps = (result_arg.fetch("deps", []) + body_typed.fetch("deps", [])).uniq
+      typed_expr("call", result_type_ir(u_type, e_type), deps,
+                 "fn" => "and_then", "args" => [result_arg])
+    end
+
     # array_literal: infers Collection[T] from the first non-Unknown element type.
     # Empty array: Collection[Unknown]. Required for map_from_pairs pair arrays.
     def infer_array_literal(expr, symbol_types, type_errors, type_warnings, node_name)
@@ -3236,6 +3422,8 @@ module IgniterLang
       end
 
       declared_arms = variant_arms(subject_type)
+      sealed        = sealed_builtin?(subject_type)  # LANG-SUMTYPE-CONSTRUCT-MATCH-P3
+      subject_rt    = subject_node.fetch("resolved_type")
       covered_arms  = {}
       has_wildcard  = false
       arm_types     = []
@@ -3279,10 +3467,13 @@ module IgniterLang
         end
 
         arm_field_shapes = declared_arms[arm_name]
+        # Sealed built-ins substitute the concrete payload type from the subject's
+        # params; user variants use their declared field types directly.
+        bind_types = sealed ? sealed_arm_field_types(subject_rt, arm_name) : arm_field_shapes
         arm_bindings = {}
         bindings.each do |binding|
           if arm_field_shapes.key?(binding)
-            arm_bindings[binding] = arm_field_shapes[binding]
+            arm_bindings[binding] = bind_types.fetch(binding, type_ir("Unknown"))
           else
             type_errors << oof("OOF-KIND2",
               "binding '#{binding}' is not a field of #{subject_type}::#{arm_name}",
@@ -3311,12 +3502,15 @@ module IgniterLang
       subject_deps = subject_node.fetch("deps", [])
       arm_deps     = typed_arms.flat_map { |a| a.fetch("body", {}).fetch("deps", []) }
 
-      typed_expr("match_expr", result_type, (subject_deps + arm_deps).uniq,
-                 "subject"      => subject_node,
-                 "subject_type" => subject_type,
-                 "arms"         => typed_arms,
-                 "exhaustive"   => uncovered.empty? || has_wildcard,
-                 "has_wildcard" => has_wildcard)
+      match_extra = {
+        "subject"      => subject_node,
+        "subject_type" => subject_type,
+        "arms"         => typed_arms,
+        "exhaustive"   => uncovered.empty? || has_wildcard,
+        "has_wildcard" => has_wildcard,
+      }
+      match_extra["sealed"] = true if sealed  # LANG-SUMTYPE-CONSTRUCT-MATCH-P3
+      typed_expr("match_expr", result_type, (subject_deps + arm_deps).uniq, match_extra)
     end
 
     def infer_match_expr_degraded(expr, subject_node, symbol_types, type_errors, type_warnings, node_name)
@@ -3427,6 +3621,13 @@ module IgniterLang
     def option_type_ir(inner)
       inner_ir = inner.is_a?(Hash) ? inner : type_ir(inner.to_s)
       { "name" => "Option", "params" => [inner_ir] }
+    end
+
+    # Result[T,E] type IR. LANG-SUMTYPE-CONSTRUCT-MATCH-P3.
+    def result_type_ir(ok_type, err_type)
+      ok_ir  = ok_type.is_a?(Hash)  ? ok_type  : type_ir(ok_type.to_s)
+      err_ir = err_type.is_a?(Hash) ? err_type : type_ir(err_type.to_s)
+      { "name" => "Result", "params" => [ok_ir, err_ir] }
     end
 
     # Collection[V] type IR. elem_type_ir may be Hash type_ir or String type name.

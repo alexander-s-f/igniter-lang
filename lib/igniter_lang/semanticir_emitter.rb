@@ -440,18 +440,22 @@ module IgniterLang
 
     # PROP-044 P6: lower a TypeChecker variant_construct node to SemanticIR shape.
     def semantic_variant_construct(expr)
-      {
+      node = {
         "kind"          => "variant_construct",
         "arm"           => expr.fetch("arm"),
         "variant"       => expr.fetch("variant"),
         "fields"        => expr.fetch("typed_fields", {}).transform_values { |f| semantic_expr(f) },
         "resolved_type" => expr.fetch("resolved_type")
       }
+      # LANG-SUMTYPE-CONSTRUCT-MATCH-P3: sealed-only marker; absent for user variants
+      # so their SIR byte shape is unchanged.
+      node["sealed"] = true if expr.fetch("sealed", false)
+      node
     end
 
     # PROP-044 P6: lower a TypeChecker match_expr node to SemanticIR match_node shape.
     def semantic_match_node(expr)
-      {
+      node = {
         "kind"          => "match_node",
         "subject"       => semantic_expr(expr.fetch("subject")),
         "subject_type"  => expr.fetch("subject_type"),
@@ -460,6 +464,9 @@ module IgniterLang
         "has_wildcard"  => expr.fetch("has_wildcard", false),
         "resolved_type" => expr.fetch("resolved_type")
       }
+      # LANG-SUMTYPE-CONSTRUCT-MATCH-P3: sealed-only marker (Option/Result subjects).
+      node["sealed"] = true if expr.fetch("sealed", false)
+      node
     end
 
     def semantic_match_arm(arm)
