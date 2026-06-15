@@ -167,6 +167,17 @@ diagnostics and do not indicate an `if_expr` regression.
 - `Decimal[A] + Decimal[B]`: requires `A == B` → result `Decimal[A]`; else `OOF-TC5`
 - `Decimal[A] * Decimal[B]`: result `Decimal[A+B]` (always valid)
 
+**Decimal construction** (LAB-NUMERIC-DECIMAL-CONSTRUCT-P1): the only way to mint a
+`Decimal[N]` constant is the explicit constructor `decimal(value, scale)`:
+- `decimal(value: Integer, scale: Integer literal) -> Decimal[scale]` — `value` is the
+  exact amount in minor units (e.g. `decimal(150, 2)` is `1.50` at scale 2). The `scale`
+  must be a non-negative **Integer literal** so the result type `Decimal[scale]` is
+  statically known; a non-literal or negative scale is `OOF-DM4`. Wrong arity or a
+  non-`Integer` `value` is `OOF-TY0`.
+- There is **no Decimal literal** (`0.00` types as `Float`) and **no implicit
+  `Float`/`Integer` → `Decimal` coercion** (`OOF-TY1`, unchanged). `decimal()` is the
+  sole money-safe path from exact integer minor-units into the `Decimal` family.
+
 ---
 
 ## 3.7 TypedProgram Shape (PROP-021 §Part 5)

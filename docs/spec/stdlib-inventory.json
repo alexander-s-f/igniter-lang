@@ -1,8 +1,8 @@
 {
   "kind": "stdlib_inventory",
   "format_version": "v0",
-  "stdlib_surface_digest": "d7354482a43145e2acd535f8abfcef620653b16b5b521a65529a5dc0a3d1af0b",
-  "note": "Normatively referenced by Ch8. Digest is computed from canonical re-serialization of entries sorted by canonical_name with entry_digest fields stripped — never from raw file bytes. P3 proof verifies determinism. P5 adds stdlib.collection.map + stdlib.collection.filter entries and updates stdlib.collection.count proof_lineage.",
+  "stdlib_surface_digest": "8324494ab6b5393e2142523236758b84165ff1306257ea2942405b9f1942ad1d",
+  "note": "Normatively referenced by Ch8. Digest is computed from canonical re-serialization of entries sorted by canonical_name with entry_digest fields stripped — never from raw file bytes. P3 proof verifies determinism. P5 adds stdlib.collection.map + stdlib.collection.filter entries and updates stdlib.collection.count proof_lineage. CONSTRUCT-P1 adds stdlib.decimal.decimal (explicit Decimal constructor) and recomputes the digest.",
   "entries": [
     {
       "canonical_name": "stdlib.text.byte_length",
@@ -1672,6 +1672,50 @@
       ],
       "compatibility_note": "Generator: exclusive [start, stop) interval as Collection[Integer]. Total: range(a, a) and range(b, a where b>a) both return empty collection. OOF-COL1 on arity != 2; arg types Unknown-permissive in v0 (no OOF-COL2 — arg must be Integer not Collection). Ruby-only in P2; Rust parity in P3.",
       "owner_surface": "LANG-STDLIB-COLLECTION-RANGE-P1",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.decimal.decimal",
+      "semantic_ir_name": "decimal",
+      "legacy_sir": null,
+      "aliases": [
+        {
+          "kind": "source_alias",
+          "name": "decimal"
+        }
+      ],
+      "category": "decimal",
+      "lifecycle_status": "lab-implemented",
+      "semantic_stability": "experiment-pass",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "total",
+      "type_params": [],
+      "input_signature": [
+        "Integer",
+        "Integer"
+      ],
+      "output_signature": "Decimal[scale]",
+      "diagnostics": [
+        "OOF-TY0",
+        "OOF-DM4"
+      ],
+      "failure_behavior": "none",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "LAB-NUMERIC-DECIMAL-BOUNDARY-P1 readiness 62/62 - route: explicit decimal(value, scale)",
+        "LAB-NUMERIC-DECIMAL-CONSTRUCT-P1 dual-toolchain TC arm + VM/stdlib lowering + Ruby Decimal[N] annotation fix"
+      ],
+      "examples": [
+        "decimal(0, 2) -> Decimal[2] (0.00)",
+        "decimal(150, 2) -> Decimal[2] (1.50, exact minor units)",
+        "decimal(0, n) -> OOF-DM4 (scale must be an Integer literal)"
+      ],
+      "compatibility_note": "Explicit Decimal constructor: value is exact minor units (Integer), scale is a non-negative Integer literal so Decimal[scale] is statically known. OOF-TY0 on arity != 2 or non-Integer value; OOF-DM4 on non-literal/negative scale. No implicit Float/Integer -> Decimal coercion (stays OOF-TY1). VM lowers to Value::Decimal{value, scale}. Dual-toolchain (Ruby canon TC + Rust lab TC/VM).",
+      "owner_surface": "LAB-NUMERIC-DECIMAL-CONSTRUCT-P1",
       "entry_digest": null
     }
   ]

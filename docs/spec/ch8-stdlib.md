@@ -111,6 +111,10 @@ stdlib.integer.add(a: Integer, b: Integer) -> Integer
 stdlib.float.add(a: Float, b: Float) -> Float
 stdlib.decimal.add(a: Decimal[N], b: Decimal[N]) -> Decimal[N]  -- scales must match
 stdlib.decimal.mul(a: Decimal[A], b: Decimal[B]) -> Decimal[A+B]
+stdlib.decimal.decimal(value: Integer, scale: Integer literal) -> Decimal[scale]
+                                                -- explicit constructor; exact minor units;
+                                                -- scale must be an Integer literal (OOF-DM4);
+                                                -- no implicit Float/Integer -> Decimal (OOF-TY1)
 ```
 
 ---

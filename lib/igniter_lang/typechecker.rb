@@ -1135,6 +1135,9 @@ module IgniterLang
       when "range"
         # LANG-STDLIB-COLLECTION-RANGE-P2: range(start, stop) -> Collection[Integer]
         infer_range_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
+      when "decimal"
+        # LAB-NUMERIC-DECIMAL-CONSTRUCT-P1: decimal(value, scale) -> Decimal[scale]
+        infer_decimal_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
       when "or_else"
         # PROP-043: Option[V] unwrap with default (or_else introduced alongside Map v0)
         infer_or_else(args, symbol_types, type_errors, type_warnings, node_name)
@@ -1632,7 +1635,11 @@ module IgniterLang
 
     def unknown_or_unknown_bearing?(t)
       return true if type_name(t) == "Unknown"
-      t.fetch("params", []).any? { |p| unknown_or_unknown_bearing?(p) }
+      # LAB-NUMERIC-DECIMAL-CONSTRUCT-P1: normalise each param through type_ir before
+      # recursing — Decimal[N] params arrive as bare scalars (e.g. the integer 2), not
+      # type hashes. Mirrors the Rust TC (`self.type_ir(p)`); without it type_name(2)
+      # raises NoMethodError. A scale scalar normalises to {"name"=>"2"} (not Unknown).
+      t.fetch("params", []).any? { |p| unknown_or_unknown_bearing?(type_ir(p)) }
     end
 
     def type_mismatch(expected, actual, node)
@@ -1646,7 +1653,11 @@ module IgniterLang
       actual_params   = actual.fetch("params",   [])
       expected_params = expected.fetch("params", [])
       return false if actual_params.length != expected_params.length
-      actual_params.zip(expected_params).all? { |a, e| structurally_assignable?(a, e) }
+      # LAB-NUMERIC-DECIMAL-CONSTRUCT-P1: normalise each param through type_ir before
+      # recursing. Decimal[N] params arrive as bare scalars (the integer 2), not type
+      # hashes; type_ir wraps 2 -> {"name"=>"2"} so scale compares by value (Decimal[2]
+      # != Decimal[4]) and type_name no longer raises on a bare Integer. Mirrors Rust.
+      actual_params.zip(expected_params).all? { |a, e| structurally_assignable?(type_ir(a), type_ir(e)) }
     end
 
     # True when `actual` is a parameterised Collection whose params are all Unknown —
@@ -3033,6 +3044,60 @@ module IgniterLang
       deps        = (start_typed.fetch("deps", []) + stop_typed.fetch("deps", [])).uniq
 
       typed_expr("call", result_type, deps, "fn" => qualified, "args" => [start_typed, stop_typed])
+    end
+
+    # LAB-NUMERIC-DECIMAL-CONSTRUCT-P1: explicit Decimal constructor.
+    #   decimal(value, scale) -> Decimal[scale]
+    #   value : Integer (exact minor units), scale : Integer *literal*.
+    # The scale must be a literal so Decimal[scale] is statically known (mirrors the
+    # Decimal[N] annotation). OOF-TY0: arity != 2 or value not Integer. OOF-DM4:
+    # non-literal / negative scale. On any error falls back to bare Decimal to avoid a
+    # cascade. No implicit Float/Integer -> Decimal coercion. Mirrors the Rust TC arm.
+    # The emitted fn stays the bare "decimal" (parity with the Rust SemanticIR; the VM
+    # accepts both "decimal" and "stdlib.decimal.decimal").
+    def infer_decimal_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
+      scale = nil
+
+      if args.length != 2
+        type_errors << oof("OOF-TY0",
+          "stdlib.decimal.decimal: expected 2 arguments (value, scale), got #{args.length}", node_name)
+        typed_args = args.map { |a| infer_expr(a, symbol_types, type_errors, type_warnings, node_name) }
+        deps = typed_args.flat_map { |a| a.fetch("deps", []) }.uniq
+        return typed_expr("call", type_ir("Decimal"), deps, "fn" => "decimal", "args" => typed_args)
+      end
+
+      value_typed = infer_expr(args[0], symbol_types, type_errors, type_warnings, node_name)
+      value_name  = type_name(value_typed.fetch("resolved_type"))
+      unless value_name == "Integer" || value_name == "Unknown"
+        type_errors << oof("OOF-TY0",
+          "stdlib.decimal.decimal arg 1: expected Integer, got #{value_name}", node_name)
+      end
+
+      scale_node  = args[1]
+      scale_typed = infer_expr(scale_node, symbol_types, type_errors, type_warnings, node_name)
+      if scale_node.is_a?(Hash) && scale_node.fetch("kind", nil) == "literal" &&
+         scale_node.fetch("type_tag", nil) == "Integer"
+        scale_val = scale_node.fetch("value", nil)
+        if scale_val.is_a?(Integer) && scale_val >= 0
+          scale = scale_val
+        else
+          type_errors << oof("OOF-DM4",
+            "stdlib.decimal.decimal: scale must be a non-negative Integer literal", node_name)
+        end
+      else
+        type_errors << oof("OOF-DM4",
+          "stdlib.decimal.decimal: scale must be an Integer literal", node_name)
+      end
+
+      result_type =
+        if scale
+          { "name" => "Decimal", "params" => [{ "name" => scale.to_s, "params" => [] }] }
+        else
+          type_ir("Decimal")
+        end
+
+      deps = (value_typed.fetch("deps", []) + scale_typed.fetch("deps", [])).uniq
+      typed_expr("call", result_type, deps, "fn" => "decimal", "args" => [value_typed, scale_typed])
     end
 
     def infer_char_at_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
