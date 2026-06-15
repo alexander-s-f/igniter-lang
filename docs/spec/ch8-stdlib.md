@@ -55,7 +55,8 @@ map(xs: Collection[T], fn: T -> U) -> Collection[U]
 filter(xs: Collection[T], pred: T -> Bool) -> Collection[T]
 filter_map(xs: Collection[T], fn: T -> Option[U]) -> Collection[U]  -- keep each Some payload, drop None
 count(xs: Collection[T]) -> Integer
-sum(xs: Collection[T]) -> T           -- requires Numeric[T]
+sum(xs: Collection[T]) -> T           -- scalar; requires Numeric[T] (Integer/Float/Decimal[N])
+sum(xs: Collection[R], :field) -> F   -- field projection; F = R.field's type
 avg(xs: Collection[T]) -> Option[T]   -- None if empty; requires Numeric[T]
 min(xs: Collection[T]) -> Option[T]
 max(xs: Collection[T]) -> Option[T]

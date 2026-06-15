@@ -2841,13 +2841,20 @@ module IgniterLang
     # OOF-COL1: arity != 2
     # OOF-COL2: non-Collection first arg
     # OOF-COL5: non-Symbol second arg OR field not found in type_shapes (Unknown elem exempt)
+    # LANG-STDLIB-COLLECTION-SUM-SCALAR-P2: sum has two forms, dispatched by arity:
+    #   1-arg scalar:           sum(Collection[T])         -> T        (T must be Numeric)
+    #   2-arg field projection: sum(Collection[T], :field) -> F        (existing)
+    # Scalar sum returns the element type EXACTLY (Decimal scale preserved); the empty
+    # identity is the additive zero of T's family (LANG-STDLIB-COLLECTION-SUM-SCALAR-P1).
+    NUMERIC_SUM_FAMILIES = %w[Integer Float Decimal Unknown].freeze
+
     def infer_sum_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
       qualified = "stdlib.collection.sum"
 
-      # ── OOF-COL1: arity must be exactly 2 ───────────────────────────────────
-      unless args.length == 2
+      # ── OOF-COL1: arity must be 1 (scalar) or 2 (field projection) ──────────
+      unless args.length == 1 || args.length == 2
         type_errors << oof("OOF-COL1",
-          "#{qualified}: expected 2 arguments (collection, :field), got #{args.length}",
+          "#{qualified}: expected 1 (collection) or 2 (collection, :field) argument(s), got #{args.length}",
           node_name)
         return typed_expr("call", type_ir("Unknown"), [], "fn" => qualified, "args" => [])
       end
@@ -2862,6 +2869,22 @@ module IgniterLang
           "#{qualified}: first argument must be Collection[T], got #{col_type_name}",
           node_name)
         return typed_expr("call", type_ir("Unknown"), collection_arg.fetch("deps", []),
+                          "fn" => qualified, "args" => [collection_arg])
+      end
+
+      elem_type = element_type_from_collection(collection_arg.fetch("resolved_type"))
+
+      # ── Scalar form: sum(Collection[T]) -> T (T must be Numeric) ─────────────
+      if args.length == 1
+        elem_name = type_name(elem_type)
+        unless NUMERIC_SUM_FAMILIES.include?(elem_name)
+          type_errors << oof("OOF-COL8",
+            "#{qualified}: scalar sum element type must be Numeric (Integer, Float, Decimal[N]), got #{elem_name}",
+            node_name)
+          return typed_expr("call", type_ir("Unknown"), collection_arg.fetch("deps", []),
+                            "fn" => qualified, "args" => [collection_arg])
+        end
+        return typed_expr("call", elem_type, collection_arg.fetch("deps", []),
                           "fn" => qualified, "args" => [collection_arg])
       end
 

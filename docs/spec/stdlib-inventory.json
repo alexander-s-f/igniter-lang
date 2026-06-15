@@ -1,7 +1,7 @@
 {
   "kind": "stdlib_inventory",
   "format_version": "v0",
-  "stdlib_surface_digest": "8324494ab6b5393e2142523236758b84165ff1306257ea2942405b9f1942ad1d",
+  "stdlib_surface_digest": "f7964a7b868c7756cecc41268cddf8aa8d158aec83e20e7610401c4497fe966f",
   "note": "Normatively referenced by Ch8. Digest is computed from canonical re-serialization of entries sorted by canonical_name with entry_digest fields stripped — never from raw file bytes. P3 proof verifies determinism. P5 adds stdlib.collection.map + stdlib.collection.filter entries and updates stdlib.collection.count proof_lineage. CONSTRUCT-P1 adds stdlib.decimal.decimal (explicit Decimal constructor) and recomputes the digest.",
   "entries": [
     {
@@ -1672,6 +1672,54 @@
       ],
       "compatibility_note": "Generator: exclusive [start, stop) interval as Collection[Integer]. Total: range(a, a) and range(b, a where b>a) both return empty collection. OOF-COL1 on arity != 2; arg types Unknown-permissive in v0 (no OOF-COL2 — arg must be Integer not Collection). Ruby-only in P2; Rust parity in P3.",
       "owner_surface": "LANG-STDLIB-COLLECTION-RANGE-P1",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.collection.sum",
+      "semantic_ir_name": "stdlib.collection.sum",
+      "legacy_sir": null,
+      "aliases": [
+        {
+          "kind": "source_alias",
+          "name": "sum"
+        }
+      ],
+      "category": "collection",
+      "lifecycle_status": "lab-implemented",
+      "semantic_stability": "experiment-pass",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "total",
+      "type_params": [
+        "T",
+        "F"
+      ],
+      "input_signature": [
+        "Collection[T]"
+      ],
+      "output_signature": "T",
+      "diagnostics": [
+        "OOF-COL1",
+        "OOF-COL2",
+        "OOF-COL5",
+        "OOF-COL8"
+      ],
+      "failure_behavior": "none",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "LANG-STDLIB-SUM-PROP-P3 — 2-arg field projection sum(Collection[T], :field) -> F",
+        "LANG-STDLIB-COLLECTION-SUM-SCALAR-P1 planning 66/66 — authorize scalar form",
+        "LANG-STDLIB-COLLECTION-SUM-SCALAR-P2 — scalar sum(Collection[T]) -> T implemented dual-toolchain (Ruby TC + Rust TC + VM)"
+      ],
+      "examples": [
+        "sum(amounts) -> Decimal[2]   -- scalar, over Collection[Decimal[2]]",
+        "sum(postings, :amount) -> Decimal[2]   -- 2-arg field projection"
+      ],
+      "compatibility_note": "TWO arity-dispatched forms. Scalar: sum(Collection[T]) -> T where T is Numeric (Integer/Float/Decimal[N]); returns the element type EXACTLY (Decimal scale preserved); empty identity = additive zero of T's family (Integer 0 / Float 0.0 / Decimal{0,N}); non-numeric element -> OOF-COL8. Field projection: sum(Collection[R], :field) -> F where F is the field's type; non-Symbol or missing field -> OOF-COL5. Arity not in {1,2} -> OOF-COL1; non-Collection first arg -> OOF-COL2. No implicit numeric coercion. VM: scalar form sums elements directly; the empty Decimal collection yields Integer 0 at runtime (the universal additive zero, consistent with the field form) — only observable on empty collections.",
+      "owner_surface": "LANG-STDLIB-COLLECTION-SUM-SCALAR-P2",
       "entry_digest": null
     },
     {
