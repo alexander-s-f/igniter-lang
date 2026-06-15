@@ -53,6 +53,7 @@ any fold/map/filter terminates unconditionally.
 fold(xs: Collection[T], init: A, fn: (A, T) -> A) -> A
 map(xs: Collection[T], fn: T -> U) -> Collection[U]
 filter(xs: Collection[T], pred: T -> Bool) -> Collection[T]
+filter_map(xs: Collection[T], fn: T -> Option[U]) -> Collection[U]  -- keep each Some payload, drop None
 count(xs: Collection[T]) -> Integer
 sum(xs: Collection[T]) -> T           -- requires Numeric[T]
 avg(xs: Collection[T]) -> Option[T]   -- None if empty; requires Numeric[T]

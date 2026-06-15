@@ -105,9 +105,10 @@ Single call site each (`Ruby:3501`, `Rust:4054`), feeding the `match_expr`
 5. **Diagnostics for incompatible parametric arms?** v0 emits **no new diagnostic**:
    genuine concrete-param conflict silently degrades to the bare type (today's
    behavior) and surfaces, if at all, at the existing output boundary as `OOF-TY1`.
-   Reserve **`OOF-KIND6` "divergent arm parameters"** as an opt-in *stricter* surface
-   for a later card — keeping P1/P2 a clean no-regression change. Top-level name
-   divergence keeps `OOF-KIND5` unchanged.
+   Reserve **`OOF-KIND7` "divergent arm parameters"** as an opt-in *stricter* surface
+   for a later card — keeping P1/P2 a clean no-regression change (note: `OOF-KIND6` is
+   already taken by PROP-044-P9 reserved-field-name checks, so the next free code is
+   `OOF-KIND7`). Top-level name divergence keeps `OOF-KIND5` unchanged.
 6. **Does preserving params change existing user-variant match SIR or only
    `resolved_type`?** **Only `match_expr.resolved_type`, and only where params are
    currently being dropped.** The fallback rebuilds via `type_ir(name)` exactly as
@@ -172,7 +173,7 @@ Key properties:
 - **Unknown = bottom** throughout (Q4), so P3's partially-recovered arms (one arm
   `Option[ImportRecord]`, another transiently `Option[Unknown]`) still join up to
   `Option[ImportRecord]`.
-- **No new error in v0** (Q5); `OOF-KIND6` reserved for a later stricter card.
+- **No new error in v0** (Q5); `OOF-KIND7` reserved for a later stricter card.
 - **Recursive**, so nested parametrics (`Collection[Option[T]]`, `Map[String, Result[T,E]]`)
   preserve correctly.
 
@@ -222,7 +223,7 @@ output hint, duplicating information the arms already carry.
 
 No implementation. No new syntax. No runtime changes. No app migration. No widening of
 variant arm matching. No generic type inference beyond match-result unification. No
-`OOF-KIND6` in v0 (reserved). P1 ends at PLAN; implementation needs explicit P2/P3
+`OOF-KIND7` in v0 (reserved). P1 ends at PLAN; implementation needs explicit P2/P3
 reauthorization.
 
 ## 8. Proof

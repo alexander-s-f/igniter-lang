@@ -1,7 +1,7 @@
 {
   "kind": "stdlib_inventory",
   "format_version": "v0",
-  "stdlib_surface_digest": "dee6b9c11be05cd727b1ac678102d7d63cc42ec175762c307c819fc7bc4ca4a6",
+  "stdlib_surface_digest": "d7354482a43145e2acd535f8abfcef620653b16b5b521a65529a5dc0a3d1af0b",
   "note": "Normatively referenced by Ch8. Digest is computed from canonical re-serialization of entries sorted by canonical_name with entry_digest fields stripped — never from raw file bytes. P3 proof verifies determinism. P5 adds stdlib.collection.map + stdlib.collection.filter entries and updates stdlib.collection.count proof_lineage.",
   "entries": [
     {
@@ -1269,6 +1269,53 @@
       ],
       "compatibility_note": "Predicate must return Bool; OOF-COL3 raised otherwise. Unknown passes permissively — pre-existing == gap returns Unknown so equality predicates pass. Result type is passthrough Collection[T] (same element type as input).",
       "owner_surface": "LANG-STDLIB-COLLECTION-MAP-FILTER-PROP-P1",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.collection.filter_map",
+      "semantic_ir_name": "stdlib.collection.filter_map",
+      "legacy_sir": null,
+      "aliases": [
+        {
+          "kind": "source_alias",
+          "name": "filter_map"
+        }
+      ],
+      "category": "collection",
+      "lifecycle_status": "lab-implemented",
+      "semantic_stability": "experiment-pass",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "total",
+      "type_params": [
+        "T",
+        "U"
+      ],
+      "input_signature": [
+        "Collection[T]",
+        "(T) -> Option[U]"
+      ],
+      "output_signature": "Collection[U]",
+      "diagnostics": [
+        "OOF-COL1",
+        "OOF-COL2",
+        "OOF-COL3"
+      ],
+      "failure_behavior": "none",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "LANG-SUMTYPE-COLLECT-P1 readiness 68/68 PASS — filter_map chosen as the v0 extraction surface",
+        "LANG-SUMTYPE-COLLECT-P2 planning 73/73 PASS — mirrored edit sites + route B2 (output-context U)",
+        "LANG-SUMTYPE-COLLECT-P3 dual-toolchain impl — Ruby TC arm + Rust TC arm + emitter qualification"
+      ],
+      "examples": [
+        "filter_map(rows, r -> match r { Valid { record } => some(record); Invalid {} => none() }) -> Collection[ImportRecord]"
+      ],
+      "compatibility_note": "Callback must return Option[U] (OOF-COL3 otherwise); keeps each Some(u) payload, drops every None. U is taken from the callback's concrete Option param, else the Collection[U] output context (route B2) when a parametric match callback collapses to bare Option. Mirrors map per-toolchain: Ruby drops the lambda from SIR args and carries resolved_type; Rust keeps the lambda and omits resolved_type. Does not overload map; agnostic to T (serves user variants and built-in Option/Result).",
+      "owner_surface": "LANG-SUMTYPE-COLLECT-P3",
       "entry_digest": null
     },
     {

@@ -402,6 +402,20 @@ module IgniterLang
         @sealed_output_hints[d.fetch("name")] = type_ir(ann) if %w[Option Result].include?(tn)
       end
 
+      # LANG-SUMTYPE-COLLECT-P3: expected element-type hints for filter_map output
+      # context (fallback B2). Pre-scan output/compute decls annotated Collection[U];
+      # keyed by name. Read by infer_filter_map_call to recover U when a parametric
+      # `match` callback collapses to bare Option, and to temp-install an Option[U]
+      # sealed hint while inferring the callback body so none()/some() resolve vs U.
+      @collection_output_hints = {}
+      all_decls.each do |d|
+        next unless %w[output compute].include?(d.fetch("kind", ""))
+        ann = d.fetch("type_annotation", nil)
+        next unless ann
+        tn = ann.is_a?(Hash) ? ann.fetch("name", nil) : ann.to_s
+        @collection_output_hints[d.fetch("name")] = element_type_from_collection(type_ir(ann)) if tn == "Collection"
+      end
+
       # PROP-043: OOF-MAP1/2/3 — check all declarations for Map annotation violations.
       # Runs before declarations.each so errors accumulate early and blocking_rule_present?
       # can suppress spurious downstream type mismatches.
@@ -1091,6 +1105,9 @@ module IgniterLang
       when *OUTCOME_STDLIB_FNS.keys
         # LANG-STDLIB-OUTCOME-PROP-P3: stdlib.outcome helpers — kind + 6 PROP-047 predicates
         infer_outcome_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
+      when "filter_map"
+        # LANG-SUMTYPE-COLLECT-P3: filter_map(Collection[T], T -> Option[U]) -> Collection[U]
+        infer_filter_map_call(args, symbol_types, type_errors, type_warnings, node_name)
       when *COLLECTION_HOF_FNS.keys
         # LANG-STDLIB-COLLECTION-MAP-FILTER-PROP-P1: Collection HOF — map/filter/count
         infer_collection_hof_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
@@ -2656,6 +2673,88 @@ module IgniterLang
                  "fn" => qualified, "args" => [collection_arg])
     end
 
+    # LANG-SUMTYPE-COLLECT-P3: filter_map(Collection[T], (T -> Option[U])) -> Collection[U].
+    # Keeps each Some(u) payload, drops every None. Mirrors map/filter HOF handling:
+    # OOF-COL1 (arity / non-lambda), OOF-COL2 (non-Collection first arg), OOF-COL3
+    # (callback must return Option). U is preferred from the callback's own concrete
+    # Option[U] param; when a parametric `match` callback collapses to bare Option
+    # (the COLLECT-P1 sub-gap), U falls back to the Collection[U] output context
+    # (@collection_output_hints, route B2). While inferring the callback body, the
+    # expected Option[U] is temp-installed as a sealed hint so none()/some() resolve
+    # against U. SIR mirrors map per-toolchain: qualified fn, lambda dropped from args.
+    def infer_filter_map_call(args, symbol_types, type_errors, type_warnings, node_name)
+      qualified = "stdlib.collection.filter_map"
+
+      # ── OOF-COL1: arity must be exactly 2 ────────────────────────────────────
+      unless args.length == 2
+        type_errors << oof("OOF-COL1",
+          "#{qualified}: expected 2 argument(s), got #{args.length}", node_name)
+        return typed_expr("call", type_ir("Unknown"), [], "fn" => qualified, "args" => [])
+      end
+
+      # ── Infer collection argument ────────────────────────────────────────────
+      collection_arg = infer_expr(args[0], symbol_types, type_errors, type_warnings, node_name)
+      col_type_name  = type_name(collection_arg.fetch("resolved_type"))
+
+      # ── OOF-COL2: first arg must be Collection or Unknown ────────────────────
+      unless col_type_name == "Collection" || col_type_name == "Unknown"
+        type_errors << oof("OOF-COL2",
+          "#{qualified}: first argument must be Collection[T], got #{col_type_name}", node_name)
+        return typed_expr("call", type_ir("Unknown"), collection_arg.fetch("deps", []),
+                          "fn" => qualified, "args" => [collection_arg])
+      end
+
+      # ── OOF-COL1: second arg must be a lambda ────────────────────────────────
+      lambda_node = args[1]
+      unless lambda_node.is_a?(Hash) && lambda_node.fetch("kind", nil) == "lambda"
+        type_errors << oof("OOF-COL1",
+          "#{qualified}: second argument must be a lambda, got #{lambda_node.fetch("kind", "non-lambda") rescue "non-lambda"}", node_name)
+        return typed_expr("call", type_ir("Unknown"), collection_arg.fetch("deps", []),
+                          "fn" => qualified, "args" => [collection_arg])
+      end
+
+      # ── Bind lambda parameter to element type T ──────────────────────────────
+      elem_type     = element_type_from_collection(collection_arg.fetch("resolved_type"))
+      lambda_params = lambda_node.fetch("params", [])
+      local_symbols = lambda_params.each_with_object(symbol_types.dup) { |p, acc| acc[p] = elem_type }
+
+      # ── Route B2: U from Collection[U] output context; install Option[U] hint ─
+      ctx_u     = (@collection_output_hints || {})[node_name]
+      temp_hint = false
+      if ctx_u.is_a?(Hash) && type_name(ctx_u) != "Unknown" && !@sealed_output_hints.key?(node_name)
+        @sealed_output_hints[node_name] = option_type_ir(ctx_u)
+        temp_hint = true
+      end
+      begin
+        body_typed = infer_lambda_body(lambda_node.fetch("body"), local_symbols, type_errors, type_warnings, node_name)
+      ensure
+        @sealed_output_hints.delete(node_name) if temp_hint
+      end
+      body_type = body_typed.fetch("resolved_type")
+
+      # ── OOF-COL3: callback must return Option[U] ─────────────────────────────
+      body_name = type_name(body_type)
+      unless body_name == "Option" || body_name == "Unknown"
+        type_errors << oof("OOF-COL3",
+          "#{qualified}: callback must return Option[U], got #{body_name}", node_name)
+      end
+
+      # ── Result element U: callback's concrete Option param, else output context ─
+      body_inner = element_type_from_collection(body_type)
+      u_type =
+        if body_inner.is_a?(Hash) && type_name(body_inner) != "Unknown"
+          body_inner
+        elsif ctx_u.is_a?(Hash) && type_name(ctx_u) != "Unknown"
+          ctx_u
+        else
+          type_ir("Unknown")
+        end
+
+      all_deps = (collection_arg.fetch("deps", []) + body_typed.fetch("deps", [])).uniq
+      typed_expr("call", collection_type_ir_from(u_type), all_deps,
+                 "fn" => qualified, "args" => [collection_arg])
+    end
+
     # LANG-STDLIB-COLLECTION-FIRST-LAST-P2: first(Collection[T]) / last(Collection[T]) -> Option[T].
     # Mirrors the current Rust TC behavior: no new arity/non-Collection diagnostics
     # here; malformed or non-inferable input falls back to Option[Unknown].
@@ -3552,14 +3651,57 @@ module IgniterLang
     def unify_match_arm_types(arm_types, subject_type, node_name, type_errors)
       return type_ir("Unknown") if arm_types.empty?
 
-      concrete = arm_types.map { |t| type_name(t) }.reject { |t| t == "Unknown" }.uniq
-      return type_ir("Unknown") if concrete.empty?
-      return type_ir(concrete.first) if concrete.length == 1
+      # Top-level Unknown arms contribute nothing to the join (legacy behavior).
+      present = arm_types.reject { |t| type_name(t) == "Unknown" }
+      return type_ir("Unknown") if present.empty?
 
-      type_errors << oof("OOF-KIND5",
-        "match on '#{subject_type}' has divergent arm result types: #{concrete.sort.join(", ")}",
-        node_name)
-      type_ir("Unknown")
+      names = present.map { |t| type_name(t) }.uniq
+      if names.length > 1
+        type_errors << oof("OOF-KIND5",
+          "match on '#{subject_type}' has divergent arm result types: #{names.sort.join(", ")}",
+          node_name)
+        return type_ir("Unknown")
+      end
+
+      # LANG-MATCH-ARM-PARAM-UNIFICATION-P2 (route A): preserve type params when all
+      # arms share the parametric family, via a position-wise structural join.
+      # PURE precision widening — every case that previously dropped params still
+      # returns the byte-identical legacy `type_ir(name)`; params are preserved only
+      # when the join yields a non-empty, fully-resolved (not Unknown-bearing) result.
+      name   = names.first
+      joined = present.reduce { |acc, t| join_match_param_types(acc, t) }
+      if joined && !joined.fetch("params", []).empty? && !unknown_or_unknown_bearing?(joined)
+        return joined
+      end
+      type_ir(name)
+    end
+
+    # Position-wise structural join of two arm result types. `Unknown` is the join
+    # bottom: join(Unknown, X) = X. Identical structures are preserved as-is (keeps
+    # any extra keys, e.g. OLAPPoint dims). Arity or concrete-name conflict at any
+    # depth returns nil ⇒ the caller degrades to the legacy bare family result.
+    # No diagnostic is emitted here (P2 reserves OOF-KIND7 for a future strictness
+    # card; OOF-KIND6 is already taken by PROP-044-P9 reserved-field-name checks).
+    def join_match_param_types(a, b)
+      return nil if a.nil? || b.nil?
+      na = type_name(a)
+      nb = type_name(b)
+      return b if na == "Unknown"
+      return a if nb == "Unknown"
+      return nil if na != nb
+      return a if a == b   # identical — preserve all keys, zero change
+
+      pa = a.fetch("params", [])
+      pb = b.fetch("params", [])
+      return nil if pa.length != pb.length
+
+      joined_params = []
+      pa.zip(pb).each do |x, y|
+        jp = join_match_param_types(x, y)
+        return nil if jp.nil?
+        joined_params << jp
+      end
+      { "name" => na, "params" => joined_params }
     end
 
     # check_map_annotation: validates a single type_annotation for Map constraint violations.
