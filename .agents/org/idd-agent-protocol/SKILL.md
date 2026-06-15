@@ -68,6 +68,11 @@ MCP Observe Receipt` template.
 
 Use `references/source-patterns.md` when borrowing from Igniter-Lang or SparkCRM patterns, or when explaining why the protocol is strict or lightweight.
 
+Use `references/doc-and-delta-maintenance.md` when the work is maintaining the
+documentation system itself (MAP, canon↔lab delta ledger, status boards, doc
+segmentation) rather than shipping a feature. It defines the ledger/map/sweep
+maintenance artifacts and the "update living docs, never snapshot them" rule.
+
 ## Authority Checks
 
 Before changing code, docs, data, or process, ask internally:
@@ -106,7 +111,9 @@ Avoid:
 - hiding blockers inside long narrative docs;
 - letting partner code shape become product ontology without product review;
 - forcing one project's vocabulary onto another project too early;
-- copying Igniter-Lang governance where a SparkCRM-style fast-lane receipt is enough.
+- copying Igniter-Lang governance where a SparkCRM-style fast-lane receipt is enough;
+- writing a fresh dated delta/status/map snapshot instead of updating the living
+  document (the root cause of "agents become archaeologists").
 
 ## Output Style
 
