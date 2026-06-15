@@ -1428,9 +1428,60 @@ module IgniterLang
       )
     end
 
+    # LANG-RUBY-NUMERIC-OPS-PARITY-P1: scale of a Decimal type. The scale param may be a
+    # bare scalar (e.g. the integer 2 from a `Decimal[2]` annotation) or a named type node
+    # (`{"name"=>"2"}` from the `decimal()` constructor); both normalise to a string.
+    def decimal_scale(t)
+      p = t.fetch("params", []).first
+      return "0" if p.nil?
+      (p.is_a?(Hash) ? p.fetch("name", "0") : p).to_s
+    end
+
     def operator_type(op, left, right, type_errors, node_name)
       left_name = type_name(left)
       right_name = type_name(right)
+
+      # LANG-RUBY-NUMERIC-OPS-PARITY-P1: mirror the Rust homogeneous numeric relaxation.
+      # (a) Fixed-point Decimal rules — both operands Decimal:
+      #     +/- require equal scale (OOF-TC5) and return Decimal[scale]; * -> Decimal[A+B].
+      if left_name == "Decimal" && right_name == "Decimal"
+        left_scale  = decimal_scale(left)
+        right_scale = decimal_scale(right)
+        case op
+        when "+", "-"
+          unless left_scale == right_scale
+            type_errors << oof("OOF-TC5",
+              "Decimal scale mismatch in operator '#{op}': left_scale=#{left_scale}, right_scale=#{right_scale}",
+              node_name)
+          end
+          return ["stdlib.decimal.add", left.dup]
+        when "*"
+          sum_scale = left_scale.to_i + right_scale.to_i
+          return ["stdlib.decimal.mul", { "name" => "Decimal", "params" => [{ "name" => sum_scale.to_s, "params" => [] }] }]
+        end
+      end
+
+      # (b) v0 homogeneous numeric relaxation: both sides the SAME numeric family
+      #     (Integer/Float/Decimal). Arithmetic returns the operand type; comparison and
+      #     == return Bool. The VM binary opcodes already dispatch on value type, so the
+      #     nominal stdlib.integer.* fn name is fine. Heterogeneous numeric (e.g. Integer
+      #     + Float) and Decimal scale mismatch stay rejected by the fall-through below.
+      #     Decimal +/-/* are handled in (a); this covers Float (all ops), Decimal (/ and
+      #     comparisons and ==), and Integer.
+      if left_name == right_name && %w[Integer Float Decimal].include?(left_name)
+        case op
+        when "+"  then return ["stdlib.integer.add", left.dup]
+        when "-"  then return ["stdlib.integer.sub", left.dup]
+        when "*"  then return ["stdlib.integer.mul", left.dup]
+        when "/"  then return ["stdlib.integer.div", left.dup]
+        when "<"  then return ["stdlib.integer.lt",  type_ir("Bool")]
+        when "<=" then return ["stdlib.integer.lte", type_ir("Bool")]
+        when ">"  then return ["stdlib.integer.gt",  type_ir("Bool")]
+        when ">=" then return ["stdlib.integer.gte", type_ir("Bool")]
+        when "==" then return ["stdlib.primitive.eq", type_ir("Bool")]
+        end
+      end
+
       case op
       when "+"
         type_errors << type_mismatch(type_ir("Integer"), type_ir("#{left_name}+#{right_name}"), node_name) unless unknown?(left, right) || left_name == "Integer" && right_name == "Integer"
