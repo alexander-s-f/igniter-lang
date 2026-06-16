@@ -163,6 +163,11 @@ pure contract FindVendor {
   arms — unlike plain record literals (§8).
 - `_` is a wildcard arm.
 - `Option[T]` is **not** a matchable variant; don't `match` on it (§8).
+  > **NB (verify-first, 2026-06-16):** both toolchains *currently* typecheck `match` over
+  > `Option`/`Result` as sealed built-in variants (proven dual, 109/109). This guidance encodes the
+  > canon stance (PROP-044: `or_else` is the idiomatic Option handler); the doc-vs-implementation
+  > reconciliation is pending — see `.agents/work/cards/lang/LANG-SUMTYPE-OPTION-RESULT-SURFACE-P1.md`
+  > and the proposed `LANG-SUMTYPE-CANON-RECONCILE-P1` gate. Until reconciled, prefer `or_else`.
 
 Patterns: `lead_router` models the whole eligibility railway this way;
 `call_router` models the telephony state machine (`NoCall`/`Ringing`/`CallConnected`).
@@ -257,7 +262,7 @@ Verified non-working on 2026-06-14:
 
 | Surface | Intended syntax | Current state |
 |---|---|---|
-| **Effect surface** | `effect contract C { capability c: IO.X  effect e using c }` | Ruby parses; Rust → `E-IO-EFFECT-UNKNOWN`. IO membrane not wired. (PROP-031/035) |
+| **Effect surface** | `effect contract C { capability c: IO.X  effect e using c }` | **Dual-clean for ANY well-formed effect name** (LANG-EFFECT-NAME-PARITY-P2, 2026-06-16 — Rust no longer limits effect names; `e` is a label, not an authority selector). `capability`-binding diagnostics still fire (undeclared/unbound). IO membrane is host-side, not a language primitive. (PROP-031/035) |
 | **Profiles** | `profile P { authority: effect }` + `contract C via P { … }` | Rust parser → `OOF-G1` (unknown). Ruby-only. (PROP-033/040) |
 | **Rich entrypoint** | `entrypoint plan { contract: C  output: o  args: {…}  default: true }` + named profiles + `section` | Only the **bare** `entrypoint C` is implemented. (PROP-029) |
 | **Form vocabulary** | `vocabulary V { submit -> Validate }` + `speaks V` → call as `submit(x)` | Not implemented; substrate `uses ContractName` IS implemented. (LANG-FORM-VOCABULARY) |
