@@ -2731,8 +2731,15 @@ module IgniterLang
       when "filter" then collection_type_ir_from(elem_type)
       end
 
+      lambda_typed = {
+        "kind" => "lambda",
+        "params" => lambda_params,
+        "body" => body_typed,
+        "resolved_type" => body_type
+      }
+
       typed_expr("call", output_type, all_deps,
-                 "fn" => qualified, "args" => [collection_arg])
+                 "fn" => qualified, "args" => [collection_arg, lambda_typed])
     end
 
     # LANG-SUMTYPE-COLLECT-P3: filter_map(Collection[T], (T -> Option[U])) -> Collection[U].
@@ -2813,8 +2820,15 @@ module IgniterLang
         end
 
       all_deps = (collection_arg.fetch("deps", []) + body_typed.fetch("deps", [])).uniq
+      lambda_typed = {
+        "kind" => "lambda",
+        "params" => lambda_params,
+        "body" => body_typed,
+        "resolved_type" => body_type
+      }
+
       typed_expr("call", collection_type_ir_from(u_type), all_deps,
-                 "fn" => qualified, "args" => [collection_arg])
+                 "fn" => qualified, "args" => [collection_arg, lambda_typed])
     end
 
     # LANG-STDLIB-COLLECTION-FIRST-LAST-P2: first(Collection[T]) / last(Collection[T]) -> Option[T].
