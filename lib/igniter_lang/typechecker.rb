@@ -439,6 +439,7 @@ module IgniterLang
         output_type:        recur_outputs.length == 1 ? type_ir(recur_outputs.first.fetch("type_annotation", "Unknown")) : type_ir("Unknown"),
         decreases_variant:  decreases_variant,
       }
+      @current_contract_refs = {}
 
       classified_contract.fetch("declarations").each do |decl|
         case decl.fetch("kind")
@@ -484,7 +485,9 @@ module IgniterLang
         when "uses_contract"
           # LANG-TYPED-CONTRACT-REF-PROP-P3: resolve typed contract reference.
           # Does NOT enter symbol_types — not a local symbol binding.
-          typed_decls << typecheck_uses_contract(decl, contract_name_str, type_errors)
+          typed_ref = typecheck_uses_contract(decl, contract_name_str, type_errors)
+          register_current_contract_ref(typed_ref)
+          typed_decls << typed_ref
         when "invariant"
           # TINV-1/2/3: Resolve predicate_ref, validate overridable_with, compute output_effect
           check_invariant(decl, symbol_types, type_errors, invariant_effects)
@@ -675,7 +678,10 @@ module IgniterLang
           "modifier"     => contract.fetch("modifier", "pure"),
           "input_count"  => inputs.size,
           "input_names"  => inputs.map { |d| d.fetch("name") },
-          "output_names" => outputs.map { |d| d.fetch("name") }
+          "input_types"  => inputs.map { |d| d.fetch("type_annotation", "Unknown") },
+          "output_names" => outputs.map { |d| d.fetch("name") },
+          "output_types" => outputs.map { |d| d.fetch("type_annotation", "Unknown") },
+          "single_output_type" => outputs.size == 1 ? outputs[0].fetch("type_annotation", nil) : nil
         }
       end
     end
@@ -827,7 +833,10 @@ module IgniterLang
             "modifier"      => entry.fetch("modifier"),
             "input_count"   => entry.fetch("input_count"),
             "input_names"   => entry.fetch("input_names"),
-            "output_names"  => entry.fetch("output_names")
+            "input_types"   => entry.fetch("input_types", []),
+            "output_names"  => entry.fetch("output_names"),
+            "output_types"  => entry.fetch("output_types", []),
+            "single_output_type" => entry.fetch("single_output_type", nil)
           }
         )
       end
@@ -852,7 +861,10 @@ module IgniterLang
               "modifier"      => entry.fetch("modifier"),
               "input_count"   => entry.fetch("input_count"),
               "input_names"   => entry.fetch("input_names"),
-              "output_names"  => entry.fetch("output_names")
+              "input_types"   => entry.fetch("input_types", []),
+              "output_names"  => entry.fetch("output_names"),
+              "output_types"  => entry.fetch("output_types", []),
+              "single_output_type" => entry.fetch("single_output_type", nil)
             }
           )
         end
@@ -895,7 +907,10 @@ module IgniterLang
             "modifier"      => entry.fetch("modifier"),
             "input_count"   => entry.fetch("input_count"),
             "input_names"   => entry.fetch("input_names"),
-            "output_names"  => entry.fetch("output_names")
+            "input_types"   => entry.fetch("input_types", []),
+            "output_names"  => entry.fetch("output_names"),
+            "output_types"  => entry.fetch("output_types", []),
+            "single_output_type" => entry.fetch("single_output_type", nil)
           }
         )
       else
@@ -911,6 +926,14 @@ module IgniterLang
           "target" => target, "resolution_status" => "unresolved", "resolution_kind" => "unresolved"
         )
       end
+    end
+
+    def register_current_contract_ref(typed_ref)
+      return unless typed_ref.fetch("resolution_status", nil) == "resolved"
+
+      resolved = typed_ref.fetch("resolved_ref")
+      @current_contract_refs[typed_ref.fetch("target")] = resolved
+      @current_contract_refs[resolved.fetch("contract_name")] ||= resolved
     end
 
     # LANG-TYPED-CONTRACT-REF-PROP-P5: import scope for a given module.
@@ -1061,6 +1084,8 @@ module IgniterLang
         infer_binary(expr, symbol_types, type_errors, type_warnings, node_name)
       when "call"
         infer_call(expr, symbol_types, type_errors, type_warnings, node_name)
+      when "form_invocation"
+        infer_form_invocation(expr, symbol_types, type_errors, type_warnings, node_name)
       when "index_access"
         infer_index_access(expr, symbol_types, type_errors, type_warnings, node_name)
       when "if_expr"
@@ -1079,6 +1104,108 @@ module IgniterLang
         type_errors << oof("OOF-TY0", "Unsupported expression kind: #{expr.fetch("kind")}", node_name)
         typed_expr("unsupported", type_ir("Unknown"), [], "source_kind" => expr.fetch("kind"))
       end
+    end
+
+    def infer_form_invocation(expr, symbol_types, type_errors, type_warnings, node_name)
+      trigger = expr.fetch("trigger")
+      resolved = @current_contract_refs.fetch(trigger, nil)
+      unless resolved
+        type_errors << oof(
+          "OOF-FORM1",
+          "form invocation '#{trigger}' requires an explicit uses declaration for the target contract",
+          node_name
+        )
+        return typed_expr("form_invocation", type_ir("Unknown"), [], "trigger" => trigger)
+      end
+
+      unless resolved.fetch("modifier", "pure") == "pure"
+        type_errors << oof(
+          "OOF-FORM2",
+          "form invocation '#{trigger}' targets #{resolved.fetch("modifier")} contract '#{resolved.fetch("contract_name")}'; only pure targets are allowed",
+          node_name
+        )
+      end
+
+      input_names = resolved.fetch("input_names", [])
+      input_types = resolved.fetch("input_types", [])
+      attrs = expr.fetch("attrs", [])
+      attr_map = {}
+      attrs.each do |attr|
+        name = attr.fetch("name")
+        if attr_map.key?(name)
+          type_errors << oof("OOF-FORM3", "duplicate form attribute '#{name}'", node_name)
+        end
+        attr_map[name] = attr.fetch("value")
+      end
+
+      extras = attr_map.keys - input_names
+      extras.each do |name|
+        type_errors << oof(
+          "OOF-FORM4",
+          "form invocation '#{trigger}' has unknown attribute '#{name}'",
+          node_name
+        )
+      end
+
+      children = expr.fetch("children", [])
+      if children.any? && !input_names.include?("children")
+        type_errors << oof(
+          "OOF-FORM5",
+          "form invocation '#{trigger}' has children but target contract has no 'children' input",
+          node_name
+        )
+      end
+
+      typed_args = []
+      input_names.each_with_index do |input_name, idx|
+        expected = input_types[idx] ? type_ir(input_types[idx]) : type_ir("Unknown")
+        raw_arg = if input_name == "children"
+          { "kind" => "array_literal", "items" => children }
+        elsif attr_map.key?(input_name)
+          attr_map.fetch(input_name)
+        else
+          type_errors << oof(
+            "OOF-FORM6",
+            "form invocation '#{trigger}' missing required attribute '#{input_name}'",
+            node_name
+          )
+          { "kind" => "literal", "value" => nil, "type_tag" => "Nil" }
+        end
+
+        typed_arg = infer_expr(raw_arg, symbol_types, type_errors, type_warnings, node_name)
+        actual = typed_arg.fetch("resolved_type")
+        unless unknown_or_unknown_bearing?(actual) || unknown_or_unknown_bearing?(expected) ||
+               structurally_assignable?(actual, expected)
+          type_errors << oof(
+            "OOF-FORM7",
+            "form invocation '#{trigger}' input '#{input_name}' expected #{type_display(expected)}, got #{type_display(actual)}",
+            node_name
+          )
+        end
+        typed_args << {
+          "name" => input_name,
+          "expected_type" => expected,
+          "expr" => typed_arg
+        }
+      end
+
+      out_type = resolved.fetch("single_output_type", nil) ? type_ir(resolved.fetch("single_output_type")) : type_ir("Unknown")
+      if resolved.fetch("output_names", []).length != 1
+        type_errors << oof(
+          "OOF-FORM8",
+          "form invocation '#{trigger}' target must have exactly one output",
+          node_name
+        )
+      end
+
+      typed_expr(
+        "form_invocation",
+        out_type,
+        typed_args.flat_map { |arg| arg.fetch("expr").fetch("deps", []) }.uniq,
+        "trigger" => trigger,
+        "resolved_ref" => resolved,
+        "args" => typed_args
+      )
     end
 
     def infer_call(expr, symbol_types, type_errors, type_warnings, node_name)

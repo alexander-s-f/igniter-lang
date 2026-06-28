@@ -72,7 +72,10 @@ module IgniterLang
             "modifier"     => contract.fetch("modifier", "pure"),
             "input_count"  => inputs.size,
             "input_names"  => inputs.map { |d| d.fetch("name") },
+            "input_types"  => inputs.map { |d| d.fetch("type_annotation", "Unknown") },
             "output_names" => outputs.map { |d| d.fetch("name") },
+            "output_types" => outputs.map { |d| d.fetch("type_annotation", "Unknown") },
+            "single_output_type" => outputs.size == 1 ? outputs[0].fetch("type_annotation", nil) : nil,
             "source_hash"  => unit.fetch("source_hash"),
             "source_path"  => unit.fetch("source_path")
           }

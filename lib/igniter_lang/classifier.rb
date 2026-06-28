@@ -597,6 +597,9 @@ module IgniterLang
         expr_refs(expr.fetch("left")) + expr_refs(expr.fetch("right"))
       when "call"
         expr.fetch("args", []).flat_map { |arg| expr_refs(arg) }
+      when "form_invocation"
+        expr.fetch("attrs", []).flat_map { |attr| expr_refs(attr.fetch("value")) } +
+          expr.fetch("children", []).flat_map { |child| expr_refs(child) }
       when "lambda"
         params = expr.fetch("params", [])
         body_refs = expr_refs(expr.fetch("body"))

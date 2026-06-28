@@ -1863,6 +1863,8 @@ module IgniterLang
         # PROP-044-P3: PascalCase ident immediately followed by { → variant construct
         if tok.value[0] =~ /[A-Z]/ && peek_type?(:lbrace)
           parse_variant_construct(tok.value)
+        elsif form_invocation_start?
+          parse_form_invocation(tok.value)
         else
           { "kind" => "ref", "name" => tok.value }
         end
@@ -1890,6 +1892,40 @@ module IgniterLang
         advance
         { "kind" => "error", "token" => tok.value }
       end
+    end
+
+    def form_invocation_start?
+      peek_type?(:lbrace) ||
+        (%i[ident keyword].include?(peek&.type) && peek(1)&.type == :assign)
+    end
+
+    def parse_form_invocation(trigger)
+      attrs = []
+      until peek_type?(:lbrace) || peek_type?(:eof)
+        unless %i[ident keyword].include?(peek&.type) && peek(1)&.type == :assign
+          add_parse_error(
+            rule: "OOF-FORM0",
+            message: "form invocation '#{trigger}' attributes must use key=value before the child block",
+            token: peek&.value.to_s,
+            line: peek&.line || 0,
+            col: peek&.col || 0
+          )
+          break
+        end
+        name = advance.value
+        expect_type!(:assign)
+        attrs << { "name" => name, "value" => parse_expr }
+        advance if peek_type?(:comma)
+      end
+
+      expect_type!(:lbrace)
+      children = []
+      until peek_type?(:rbrace) || peek_type?(:eof)
+        children << parse_expr
+        advance if peek_type?(:comma)
+      end
+      expect_type!(:rbrace)
+      { "kind" => "form_invocation", "trigger" => trigger, "attrs" => attrs, "children" => children }
     end
 
     def parse_if_expr
