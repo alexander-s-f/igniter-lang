@@ -85,13 +85,17 @@ module IgniterLang
 
     # LANG-STDLIB-COLLECTION-MAP-FILTER-PROP-P1: stdlib.collection HOF registry (v0 — exhaustive).
     # Source aliases → qualified SemanticIR names. All pure/core/authority_surface:none.
-    # map/filter: 2-arg (collection, lambda). count: 1-arg (collection). No predicate-count in v0.
+    # map/filter/find/any/all: 2-arg (collection, lambda). count: 1-arg (collection).
+    # No predicate-count in v0.
     # SemanticIR fn is always the qualified_name. Source alias never appears in SIR.
     # Adding entries requires PROP amendment + P4+ authorization.
     COLLECTION_HOF_FNS = {
       "map"      => { qualified_name: "stdlib.collection.map",      arity: 2, has_lambda: true  },
       "filter"   => { qualified_name: "stdlib.collection.filter",   arity: 2, has_lambda: true  },
       "count"    => { qualified_name: "stdlib.collection.count",    arity: 1, has_lambda: false },
+      "find"     => { qualified_name: "stdlib.collection.find",     arity: 2, has_lambda: true  },
+      "any"      => { qualified_name: "stdlib.collection.any",      arity: 2, has_lambda: true  },
+      "all"      => { qualified_name: "stdlib.collection.all",      arity: 2, has_lambda: true  },
       # LANG-STDLIB-COLLECTION-FLATMAP-P3 (admitted by -FLATMAP-PROP-P1): flat_map(Collection[A],
       # A -> Collection[B]) -> Collection[B]. The result is ONE-LEVEL unwrapped (the lambda body's
       # collection type itself), never re-wrapped as Collection[Collection[B]].
@@ -2785,9 +2789,11 @@ module IgniterLang
     end
 
     # LANG-STDLIB-COLLECTION-MAP-FILTER-PROP-P1: Collection HOF dispatch.
-    # map(Collection[T],  (T→U))    → Collection[U]
-    # filter(Collection[T], (T→Bool)) → Collection[T]
-    # count(Collection[T])           → Integer
+    # map(Collection[T],  (T→U))       → Collection[U]
+    # filter(Collection[T], (T→Bool))  → Collection[T]
+    # count(Collection[T])             → Integer
+    # find(Collection[T], (T→Bool))    → Option[T]
+    # any/all(Collection[T], (T→Bool)) → Bool
     def infer_collection_hof_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
       spec           = COLLECTION_HOF_FNS.fetch(fn)
       qualified      = spec[:qualified_name]
@@ -2811,7 +2817,8 @@ module IgniterLang
         type_errors << oof("OOF-COL2",
           "#{qualified}: first argument must be Collection[T], got #{col_type_name}",
           node_name)
-        return typed_expr("call", type_ir("Unknown"), collection_arg.fetch("deps", []),
+        recovery_type = %w[any all].include?(fn) ? type_ir("Bool") : type_ir("Unknown")
+        return typed_expr("call", recovery_type, collection_arg.fetch("deps", []),
                           "fn" => qualified, "args" => [collection_arg])
       end
 
@@ -2821,13 +2828,14 @@ module IgniterLang
                           "fn" => qualified, "args" => [collection_arg])
       end
 
-      # ── map / filter: validate lambda argument ────────────────────────────────
+      # ── map / filter / predicate ops: validate lambda argument ────────────────
       lambda_node = args[1]
       unless lambda_node.is_a?(Hash) && lambda_node.fetch("kind", nil) == "lambda"
         type_errors << oof("OOF-COL1",
           "#{qualified}: second argument must be a lambda, got #{lambda_node.fetch("kind", "non-lambda") rescue "non-lambda"}",
           node_name)
-        return typed_expr("call", type_ir("Unknown"), collection_arg.fetch("deps", []),
+        recovery_type = %w[any all].include?(fn) ? type_ir("Bool") : type_ir("Unknown")
+        return typed_expr("call", recovery_type, collection_arg.fetch("deps", []),
                           "fn" => qualified, "args" => [collection_arg])
       end
 
@@ -2843,8 +2851,8 @@ module IgniterLang
       body_typed  = infer_lambda_body(lambda_body, local_symbols, type_errors, type_warnings, node_name)
       body_type   = body_typed.fetch("resolved_type")
 
-      # ── OOF-COL3: filter predicate must return Bool ───────────────────────────
-      if fn == "filter"
+      # ── OOF-COL3: predicate ops must return Bool ─────────────────────────────
+      if %w[filter find any all].include?(fn)
         pred_name = type_name(body_type)
         unless pred_name == "Bool" || pred_name == "Unknown"
           type_errors << oof("OOF-COL3",
@@ -2860,6 +2868,8 @@ module IgniterLang
       output_type = case fn
       when "map"    then collection_type_ir_from(body_type)
       when "filter" then collection_type_ir_from(elem_type)
+      when "find"   then option_type_ir(elem_type)
+      when "any", "all" then type_ir("Bool")
       when "flat_map"
         # LANG-STDLIB-COLLECTION-FLATMAP-P3: ONE-LEVEL unwrap. The lambda body is `Collection[B]`,
         # and the result is that SAME `Collection[B]` - NOT `collection_type_ir_from(body_type)`,
