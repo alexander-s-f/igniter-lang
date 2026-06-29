@@ -89,9 +89,13 @@ module IgniterLang
     # SemanticIR fn is always the qualified_name. Source alias never appears in SIR.
     # Adding entries requires PROP amendment + P4+ authorization.
     COLLECTION_HOF_FNS = {
-      "map"    => { qualified_name: "stdlib.collection.map",    arity: 2, has_lambda: true  },
-      "filter" => { qualified_name: "stdlib.collection.filter", arity: 2, has_lambda: true  },
-      "count"  => { qualified_name: "stdlib.collection.count",  arity: 1, has_lambda: false },
+      "map"      => { qualified_name: "stdlib.collection.map",      arity: 2, has_lambda: true  },
+      "filter"   => { qualified_name: "stdlib.collection.filter",   arity: 2, has_lambda: true  },
+      "count"    => { qualified_name: "stdlib.collection.count",    arity: 1, has_lambda: false },
+      # LANG-STDLIB-COLLECTION-FLATMAP-P3 (admitted by -FLATMAP-PROP-P1): flat_map(Collection[A],
+      # A -> Collection[B]) -> Collection[B]. The result is ONE-LEVEL unwrapped (the lambda body's
+      # collection type itself), never re-wrapped as Collection[Collection[B]].
+      "flat_map" => { qualified_name: "stdlib.collection.flat_map", arity: 2, has_lambda: true  },
     }.freeze
 
     # LANG-STDLIB-COLLECTION-FIRST-LAST-P2: source aliases for Rust-parity
@@ -2856,6 +2860,22 @@ module IgniterLang
       output_type = case fn
       when "map"    then collection_type_ir_from(body_type)
       when "filter" then collection_type_ir_from(elem_type)
+      when "flat_map"
+        # LANG-STDLIB-COLLECTION-FLATMAP-P3: ONE-LEVEL unwrap. The lambda body is `Collection[B]`,
+        # and the result is that SAME `Collection[B]` - NOT `collection_type_ir_from(body_type)`,
+        # which would wrap it again as `Collection[Collection[B]]`.
+        case type_name(body_type)
+        when "Collection"
+          body_type                                   # Collection[B] (or Collection[Unknown]) as-is
+        when "Unknown"
+          collection_type_ir_from(type_ir("Unknown")) # body fully Unknown -> permissive Collection[Unknown]
+        else
+          # -- OOF-COL9: flat_map lambda body must itself be a collection --------------------------
+          type_errors << oof("OOF-COL9",
+            "#{qualified}: lambda body must return Collection[B], got #{type_name(body_type)}",
+            node_name)
+          collection_type_ir_from(type_ir("Unknown")) # recover as Collection[Unknown]
+        end
       end
 
       lambda_typed = {
