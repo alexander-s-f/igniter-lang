@@ -1,8 +1,8 @@
 {
   "kind": "stdlib_inventory",
   "format_version": "v0",
-  "stdlib_surface_digest": "f7964a7b868c7756cecc41268cddf8aa8d158aec83e20e7610401c4497fe966f",
-  "note": "Normatively referenced by Ch8. Digest is computed from canonical re-serialization of entries sorted by canonical_name with entry_digest fields stripped — never from raw file bytes. P3 proof verifies determinism. P5 adds stdlib.collection.map + stdlib.collection.filter entries and updates stdlib.collection.count proof_lineage. CONSTRUCT-P1 adds stdlib.decimal.decimal (explicit Decimal constructor) and recomputes the digest.",
+  "stdlib_surface_digest": "31934924da8a451687830feb1f9a6d3eabe524b69248b068ae70d663ddc1a86a",
+  "note": "Normatively referenced by Ch8. Digest is computed from canonical re-serialization of entries sorted by canonical_name with entry_digest fields stripped — never from raw file bytes. P3 proof verifies determinism. P5 adds stdlib.collection.map + stdlib.collection.filter entries and updates stdlib.collection.count proof_lineage. CONSTRUCT-P1 adds stdlib.decimal.decimal (explicit Decimal constructor) and recomputes the digest. FLATMAP-P5 adds stdlib.collection.flat_map and recomputes the digest.",
   "entries": [
     {
       "canonical_name": "stdlib.text.byte_length",
@@ -1316,6 +1316,54 @@
       ],
       "compatibility_note": "Callback must return Option[U] (OOF-COL3 otherwise); keeps each Some(u) payload, drops every None. U is taken from the callback's concrete Option param, else the Collection[U] output context (route B2) when a parametric match callback collapses to bare Option. Mirrors map per-toolchain: Ruby drops the lambda from SIR args and carries resolved_type; Rust keeps the lambda and omits resolved_type. Does not overload map; agnostic to T (serves user variants and built-in Option/Result).",
       "owner_surface": "LANG-SUMTYPE-COLLECT-P3",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.collection.flat_map",
+      "semantic_ir_name": "stdlib.collection.flat_map",
+      "legacy_sir": null,
+      "aliases": [
+        {
+          "kind": "source_alias",
+          "name": "flat_map"
+        }
+      ],
+      "category": "collection",
+      "lifecycle_status": "lab-implemented",
+      "semantic_stability": "experiment-pass",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "total",
+      "type_params": [
+        "T",
+        "U"
+      ],
+      "input_signature": [
+        "Collection[T]",
+        "(T) -> Collection[U]"
+      ],
+      "output_signature": "Collection[U]",
+      "diagnostics": [
+        "OOF-COL1",
+        "OOF-COL2",
+        "OOF-COL9"
+      ],
+      "failure_behavior": "none",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "LANG-STDLIB-COLLECTION-FLATMAP-PROP-P1 readiness/admission — flat_map chosen as the smallest collection HOF for descriptor pressure",
+        "LANG-STDLIB-COLLECTION-FLATMAP-P3 canon Ruby typechecker.rb — COLLECTION_HOF_FNS + one-level unwrap + OOF-COL9 (proof 18/18 PASS)",
+        "LANG-STDLIB-COLLECTION-FLATMAP-P4 lab Rust parity — split from and_then, param=element type, one-level unwrap, emitter qualification (tests 7/7 PASS)",
+        "LANG-STDLIB-COLLECTION-FLATMAP-P5 inventory integration + digest recompute"
+      ],
+      "examples": [
+        "flat_map([[1], [2]], xs -> xs) -> [1, 2]"
+      ],
+      "compatibility_note": "One-level unwrap: flat_map(Collection[A], A -> Collection[B]) -> Collection[B], never Collection[Collection[B]]. Lambda body must be Collection[B] or Unknown (OOF-COL9 otherwise); Unknown stays permissive. `and_then` is a SEPARATE Option/Result-monadic surface and is NOT aliased to collection flat_map. Lab Rust array-literal lambda body (x -> [x,x]) infers Collection[Unknown] (a separate array-literal inference gap); collection-valued bodies carry a concrete element type.",
+      "owner_surface": "LANG-STDLIB-COLLECTION-FLATMAP-PROP-P1",
       "entry_digest": null
     },
     {
