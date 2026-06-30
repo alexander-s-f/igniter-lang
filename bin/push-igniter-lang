@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+# Verify and push the igniter-lang repository.
+#
+# This repo has two normal remotes:
+#   origin   -> public/GitHub upstream
+#   avenlance -> internal team mirror
+
+set -euo pipefail
+
+PUBLIC_REMOTE="${IGNITER_LANG_PUBLIC_REMOTE:-origin}"
+INTERNAL_REMOTE="${IGNITER_LANG_INTERNAL_REMOTE:-avenlance}"
+REMOTE_BRANCH="${IGNITER_LANG_REMOTE_BRANCH:-main}"
+
+usage() {
+  cat <<USAGE
+Usage: bin/push-igniter-lang
+
+Run lightweight package checks and push igniter-lang to:
+  $PUBLIC_REMOTE/$REMOTE_BRANCH
+  $INTERNAL_REMOTE/$REMOTE_BRANCH
+
+Expected setup:
+  git remote add avenlance ssh://git@git.int.avenlance.com:222/Igniter/igniter-lang.git
+
+Recommended flow:
+  git status
+  git add <files>
+  git commit -m "..."
+  bin/push-igniter-lang
+
+Environment overrides:
+  IGNITER_LANG_PUBLIC_REMOTE   default: origin
+  IGNITER_LANG_INTERNAL_REMOTE default: avenlance
+  IGNITER_LANG_REMOTE_BRANCH   default: main
+USAGE
+}
+
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  usage
+  exit 0
+fi
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root"
+
+if [[ ! -f "igniter_lang.gemspec" ]] || [[ ! -f "lib/igniter_lang.rb" ]]; then
+  echo "push-igniter-lang: ERROR: this does not look like the igniter-lang repo." >&2
+  exit 1
+fi
+
+current_branch="$(git branch --show-current)"
+if [[ "$current_branch" != "$REMOTE_BRANCH" ]]; then
+  echo "push-igniter-lang: ERROR: expected branch '$REMOTE_BRANCH', got '$current_branch'." >&2
+  exit 1
+fi
+
+for remote in "$PUBLIC_REMOTE" "$INTERNAL_REMOTE"; do
+  if ! git remote get-url "$remote" >/dev/null 2>&1; then
+    echo "push-igniter-lang: ERROR: remote '$remote' is not configured." >&2
+    exit 1
+  fi
+done
+
+if [[ -n "$(git status --porcelain)" ]]; then
+  echo "push-igniter-lang: ERROR: working tree is dirty; commit or stash first." >&2
+  git status --short >&2
+  exit 1
+fi
+
+echo "push-igniter-lang: checking gemspec syntax ..."
+ruby -c igniter_lang.gemspec
+
+echo "push-igniter-lang: checking package load ..."
+ruby -Ilib -e 'require "igniter_lang"; puts "igniter_lang #{IgniterLang::VERSION}"'
+
+echo "push-igniter-lang: checking CLI help ..."
+ruby -Ilib bin/igc --help >/dev/null
+
+echo "push-igniter-lang: pushing $current_branch -> $PUBLIC_REMOTE/$REMOTE_BRANCH ..."
+git push "$PUBLIC_REMOTE" "$current_branch:$REMOTE_BRANCH"
+
+echo "push-igniter-lang: pushing $current_branch -> $INTERNAL_REMOTE/$REMOTE_BRANCH ..."
+git push "$INTERNAL_REMOTE" "$current_branch:$REMOTE_BRANCH"
+
+echo "push-igniter-lang: OK"
