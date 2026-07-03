@@ -255,7 +255,9 @@ R190 accepts expression-level `if_expr` as internal compiler support:
 
 ```text
 stage ownership:    TypeChecker (OOF-IF1..OOF-IF4) + typed SemanticIR lowering
-parser shape:       existing; no new parser syntax
+parser shape:       existing; `else if` chaining added as parser-only sugar that
+                    desugars to nested `else { if ... }` (see Ch2 §2.2.3.1); no new
+                    AST/SIR node, no new diagnostic, TypeChecker/lowering unchanged
 else required:      missing else produces OOF-IF2, not a parse error
 condition:          must resolve to canonical Bool {"name":"Bool","params":[]}
 branch types:       then/else must exact-match; mismatch produces OOF-IF3

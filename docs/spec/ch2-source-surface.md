@@ -150,10 +150,15 @@ compute result = if condition { then_expr } else { else_expr }
 Accepted v0 grammar (required-else form for spec purposes):
 
 ```text
-IfExpr   := "if" Expr BlockExpr "else" BlockExpr
+IfExpr   := "if" Expr BlockExpr "else" ( IfExpr | BlockExpr )
 BlockExpr := "{" BlockBody "}"
 BlockBody := Stmt* Expr
 ```
+
+The `else` branch may be either a `BlockExpr` (the plain form) or another
+`IfExpr` (the `else if` chaining sugar; see §2.2.3.1). The chaining form is pure
+surface syntax that desugars to a nested `BlockExpr` holding the trailing
+`IfExpr`, so it introduces no new grammar node beyond the existing `IfExpr`.
 
 Branch bodies are `BlockExpr`-shaped (`Stmt*` followed by a final `Expr`), not
 bare expressions. The tolerant parser BNF in §2.2 uses `BlockExpr := "{" Stmt* Expr "}"`,
@@ -183,11 +188,45 @@ V0 accepted semantics:
   the same type; see Ch3 §3.6.
 - Nested `if_expr` follows the same rules at every nesting level.
 
+### 2.2.3.1 else if chaining (source-surface sugar)
+
+`else if` is accepted source-surface sugar that desugars to the existing nested
+form. It reuses the two existing keywords `else` and `if`; no `elif` or alternate
+keyword is added.
+
+Accepted source shape:
+
+```igniter
+compute result = if c1 { a } else if c2 { b } else { c }
+```
+
+Desugaring (exact, applied recursively):
+
+```text
+if c1 { a } else if c2 { b } else { c }
+  ≡  if c1 { a } else { if c2 { b } else { c } }
+```
+
+The parser rewrites `else if …` into an `else` branch whose sole value-producing
+expression is the trailing `if_expr`. Consequences, all inherited (no new rule):
+
+- **No new AST/SIR node.** The desugared tree is byte-identical to the
+  hand-written nested form; the lowered SemanticIR `contracts` are equal (only
+  the source-text-derived `source_hash` differs, by construction).
+- **Totality preserved.** A chain with no final `else`
+  (`if c1 { a } else if c2 { b }`) desugars to an inner `if` with no `else`, so
+  `OOF-IF2` fires on that inner node exactly as the nested form does.
+- **Diagnostics unchanged.** `OOF-IF1` (non-Bool condition), `OOF-IF3` (branch
+  type mismatch), and `OOF-IF4` (empty branch) apply per link at its source span.
+- **Unambiguous parse.** After `else`, one-token lookahead disambiguates: the
+  `if` keyword starts a chain link; `{` starts a block. Each branch body is
+  brace-delimited, so a trailing `else` binds to the nearest `if`.
+
 Non-claims for this surface:
 
 ```text
 runtime/lazy branch execution is not claimed;
-else-if / multi-branch sugar is not supported;
+else-if desugars to the nested form and adds no new SIR node or runtime semantics;
 branch-local declaration scoping beyond BlockExpr is not added;
 statement-level if is not supported;
 public API/CLI is not widened by this surface.

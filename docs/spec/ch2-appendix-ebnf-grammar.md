@@ -170,7 +170,8 @@ BinOp             ::= Expr Op Expr
 Op                ::= "+" | "-" | "*" | "/" | "==" | "!=" | "<" | ">" | "<=" | ">="
                     | "&&" | "||" | "++"
 Call              ::= Name "(" (Expr ("," Expr)*)? ")"
-IfExpr            ::= "if" Expr BlockExpr ("else" BlockExpr)?
+IfExpr            ::= "if" Expr BlockExpr ("else" (IfExpr | BlockExpr))?
+                      -- `else if` is surface sugar desugaring to `else { if ... }`; see ch2 §2.2.3.1
 BlockExpr         ::= "{" Stmt* Expr "}"
 Lambda            ::= "(" Params? ")" "->" Expr | Name "->" Expr
 FieldAccess       ::= Expr "." Name
