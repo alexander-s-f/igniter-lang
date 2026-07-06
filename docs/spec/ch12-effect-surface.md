@@ -1,14 +1,25 @@
 # Chapter 12: Effect Surface
 
-Status: proposed
+Status: proposed (body-decl subset experiment-pass via PROP-035 v0)
 Stage: 3 (Phase 2)
-Source PROP: PROP-035 (not yet authored)
+Source PROP: PROP-035 — authored + experiment-pass 2026-06-07
+  (`.agents/work/proposals/PROP-035-effect-surface-io-capability-v0.md`,
+  proof 64/64 `experiments/io_capability_proof/`)
 Governance: META-EXPERT-013
-Last updated: 2026-05-10
+Delta tracking: igniter-gov `DELTA-LEDGER.md` rows D-001 / D-005 / D-009
+Last updated: 2026-07-06
 
-> **Proposed.** This chapter describes the Effect Surface extension.
-> Status advances to `accepted` when PROP-035 regression suite passes.
-> PROP-035 authorship is gated on PROP-031 passing.
+> **Proposed, partially proven.** PROP-035 v0 is authored and experiment-pass,
+> but its scope is the body-level `capability` / `effect ... using` declarations
+> plus structural checks — NOT the seven-field Effect Surface this chapter
+> defines. The seven-field grammar, outcome taxonomy, required-field enforcement,
+> and unified parsed `effect_surface` SemanticIR shape remain incomplete. (Ruby
+> has a later `effect_surface_v0_stub`; Rust emits `capabilities[]`/`effects[]`.)
+> Chapter status advances to `accepted` when the full surface regression suite passes.
+>
+> Lab evidence (igniter-machine capability-IO receipts/reconcile; softphone
+> P6–P8 unknown→reconcile loop) proves the outcome semantics at the host
+> boundary. That is design evidence for this chapter — not canon acceptance.
 
 ---
 
@@ -158,6 +169,14 @@ in a profile that only permits `compensatable` is a compile-time error (OOF-M2).
 | OOF-M3 | `irreversible` without `compensation` or `no_compensation` | warn |
 | OOF-M4 | `idempotency: none` used in a retry-enabled profile | error |
 | OOF-M5 | `reversibility` exceeds profile maximum | error |
+
+> **Numbering caution (2026-07-06).** PROP-035 v0 (experiment-pass) allocated
+> OOF-M2/M4/M5 to its capability/effect_binding **structural** checks
+> (pure-with-capability / undeclared-capability-ref / unbound-capability). The
+> table above is this chapter's target allocation and does **not** match the
+> implemented v0 codes. Reconciling the OOF-M* numbering is part of Effect
+> Surface completion — tracked as ledger row D-009 in igniter-gov
+> `DELTA-LEDGER.md`.
 
 ---
 

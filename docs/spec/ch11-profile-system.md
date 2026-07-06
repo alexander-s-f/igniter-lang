@@ -1,14 +1,20 @@
 # Chapter 11: Profile System
 
-Status: proposed
+Status: proposed (binding + declarations experiment-pass via PROP-033/PROP-040)
 Stage: 3 (Phase 2)
-Source PROP: PROP-034 (not yet authored)
+Source PROPs: PROP-033 (via profile binding, experiment-pass) +
+  PROP-040 (profile declarations + OOF-M7/M8, experiment-pass;
+  renumbered out of the original PROP-035 slot on 2026-06-07)
 Governance: META-EXPERT-013
-Last updated: 2026-05-12
+Last updated: 2026-07-06
 
-> **Proposed.** This chapter describes the profile system extension.
-> Status advances to `accepted` when PROP-034 regression suite passes.
-> PROP-034 authorship is gated on PROP-031 + PROP-032 passing.
+> **Proposed, partially proven.** Profile binding syntax (PROP-033) and v0
+> profile declarations with OOF-M7/M8 binding checks (PROP-040) are
+> experiment-pass. Runtime profile injection/authority resolution, the
+> reversibility scale, and broader profile policy remain closed until
+> separately authorized. Status advances to `accepted` when the full
+> profile-system regression suite passes. (Historical note: this chapter
+> originally cited "PROP-034", which is now Output Evidence Syntax.)
 
 ---
 
