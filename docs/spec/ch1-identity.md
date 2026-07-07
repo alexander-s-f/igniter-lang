@@ -73,3 +73,26 @@ Two contracts C₁ ≡ C₂ iff for all inputs and all Tt:
 3. Lifecycle commitments are equal
 
 Raw value equality alone does NOT prove equivalence.
+
+---
+
+## Hash tiers (identity policy note, 2026-07-07 — LANG-ID-P2)
+
+Two named hash tiers, deliberately distinct (precedent: the TBackend P112
+two-tier decision):
+
+- **Program/pass identity = SHA-256.** `program_id` for every compiler pass is
+  `sha256(source_path|grammar_version|source_hash|pass_version)` truncated to
+  16 hex chars (e.g. `classifier_pass/<16hex>`); `source_hash` is
+  `sha256:<hex>` of the source bytes. Ruby canon and the Rust lab compiler
+  produce **byte-identical** ids for identical input — locked by the lab
+  cross-toolchain test `tests/program_id_parity_tests.rs` (the 2026-06-10
+  "Ruby SHA-256 vs Rust blake3" divergence is resolved; Rust aligned to canon).
+- **Lab-internal artifact/ledger hashing = blake3** (e.g. capsule content
+  addresses, `AuthorityPolicy::policy_digest`, machine receipt digests).
+  Blake3 values are lab evidence, never program identity, and never enter
+  `program_id` seeds.
+
+`source_path` is part of pass identity BY DESIGN (same bytes at a different
+path = a different classified program); the path-independent semantic identity
+lives in the manifest `semantic_hash` (additive, 2026-07-05), not here.
