@@ -7,7 +7,7 @@
 # Proves `idempotency key <expr>` / `idempotency natural` / `idempotency none`
 # parse, classify (metadata; placement OOF-M6 incl. observed-refusal), typecheck
 # (key expr through normal inference; unknown refs fail closed) and emit into
-# `effect_surface_v0_stub` as PARSED `idempotency_mode`/`idempotency_key_expr`.
+# `effect_surface_v1` as PARSED `idempotency_mode`/`idempotency_key_expr`.
 #
 # In-card decisions this proof anchors:
 #   Placement: legal on effect/privileged/irreversible ONLY. Pure AND observed

@@ -202,6 +202,20 @@ in a profile that only permits `compensatable` is a compile-time error (OOF-M2).
 >   "`idempotency: none` in a retry-enabled profile" stays **HELD** for the
 >   profile-policy follow-up — no retry-enabled profile flag exists in either
 >   toolchain yet.
+> - **Unified IR object (LANG-EFFECT-SURFACE-IR-UNIFICATION-P3):** both
+>   toolchains emit the same nested `contract_ir["effect_surface"]` with
+>   `kind: "effect_surface_v1"` (Ruby's former `effect_surface_v0_stub` renamed;
+>   all stub-era proofs updated). Fields: `capability_bindings[{capability_name,
+>   capability_type, effect_name}]` (capability_type follows **CR-001** — `IO.*`
+>   normalizes to the `"IO.Capability"` sentinel), `affects_scope`/
+>   `affects_target` (defaults until the `affects` slice), `authority_ref`
+>   (null until the `authority` slice), `idempotency_mode`/`idempotency_key_expr`,
+>   `receipt_type`/`failure_type`. The Rust flat fields and
+>   `capabilities[]`/`effects[]` arrays remain as LEGACY compatibility surfaces
+>   (igniter-machine `discover_effect_surface` consumes the arrays; the arrays
+>   keep the concrete `IO.*` type name); new consumers read `effect_surface`.
+>   Proofs: lab `tests/effect_surface_ir_unification_tests.rs` (5/5) + machine
+>   `capability_io_host_tests` (9/9) + all Ruby effect-surface proofs green.
 
 ---
 

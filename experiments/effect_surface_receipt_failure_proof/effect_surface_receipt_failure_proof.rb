@@ -6,7 +6,7 @@
 # LANG-EFFECT-SURFACE-RECEIPT-FAILURE-P1 — first Effect Surface completion slice.
 # Proves `receipt <TypeRef>` / `failure <TypeRef>` parse, classify (metadata,
 # placement rules OOF-M6), typecheck (type resolution, OOF-M10) and emit into
-# `effect_surface_v0_stub` as PARSED values instead of hardcoded nils.
+# `effect_surface_v1` as PARSED values instead of hardcoded nils.
 #
 # In-card decisions this proof anchors:
 #   D1 (OOF-M numbering): implemented v0 allocation KEPT (OOF-M2/M4/M5 stay

@@ -173,8 +173,8 @@ module IgniterLang
         "nodes" => typed_nodes(contract),
         "escape_boundaries" => typed_escape_boundaries(contract)
       }
-      # LANG-EFFECT-SURFACE-RUNTIME-BRIDGE-P3: emit effect_surface_v0_stub for IO effect contracts
-      effect_surface = io_effect_surface_stub(contract)
+      # LANG-EFFECT-SURFACE-RUNTIME-BRIDGE-P3: emit effect_surface_v1 for IO effect contracts
+      effect_surface = io_effect_surface_v1(contract)
       contract_ir["effect_surface"] = effect_surface if effect_surface
       # PROP-033/040: emit profile_binding and profile_authority when via_profile is present
       via_profile       = contract.fetch("via_profile", nil)
@@ -521,7 +521,7 @@ module IgniterLang
       ] + io_capability_escape_boundaries(contract)
     end
 
-    def io_effect_surface_stub(contract)
+    def io_effect_surface_v1(contract)
       modifier = contract.fetch("modifier", "pure")
       return nil unless %w[effect privileged irreversible].include?(modifier)
 
@@ -547,7 +547,7 @@ module IgniterLang
       end
 
       {
-        "kind"                 => "effect_surface_v0_stub",
+        "kind"                 => "effect_surface_v1",
         "capability_bindings"  => bindings,
         "affects_scope"        => "external",
         "affects_target"       => "IO.Capability",
