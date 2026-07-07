@@ -560,8 +560,11 @@ module IgniterLang
       affects_decl = decls.find { |d| d.fetch("kind") == "affects" }
       # LANG-EFFECT-SURFACE-AUTHORITY-PARSER-P10: parsed authority clause.
       authority_decl = decls.find { |d| d.fetch("kind") == "authority" }
+      # LANG-EFFECT-SURFACE-COMPENSATION-P22: parsed compensation decision.
+      comp_decl    = decls.find { |d| d.fetch("kind") == "compensation" }
+      no_comp_decl = decls.find { |d| d.fetch("kind") == "no_compensation" }
       if cap_decls.empty? && receipt_decl.nil? && failure_decl.nil? && idem_decl.nil? &&
-         affects_decl.nil? && authority_decl.nil?
+         affects_decl.nil? && authority_decl.nil? && comp_decl.nil? && no_comp_decl.nil?
         return nil
       end
 
@@ -590,6 +593,11 @@ module IgniterLang
         # former hardcoded "none". Absent clause stays "none" (v0-stub default).
         "idempotency_mode"     => idem_decl&.fetch("mode", "none") || "none",
         "idempotency_key_expr" => idem_decl&.fetch("expr", nil),
+        # LANG-EFFECT-SURFACE-COMPENSATION-P22: three-state compensation decision —
+        # null (undeclared) ≠ "none" (explicit no_compensation) ≠ "ref"+name.
+        # Declaration only: no authority, no host binding, no execution.
+        "compensation_mode"    => comp_decl ? "ref" : (no_comp_decl ? "none" : nil),
+        "compensation_ref"     => comp_decl&.fetch("contract_ref", nil),
         # Parsed values (full type_ir) replace the former hardcoded nils.
         "receipt_type"         => receipt_decl&.fetch("type", nil),
         "failure_type"         => failure_decl&.fetch("type", nil)

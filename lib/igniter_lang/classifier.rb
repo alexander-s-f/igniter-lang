@@ -180,6 +180,18 @@ module IgniterLang
           effect_surface_meta["affects"] << node
           declarations << classified_decl(node.merge("name" => "affects"), "core", [], [])
                             .merge("scope" => node.fetch("scope"), "target" => node.fetch("target"))
+        when "compensation"
+          # LANG-EFFECT-SURFACE-COMPENSATION-P22: Effect Surface metadata — names
+          # the compensating contract. Declaration only (no authority, no host
+          # binding, no execution). Placement + mutual exclusion post-loop (OOF-M6).
+          effect_surface_meta["compensation"] << node
+          declarations << classified_decl(node.merge("name" => "compensation"), "core", [], [])
+                            .merge("contract_ref" => node.fetch("contract_ref"))
+        when "no_compensation"
+          # LANG-EFFECT-SURFACE-COMPENSATION-P22: explicit waiver — distinct from
+          # absence (the three-state distinction is load-bearing, Covenant P17).
+          effect_surface_meta["no_compensation"] << node
+          declarations << classified_decl(node.merge("name" => "no_compensation"), "core", [], [])
         when "authority"
           # LANG-EFFECT-SURFACE-AUTHORITY-PARSER-P10: declared authority intent
           # (ratified model F). Core metadata; placement post-loop (OOF-M6;
@@ -379,6 +391,16 @@ module IgniterLang
             contract.fetch("name")
           )
         end
+        # LANG-EFFECT-SURFACE-COMPENSATION-P22: compensation reverses a MUTATION —
+        # an observation mutates nothing, so observed is refused like pure.
+        if %w[compensation no_compensation].include?(meta_kind) && modifier == "observed" && nodes.any?
+          diagnostics << oof(
+            "OOF-M6",
+            "observed contract '#{contract.fetch("name")}' cannot declare '#{meta_kind}'; " \
+            "compensation reverses a mutation and requires an effect-family modifier",
+            contract.fetch("name")
+          )
+        end
         # LANG-EFFECT-SURFACE-AUTHORITY-PARSER-P10: authority gates mutation
         # execution; observed is refused like pure.
         if meta_kind == "authority" && modifier == "observed" && nodes.any?
@@ -397,6 +419,18 @@ module IgniterLang
             contract.fetch("name")
           )
         end
+      end
+
+      # LANG-EFFECT-SURFACE-COMPENSATION-P22: `compensation` and `no_compensation`
+      # are mutually exclusive — a contract cannot both name a compensator and
+      # explicitly waive one.
+      if effect_surface_meta["compensation"].any? && effect_surface_meta["no_compensation"].any?
+        diagnostics << oof(
+          "OOF-M6",
+          "contract '#{contract.fetch("name")}' declares both 'compensation' and " \
+          "'no_compensation'; the Effect Surface carries exactly one compensation decision",
+          contract.fetch("name")
+        )
       end
 
       if modifier == "pure"

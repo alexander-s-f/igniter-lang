@@ -899,6 +899,9 @@ module IgniterLang
       when "idempotency" then advance; parse_idempotency_decl
       # LANG-EFFECT-SURFACE-AFFECTS-P5: affects clause
       when "affects"     then advance; parse_affects_decl
+      # LANG-EFFECT-SURFACE-COMPENSATION-P22: compensation clauses
+      when "compensation"    then advance; parse_compensation_decl
+      when "no_compensation" then advance; { "kind" => "no_compensation" }
       # LANG-EFFECT-SURFACE-AUTHORITY-PARSER-P10: authority clause (declared intent only)
       when "authority"   then advance; parse_authority_decl
       when "stream"      then advance; parse_stream_decl
@@ -1229,6 +1232,41 @@ module IgniterLang
         skip_invalid_body_decl
         nil
       end
+    end
+
+    # LANG-EFFECT-SURFACE-COMPENSATION-P22: `compensation <ContractName>` |
+    # `no_compensation` — Effect Surface metadata naming the compensating
+    # contract (or explicitly waiving one). Declaration only: grants NO
+    # authority, binds NO host executor, executes NOTHING. v0 ref = bare
+    # same-module contract ident; dotted refs fail closed (OOF-M14).
+    def parse_compensation_decl
+      tok = peek
+      unless tok && %i[ident keyword].include?(tok.type)
+        add_parse_error(
+          rule: "OOF-M14",
+          message: "compensation clause requires a bare contract name or use 'no_compensation'",
+          token: tok&.value.to_s,
+          line: tok&.line || 0,
+          col: tok&.col || 0
+        )
+        skip_invalid_body_decl
+        return nil
+      end
+      ref = name_token!(%i[ident keyword])
+      # The lexer folds dotted paths into one ident token (`IO.NetworkCapability`
+      # style), so a dotted ref arrives INSIDE the name — check the name itself.
+      if ref.include?(".") || peek_type?(:dot)
+        add_parse_error(
+          rule: "OOF-M14",
+          message: "compensation ref must be a bare same-module contract name; dotted refs fail closed in v0",
+          token: ref,
+          line: tok.line,
+          col: tok.col
+        )
+        # The dotted ref was one lexed token, already consumed — nothing to skip.
+        return nil
+      end
+      { "kind" => "compensation", "contract_ref" => ref }
     end
 
     # LANG-EFFECT-SURFACE-IDEMPOTENCY-P2: `idempotency key <expr>` | `idempotency

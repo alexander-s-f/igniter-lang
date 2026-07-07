@@ -274,6 +274,19 @@ in a profile that only permits `compensatable` is a compile-time error (OOF-M2).
 >   LANG-EFFECT-SURFACE-AUTHORITY-HOST-CONFIG-P14), so no production runner
 >   enforces configured authority yet. Proof: machine
 >   `tests/capability_io_authority_policy_tests.rs` (7/7).
+> - `compensation <ContractName>` / `no_compensation` parse as body-level
+>   metadata in both toolchains (LANG-EFFECT-SURFACE-COMPENSATION-P22);
+>   three-state emission `compensation_mode: "ref"|"none"|null` +
+>   `compensation_ref` (null=undeclared ≠ explicit waiver ≠ named ref —
+>   Covenant P17); bare same-module ref only (dotted → OOF-M14; unknown →
+>   OOF-M15); placement/duplicate/mutual-exclusion → OOF-M6; bare
+>   `irreversible` → OOF-M3 warn. **Declaration only: names intent — grants no
+>   authority, binds no host executor, executes nothing** (runtime compensation
+>   = machine P12; a future host-binding card follows the authority
+>   host-policy pattern). Typed compensator input/output compatibility is
+>   deferred to a PROP-002-aligned slice. Proofs:
+>   `experiments/effect_surface_compensation_proof/` (17/17) + lab
+>   `tests/effect_surface_compensation_tests.rs` (8/8).
 > - **Unified IR object (LANG-EFFECT-SURFACE-IR-UNIFICATION-P3):** both
 >   toolchains emit the same nested `contract_ir["effect_surface"]` with
 >   `kind: "effect_surface_v1"` (Ruby's former `effect_surface_v0_stub` renamed;

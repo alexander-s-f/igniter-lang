@@ -530,6 +530,24 @@ module IgniterLang
           # (the target names an EXTERNAL/INTERNAL system, not a language type).
           typed_decls << typed_decl(decl, type_ir("Unit"), nil, [])
                            .merge("scope" => decl.fetch("scope"), "target" => decl.fetch("target"))
+        when "compensation"
+          # LANG-EFFECT-SURFACE-COMPENSATION-P22: the ref must name a same-module
+          # contract (an unresolvable compensator is a silent lie the compiler CAN
+          # catch — OOF-M15, fail-closed). Declaration only: no authority, no
+          # host binding, no execution.
+          ref = decl.fetch("contract_ref")
+          unless @same_module_registry.key?(ref)
+            type_errors << oof(
+              "OOF-M15",
+              "compensation ref '#{ref}' names no contract in this module",
+              "compensation"
+            )
+          end
+          typed_decls << typed_decl(decl, type_ir("Unit"), nil, [])
+                           .merge("contract_ref" => ref)
+        when "no_compensation"
+          # LANG-EFFECT-SURFACE-COMPENSATION-P22: explicit waiver (≠ absence).
+          typed_decls << typed_decl(decl, type_ir("Unit"), nil, [])
         when "authority"
           # LANG-EFFECT-SURFACE-AUTHORITY-PARSER-P10: declared authority intent —
           # a bare role symbol resolved HOST-side (never by the compiler).
@@ -679,6 +697,22 @@ module IgniterLang
             "lead declaration '#{decl.fetch("name")}' is only valid inside a loop body",
             decl.fetch("name")
           )
+        end
+      end
+
+      # LANG-EFFECT-SURFACE-COMPENSATION-P22: OOF-M3 as WARN (the ch12 §12.5
+      # target severity) — an `irreversible` contract that neither names a
+      # compensation nor explicitly waives one (`no_compensation`) gets a
+      # warning, not a hard failure. First target-table row to go live.
+      if contract_modifier == "irreversible"
+        has_comp = typed_decls.any? { |d| %w[compensation no_compensation].include?(d.fetch("kind")) }
+        unless has_comp
+          type_warnings << oof(
+            "OOF-M3",
+            "irreversible contract '#{classified_contract.fetch("name")}' declares neither " \
+            "'compensation <ContractName>' nor 'no_compensation'; declare or explicitly waive one",
+            classified_contract.fetch("name")
+          ).merge("severity" => "warning")
         end
       end
 
