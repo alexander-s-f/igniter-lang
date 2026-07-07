@@ -533,7 +533,11 @@ module IgniterLang
       failure_decl = decls.find { |d| d.fetch("kind") == "failure" }
       # LANG-EFFECT-SURFACE-IDEMPOTENCY-P2: parsed idempotency clause.
       idem_decl = decls.find { |d| d.fetch("kind") == "idempotency" }
-      return nil if cap_decls.empty? && receipt_decl.nil? && failure_decl.nil? && idem_decl.nil?
+      # LANG-EFFECT-SURFACE-AFFECTS-P5: parsed affects clause.
+      affects_decl = decls.find { |d| d.fetch("kind") == "affects" }
+      if cap_decls.empty? && receipt_decl.nil? && failure_decl.nil? && idem_decl.nil? && affects_decl.nil?
+        return nil
+      end
 
       eff_decls = decls.select { |d| d.fetch("kind") == "effect_binding" }
       bindings  = cap_decls.map do |cap|
@@ -549,8 +553,10 @@ module IgniterLang
       {
         "kind"                 => "effect_surface_v1",
         "capability_bindings"  => bindings,
-        "affects_scope"        => "external",
-        "affects_target"       => "IO.Capability",
+        # LANG-EFFECT-SURFACE-AFFECTS-P5: parsed affects clause replaces the former
+        # hardcoded constants. Absent clause keeps the documented defaults.
+        "affects_scope"        => affects_decl&.fetch("scope", nil) || "external",
+        "affects_target"       => affects_decl&.fetch("target", nil) || "IO.Capability",
         "authority_ref"        => nil,
         # LANG-EFFECT-SURFACE-IDEMPOTENCY-P2: parsed idempotency clause replaces the
         # former hardcoded "none". Absent clause stays "none" (v0-stub default).

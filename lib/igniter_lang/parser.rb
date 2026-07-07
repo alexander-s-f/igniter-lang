@@ -892,6 +892,8 @@ module IgniterLang
       when "failure"     then advance; parse_failure_decl
       # LANG-EFFECT-SURFACE-IDEMPOTENCY-P2: idempotency clause
       when "idempotency" then advance; parse_idempotency_decl
+      # LANG-EFFECT-SURFACE-AFFECTS-P5: affects clause
+      when "affects"     then advance; parse_affects_decl
       when "stream"      then advance; parse_stream_decl
       when "fold_stream" then advance; parse_fold_stream_decl
       when "invariant"   then advance; parse_invariant_decl
@@ -1157,6 +1159,30 @@ module IgniterLang
 
     def parse_failure_decl
       { "kind" => "failure", "type_annotation" => parse_type_ref }
+    end
+
+    # LANG-EFFECT-SURFACE-AFFECTS-P5: `affects external|internal <qualified-name>`
+    # — Effect Surface metadata naming the system the contract mutates. Metadata
+    # only: no profile allowed_effects enforcement, no runtime behavior. The
+    # qualified-name preserves source spelling (dotted identifier path).
+    def parse_affects_decl
+      tok = peek
+      case tok&.value
+      when "external", "internal"
+        scope = tok.value
+        advance
+        { "kind" => "affects", "scope" => scope, "target" => parse_qualified_ref }
+      else
+        add_parse_error(
+          rule: "OOF-M12",
+          message: "affects clause requires a scope: 'external' or 'internal'",
+          token: tok&.value.to_s,
+          line: tok&.line || 0,
+          col: tok&.col || 0
+        )
+        skip_invalid_body_decl
+        nil
+      end
     end
 
     # LANG-EFFECT-SURFACE-IDEMPOTENCY-P2: `idempotency key <expr>` | `idempotency

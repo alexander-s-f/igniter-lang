@@ -477,6 +477,12 @@ module IgniterLang
           type = type_ir("Unit")
           symbol_types[decl.fetch("name")] = type
           typed_decls << typed_decl(decl, type, nil, decl.fetch("deps", []))
+        when "affects"
+          # LANG-EFFECT-SURFACE-AFFECTS-P5: Effect Surface metadata — pure
+          # declaration (scope + qualified target name); no type resolution needed
+          # (the target names an EXTERNAL/INTERNAL system, not a language type).
+          typed_decls << typed_decl(decl, type_ir("Unit"), nil, [])
+                           .merge("scope" => decl.fetch("scope"), "target" => decl.fetch("target"))
         when "idempotency"
           # LANG-EFFECT-SURFACE-IDEMPOTENCY-P2: Effect Surface metadata. Mode "key"
           # carries an expression typed with the normal inference path (unknown

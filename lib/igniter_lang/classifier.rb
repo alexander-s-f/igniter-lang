@@ -172,6 +172,14 @@ module IgniterLang
           effect_surface_meta["idempotency"] << node
           declarations << classified_decl(node.merge("name" => "idempotency"), "core", [], [])
                             .merge("mode" => node.fetch("mode"))
+        when "affects"
+          # LANG-EFFECT-SURFACE-AFFECTS-P5: Effect Surface metadata — names the
+          # system the contract mutates. Same core-metadata treatment; placement
+          # rules run post-loop (OOF-M6; observed refused — an observation
+          # mutates nothing, so it has no affects target).
+          effect_surface_meta["affects"] << node
+          declarations << classified_decl(node.merge("name" => "affects"), "core", [], [])
+                            .merge("scope" => node.fetch("scope"), "target" => node.fetch("target"))
         when "read"
           fragment = temporal_type?(node["type_annotation"]) ? "temporal" : "escape"
           symbol_fragments[node.fetch("name")] = fragment == "temporal" ? "core" : "escape"
@@ -351,6 +359,16 @@ module IgniterLang
             "OOF-M6",
             "observed contract '#{contract.fetch("name")}' cannot declare 'idempotency'; " \
             "idempotency governs mutation retry and requires an effect-family modifier",
+            contract.fetch("name")
+          )
+        end
+        # LANG-EFFECT-SURFACE-AFFECTS-P5: affects names a MUTATION target — an
+        # observation mutates nothing, so observed is refused like pure.
+        if meta_kind == "affects" && modifier == "observed" && nodes.any?
+          diagnostics << oof(
+            "OOF-M6",
+            "observed contract '#{contract.fetch("name")}' cannot declare 'affects'; " \
+            "affects names a mutation target and requires an effect-family modifier",
             contract.fetch("name")
           )
         end

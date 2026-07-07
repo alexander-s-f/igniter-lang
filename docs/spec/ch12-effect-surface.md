@@ -177,9 +177,10 @@ in a profile that only permits `compensatable` is a compile-time error (OOF-M2).
 > table above is this chapter's TARGET-requirement prose; its rules will receive
 > fresh codes as each field slice lands (do not read table codes as implemented).
 > Codes allocated so far by completion slices: **OOF-M6** — Effect Surface
-> metadata illegal placement (pure contract; observed for `idempotency`) or
-> duplicate clause; **OOF-M10** — `receipt`/`failure` references an
-> unresolvable type; **OOF-M11** — malformed `idempotency` mode (parse-time).
+> metadata illegal placement (pure contract; observed for `idempotency` and
+> `affects`) or duplicate clause; **OOF-M10** — `receipt`/`failure` references
+> an unresolvable type; **OOF-M11** — malformed `idempotency` mode
+> (parse-time); **OOF-M12** — malformed `affects` scope (parse-time).
 > (OOF-M3 stays reserved for authority resolution / PROP-034 territory;
 > OOF-M7/M8 are taken by PROP-040 profile binding; OOF-M9 by PROP-034
 > evidence.) Tracked as ledger row D-009 in igniter-gov `DELTA-LEDGER.md`.
@@ -202,6 +203,15 @@ in a profile that only permits `compensatable` is a compile-time error (OOF-M2).
 >   "`idempotency: none` in a retry-enabled profile" stays **HELD** for the
 >   profile-policy follow-up — no retry-enabled profile flag exists in either
 >   toolchain yet.
+> - `affects external|internal <qualified-name>` parses as body-level metadata
+>   in both toolchains (LANG-EFFECT-SURFACE-AFFECTS-P5); the dotted target
+>   preserves source spelling; placement = effect/privileged/irreversible only
+>   (pure AND observed refused — affects names a mutation target); parsed
+>   values replace the former `effect_surface_v1` constants, absent clause
+>   keeps the documented defaults (`external` / `IO.Capability`). Profile
+>   `allowed_effects` enforcement stays **HELD** (profile policy). Proofs:
+>   `experiments/effect_surface_affects_proof/` (12/12) + lab
+>   `tests/effect_surface_affects_tests.rs` (8/8).
 > - **Unified IR object (LANG-EFFECT-SURFACE-IR-UNIFICATION-P3):** both
 >   toolchains emit the same nested `contract_ir["effect_surface"]` with
 >   `kind: "effect_surface_v1"` (Ruby's former `effect_surface_v0_stub` renamed;
