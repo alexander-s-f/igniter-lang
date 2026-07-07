@@ -141,9 +141,17 @@ module IgniterLang
     # (omit→None injection, T→Some auto-wrap, Option[T] passthrough) per the
     # PROVED PROP-P2 design. Default OFF — with the gate off, type_shapes drop
     # the optional flag exactly as before and behavior is byte-identical.
-    def initialize(typechecker_version: DEFAULT_VERSION, optional_fields: false)
+    # LANG-EFFECT-SURFACE-REQUIRED-FIELDS-P28 (gated completeness, board follow-up
+    # to P26): `required_effect_surface: true` emits OOF-M17 *warnings* for
+    # effect-family contracts that omit a required Effect Surface field. Default
+    # OFF — with the gate off, no OOF-M17 is ever produced and warning/error sets
+    # are byte-identical to before. Warning-only in v0; hard-error / default-ON /
+    # profile-policy are explicitly out of scope.
+    def initialize(typechecker_version: DEFAULT_VERSION, optional_fields: false,
+                   required_effect_surface: false)
       @typechecker_version = typechecker_version
       @optional_fields = optional_fields
+      @required_effect_surface = required_effect_surface
     end
 
     def typecheck(classified_program, cross_module_registry: {}, per_module_imports: {}, per_contract_module: {})
@@ -716,6 +724,28 @@ module IgniterLang
             "OOF-M3",
             "irreversible contract '#{classified_contract.fetch("name")}' declares neither " \
             "'compensation <ContractName>' nor 'no_compensation'; declare or explicitly waive one",
+            classified_contract.fetch("name")
+          ).merge("severity" => "warning")
+        end
+      end
+
+      # LANG-EFFECT-SURFACE-REQUIRED-FIELDS-P28: gated completeness warnings.
+      # OOF-M17 (fresh; NOT the PROP-035 structural OOF-M2) fires only under the
+      # `required_effect_surface` gate, only for effect-family contracts, and only
+      # at `warning` severity — a missing declared field is a completeness gap,
+      # not an unsound program. `compensation` requiredness is NOT covered here:
+      # it stays owned by the live OOF-M3 warn above (declared-or-waived semantics
+      # differ from plain presence). `observed`/`pure` are outside enforcement.
+      if @required_effect_surface && EFFECT_FAMILY_MODIFIERS.include?(contract_modifier)
+        present = typed_decls.map { |d| d.fetch("kind") }.to_set
+        REQUIRED_EFFECT_SURFACE_FIELDS.each do |field, modifiers|
+          next unless modifiers.include?(contract_modifier)
+          next if present.include?(field)
+          type_warnings << oof(
+            "OOF-M17",
+            "#{contract_modifier} contract '#{classified_contract.fetch("name")}' declares no " \
+            "'#{field}' Effect Surface field (required by ch12; declare it or leave the " \
+            "completeness gate off)",
             classified_contract.fetch("name")
           ).merge("severity" => "warning")
         end
@@ -3148,6 +3178,21 @@ module IgniterLang
     # LANG-EFFECT-SURFACE-RECEIPT-FAILURE-P1: scalar types a receipt/failure clause
     # may reference without a module-level type/variant declaration.
     EFFECT_SURFACE_BUILTIN_TYPES = %w[Integer Float Decimal Bool Text String Unit].freeze
+
+    # LANG-EFFECT-SURFACE-REQUIRED-FIELDS-P28: which contract modifiers carry an
+    # Effect Surface (and are thus subject to the completeness gate) and which
+    # declaration `kind`s are required for each. `compensation` is intentionally
+    # absent — its requiredness lives in the OOF-M3 warn. `authority` is required
+    # only for `privileged`/`irreversible` (declared-intent, never runtime).
+    EFFECT_FAMILY_MODIFIERS = %w[effect privileged irreversible].freeze
+    REQUIRED_EFFECT_SURFACE_FIELDS = {
+      "affects"       => %w[effect privileged irreversible],
+      "reversibility" => %w[effect privileged irreversible],
+      "idempotency"   => %w[effect privileged irreversible],
+      "receipt"       => %w[effect privileged irreversible],
+      "failure"       => %w[effect privileged irreversible],
+      "authority"     => %w[privileged irreversible]
+    }.freeze
 
     def infer_sum_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
       qualified = "stdlib.collection.sum"

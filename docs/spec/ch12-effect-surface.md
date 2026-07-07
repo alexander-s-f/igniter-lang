@@ -19,10 +19,15 @@ Last updated: 2026-07-07
 > (16/16 + 9/9), `affects` (12/12 + 8/8), `authority` (12/12 + 9/9;
 > declared intent only — see §12.3), `compensation` (17/17 + 8/8), and
 > `reversibility` (15/15 + 8/8; no default, absent ⇒ null);
-> proof anchors and per-slice caveats in §12.5. Still open:
-> required-field enforcement (the target OOF-M2), the seven-outcome taxonomy
-> as TYPES (outcomes are proven at the host boundary, not as language types),
-> and profile-policy enforcement (target OOF-M5). Authority host-policy
+> proof anchors and per-slice caveats in §12.5. Required-field completeness now
+> has a **gated warning** layer: `required_effect_surface` (default OFF) emits
+> `OOF-M17` for effect-family contracts missing a required field (19/19 + 9/9;
+> LANG-EFFECT-SURFACE-REQUIRED-FIELDS-P28) — a fresh code, NOT the target-table
+> OOF-M2 (retired). Still open: the seven-outcome taxonomy as TYPES (outcomes
+> are proven at the host boundary, not as language types), and profile-policy
+> enforcement (fresh M18+ codes — target OOF-M4/M5 collide with implemented
+> structural codes). Escalation of OOF-M17 from warn to error and default-ON
+> stay explicit later decisions. Authority host-policy
 > resolution exists as proof/loopback machine wiring only — no production
 > runner enforces it (public bind stays human-gated). Chapter status stays
 > `proposed`; it advances to `accepted` when the full surface regression
@@ -209,10 +214,16 @@ in a profile that only permits `compensatable` is a compile-time error (OOF-M2).
 
 | Code | Condition | Severity |
 |------|-----------|----------|
-| OOF-M2 | `effect/privileged/irreversible` missing required Effect Surface fields | error |
+| OOF-M17 | `effect/privileged/irreversible` missing a required Effect Surface field, under the `required_effect_surface` completeness gate | warn |
 | OOF-M3 | `irreversible` without `compensation` or `no_compensation` | warn |
-| OOF-M4 | `idempotency: none` used in a retry-enabled profile | error |
-| OOF-M5 | `reversibility` exceeds profile maximum | error |
+| OOF-M4 | `idempotency: none` used in a retry-enabled profile | error (HELD — profile policy) |
+| OOF-M5 | `reversibility` exceeds profile maximum | error (HELD — profile policy) |
+
+> The target-prose row "OOF-M2 — missing required Effect Surface fields (error)"
+> is **RETIRED**: implemented `OOF-M2` is PROP-035's structural
+> pure-with-capability check, and required-field completeness landed under a
+> FRESH code (`OOF-M17`) as a **gated warning**, not a hard error — see the
+> numbering decision and the P28 bullet below.
 
 > **Numbering decision (2026-07-06, LANG-EFFECT-SURFACE-RECEIPT-FAILURE-P1 D1).**
 > The implemented v0 allocation is KEPT: OOF-M2/M4/M5 remain PROP-035's
@@ -226,7 +237,16 @@ in a profile that only permits `compensatable` is a compile-time error (OOF-M2).
 > an unresolvable type; **OOF-M11** — malformed `idempotency` mode
 > (parse-time); **OOF-M12** — malformed `affects` scope (parse-time);
 > **OOF-M13** — malformed `authority` reference form (dotted ref or string
-> literal; parse-time).
+> literal; parse-time); **OOF-M16** — malformed/unknown `reversibility` value
+> (parse-time); **OOF-M17** — missing required Effect Surface field under the
+> `required_effect_surface` completeness gate (typechecker, **warn**;
+> LANG-EFFECT-SURFACE-REQUIRED-FIELDS-P28). This **retires** the target-table
+> "OOF-M2 = missing required fields" prose: M2 stays PROP-035 structural, and
+> completeness is a fresh gated warning. The profile-policy target rows
+> (OOF-M4 idempotency-none-in-retry-profile, OOF-M5 reversibility-exceeds-max)
+> likewise stay target-prose and will take **fresh** codes (M18+) when the
+> profile-policy wave lands — their table codes collide with implemented
+> PROP-035 structural M4/M5.
 > (**OOF-M3 resolution history:** the PROP-035 card once deferred "M3 =
 > authority resolution" to "PROP-034" — a numbering-era ghost (PROP-034 is
 > Output Evidence Syntax, owns OOF-M9), later re-pointed at PROP-030
@@ -316,6 +336,21 @@ in a profile that only permits `compensatable` is a compile-time error (OOF-M2).
 >   (encoded nowhere in v0). Proofs:
 >   `experiments/effect_surface_reversibility_proof/` (15/15) + lab
 >   `tests/effect_surface_reversibility_tests.rs` (8/8).
+> - **Gated completeness warnings (LANG-EFFECT-SURFACE-REQUIRED-FIELDS-P28):**
+>   an opt-in typechecker gate — Ruby `TypeChecker.new(required_effect_surface:
+>   true)`, Rust `TypeChecker::new().with_required_effect_surface(true)`,
+>   **default OFF** (gate off ⇒ no OOF-M17, warning/error sets byte-identical).
+>   Under the gate, effect-family contracts (`effect`/`privileged`/
+>   `irreversible`) missing a required field get `OOF-M17` at **warn** severity:
+>   `affects`/`reversibility`/`idempotency`/`receipt`/`failure` for all three
+>   modifiers, `authority` for `privileged`/`irreversible` only (declared-intent
+>   text — the warning does NOT imply runtime verification). `compensation`
+>   requiredness stays the live `OOF-M3` warn (declared-or-waived ≠ presence),
+>   never OOF-M17; `observed`/`pure` are outside enforcement; the warning never
+>   blocks acceptance. HELD: hard errors, default-ON, profile policy, host/
+>   runtime enforcement. Proofs:
+>   `experiments/effect_surface_required_fields_proof/` (19/19) + lab
+>   `tests/effect_surface_required_fields_tests.rs` (9/9).
 > - **Unified IR object (LANG-EFFECT-SURFACE-IR-UNIFICATION-P3):** both
 >   toolchains emit the same nested `contract_ir["effect_surface"]` with
 >   `kind: "effect_surface_v1"` (Ruby's former `effect_surface_v0_stub` renamed;
