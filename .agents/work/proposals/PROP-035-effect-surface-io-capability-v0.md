@@ -228,6 +228,13 @@ is distinct from `"Unknown"` and does not trigger type-mismatch errors.
 Note: OOF-M3 (authority resolution for `privileged` contracts) is deferred to
 PROP-034 which addresses the authority/executor approval surface.
 
+> **Correction (2026-07-06, LANG-EFFECT-SURFACE-AUTHORITY-SPEC-SPLIT-P7):**
+> the pointer above is a numbering-era ghost — PROP-034 is **Output Evidence
+> Syntax** (owns OOF-M9). The authority/executor-approval territory is
+> **PROP-030 (Executor Approval Token Contract)**, with PROP-040
+> `requires_authority` interaction. OOF-M3 stays reserved for that area. See
+> ch12 §12.3 authority (declaration-vs-enforcement split) and §12.5.
+
 ---
 
 ## § 7. Conformance Fixtures

@@ -92,9 +92,24 @@ the current igniter-lang application boundary.
 
 ### authority
 
-Names the authority role required to execute this contract. Required for
-`privileged` and `irreversible`. Optional for `effect`. When present, the runtime
-verifies the authority before execution.
+Names the authority requirement of this contract. Required for `privileged`
+and `irreversible`. Optional for `effect`.
+
+> **Declaration vs enforcement (split 2026-07-06,
+> LANG-EFFECT-SURFACE-AUTHORITY-SPEC-SPLIT-P7).** The clause declares
+> `authority_ref` — a SOURCE-DECLARED intent/requirement reference, following
+> the CR-003 pattern (a source-level intent record, like `profile_binding`).
+> **Parsing or IR presence of `authority_ref` must NOT be read as proof that
+> any runtime authority check happened.** Host enforcement is a HELD runtime
+> responsibility: it activates only when an explicit, reviewed mapping exists
+> from the source reference to one of —
+> a passport subject/scope/capability requirement;
+> a PROP-030-style executor approval token requirement;
+> or another reviewed host-policy binding.
+> The ident→passport/approval-token **mapping question is OPEN and
+> deliberately undecided** (route: an authority-mapping readiness card with
+> the PROP-030/PROP-040 owners; PROP-040 `requires_authority` interacts
+> here). Until that mapping exists, no parser accepts this clause.
 
 ### reversibility
 
@@ -181,9 +196,12 @@ in a profile that only permits `compensatable` is a compile-time error (OOF-M2).
 > `affects`) or duplicate clause; **OOF-M10** — `receipt`/`failure` references
 > an unresolvable type; **OOF-M11** — malformed `idempotency` mode
 > (parse-time); **OOF-M12** — malformed `affects` scope (parse-time).
-> (OOF-M3 stays reserved for authority resolution / PROP-034 territory;
-> OOF-M7/M8 are taken by PROP-040 profile binding; OOF-M9 by PROP-034
-> evidence.) Tracked as ledger row D-009 in igniter-gov `DELTA-LEDGER.md`.
+> (OOF-M3 stays reserved for authority resolution — **PROP-030
+> executor-approval territory, with PROP-040 `requires_authority`
+> interaction**; the older "deferred to PROP-034" pointer from the PROP-035
+> card was a numbering-era ghost: PROP-034 is Output Evidence Syntax and owns
+> OOF-M9. OOF-M7/M8 are taken by PROP-040 profile binding.) Tracked as ledger
+> row D-009 in igniter-gov `DELTA-LEDGER.md`.
 >
 > **Implemented so far (2026-07-06):**
 > - `receipt <TypeRef>` / `failure <TypeRef>` parse as body-level Effect
