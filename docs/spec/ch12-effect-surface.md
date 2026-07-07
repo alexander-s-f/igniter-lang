@@ -106,10 +106,28 @@ and `irreversible`. Optional for `effect`.
 > a passport subject/scope/capability requirement;
 > a PROP-030-style executor approval token requirement;
 > or another reviewed host-policy binding.
-> The ident→passport/approval-token **mapping question is OPEN and
-> deliberately undecided** (route: an authority-mapping readiness card with
-> the PROP-030/PROP-040 owners; PROP-040 `requires_authority` interacts
-> here). Until that mapping exists, no parser accepts this clause.
+> **Ratified mapping model (2026-07-06,
+> LANG-EFFECT-SURFACE-AUTHORITY-GOVERNANCE-P9, decision A — model F of the
+> P8 readiness packet, unchanged):**
+> - source domain: `authority_ref` is a **bare role ident**
+>   (`billing_operator`) — no dotted refs, no host-policy keys, no secrets;
+> - compile-time responsibility: syntax, placement, and IR emission ONLY —
+>   the compiler never resolves roles;
+> - runtime responsibility (**HELD** until the host-policy slice is
+>   separately authorized): the HOST policy table resolves role → required
+>   passport scope(s) on the existing `verify_passport` seam; a **missing
+>   mapping fails closed** (refusal, no receipt — never silent allow);
+>   receipts record the declared role alongside the checked authority digest;
+> - a PROP-030 executor approval token remains an ORTHOGONAL
+>   executor/artifact gate, not the role mapping;
+> - a future profile PROP may constrain the allowed role set
+>   (ch11's `requires_authority` prose — currently unauthored).
+>
+> With this model ratified: **the parser may accept `authority_ref` as
+> declared intent only** (route: LANG-EFFECT-SURFACE-AUTHORITY-PARSER-P10);
+> host role→scope enforcement remains held until the runtime/host-policy
+> slice lands. Parser acceptance is NOT runtime enforcement — the
+> declaration-vs-enforcement rule above stays load-bearing.
 
 ### reversibility
 
