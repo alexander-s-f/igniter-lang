@@ -25,7 +25,7 @@ Last updated: 2026-05-10
 | [9](ch9-stage2-reserved.md) | Stage 2 Reserved Primitives | deferred |
 | [10](ch10-contract-modifiers.md) | Contract Modifiers | proposed · PROP-031 |
 | [11](ch11-profile-system.md) | Profile System | proposed · PROP-033/PROP-040 experiment-pass (binding + v0 declarations) |
-| [12](ch12-effect-surface.md) | Effect Surface | proposed · PROP-035 experiment-pass (body-decl subset; seven-field surface open — ledger D-009) |
+| [12](ch12-effect-surface.md) | Effect Surface | proposed · PROP-035 experiment-pass; six of seven fields parse dual-toolchain (`effect_surface_v1`; reversibility open — ledger D-009) |
 | [13](ch13-managed-recursion.md) | Managed Recursion and Service Loops | proposed · Stage 4 |
 
 ---

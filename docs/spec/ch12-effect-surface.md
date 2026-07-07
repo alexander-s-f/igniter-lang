@@ -7,15 +7,26 @@ Source PROP: PROP-035 — authored + experiment-pass 2026-06-07
   proof 64/64 `experiments/io_capability_proof/`)
 Governance: META-EXPERT-013
 Delta tracking: igniter-gov `DELTA-LEDGER.md` rows D-001 / D-005 / D-009
-Last updated: 2026-07-06
+Last updated: 2026-07-07
 
-> **Proposed, partially proven.** PROP-035 v0 is authored and experiment-pass,
-> but its scope is the body-level `capability` / `effect ... using` declarations
-> plus structural checks — NOT the seven-field Effect Surface this chapter
-> defines. The seven-field grammar, outcome taxonomy, required-field enforcement,
-> and unified parsed `effect_surface` SemanticIR shape remain incomplete. (Ruby
-> has a later `effect_surface_v0_stub`; Rust emits `capabilities[]`/`effects[]`.)
-> Chapter status advances to `accepted` when the full surface regression suite passes.
+> **Proposed, six of seven fields implemented.** PROP-035 v0's scope was the
+> body-level `capability` / `effect ... using` declarations plus structural
+> checks — NOT the seven-field Effect Surface this chapter defines. Completion
+> slices have since landed **six of the seven fields** as dual-toolchain parsed
+> metadata in the unified `effect_surface_v1` IR object emitted by BOTH
+> compilers (Ruby's former `effect_surface_v0_stub` was renamed by
+> IR-UNIFICATION-P3): `receipt`/`failure` (18/18 + 8/8), `idempotency`
+> (16/16 + 9/9), `affects` (12/12 + 8/8), `authority` (12/12 + 9/9;
+> declared intent only — see §12.3), and `compensation` (17/17 + 8/8);
+> proof anchors and per-slice caveats in §12.5. Still open: `reversibility`
+> (the last v1 field, held with the profile-policy question),
+> required-field enforcement (the target OOF-M2), the seven-outcome taxonomy
+> as TYPES (outcomes are proven at the host boundary, not as language types),
+> and profile-policy enforcement (target OOF-M5). Authority host-policy
+> resolution exists as proof/loopback machine wiring only — no production
+> runner enforces it (public bind stays human-gated). Chapter status stays
+> `proposed`; it advances to `accepted` when the full surface regression
+> suite passes.
 >
 > Lab evidence (igniter-machine capability-IO receipts/reconcile; softphone
 > P6–P8 unknown→reconcile loop) proves the outcome semantics at the host
@@ -216,19 +227,23 @@ in a profile that only permits `compensatable` is a compile-time error (OOF-M2).
 > (parse-time); **OOF-M12** — malformed `affects` scope (parse-time);
 > **OOF-M13** — malformed `authority` reference form (dotted ref or string
 > literal; parse-time).
-> (OOF-M3 stays reserved for authority resolution — **PROP-030
-> executor-approval territory, with PROP-040 `requires_authority`
-> interaction**; the older "deferred to PROP-034" pointer from the PROP-035
-> card was a numbering-era ghost: PROP-034 is Output Evidence Syntax and owns
-> OOF-M9. OOF-M7/M8 are taken by PROP-040 profile binding.) Tracked as ledger
+> (**OOF-M3 resolution history:** the PROP-035 card once deferred "M3 =
+> authority resolution" to "PROP-034" — a numbering-era ghost (PROP-034 is
+> Output Evidence Syntax, owns OOF-M9), later re-pointed at PROP-030
+> territory. **Superseded 2026-07-07 by P22:** OOF-M3 is now LIVE as the
+> target-table rule — irreversible without compensation/no_compensation,
+> WARN. Authority-resolution enforcement, if it ever lands, takes a FRESH
+> code with the PROP-030/PROP-040 wave — M3 is no longer available to it.
+> OOF-M7/M8 remain taken by PROP-040 profile binding.) Tracked as ledger
 > row D-009 in igniter-gov `DELTA-LEDGER.md`.
 >
 > **Implemented so far (2026-07-06):**
 > - `receipt <TypeRef>` / `failure <TypeRef>` parse as body-level Effect
 >   Surface metadata in both toolchains; typechecker resolves the referenced
 >   type (declared type/variant or builtin scalar) and fails closed otherwise;
->   SemanticIR carries the parsed `receipt_type`/`failure_type` (Ruby
->   `effect_surface_v0_stub`; Rust `contract_ir` fields). Proofs:
+>   SemanticIR carries the parsed `receipt_type`/`failure_type` (historically
+>   Ruby `effect_surface_v0_stub`; Rust `contract_ir` fields — both unified
+>   into `effect_surface_v1` by the IR-unification bullet below). Proofs:
 >   `experiments/effect_surface_receipt_failure_proof/` (18/18) + lab
 >   `tests/effect_surface_receipt_failure_tests.rs` (8/8).
 > - `idempotency key <expr>` / `natural` / `none` parse as body-level metadata
@@ -268,11 +283,12 @@ in a profile that only permits `compensatable` is a compile-time error (OOF-M2).
 >   (`AuthRefusal::UnmappedAuthorityRole`, before the executor, no receipt);
 >   receipts gain additive `declared_authority_role` / `resolved_scopes` /
 >   `authority_policy_digest`; null `authority_ref` is a nil-safe passthrough.
->   **Proof-only — NOT wired into any production runner or host config**;
->   production wiring stays HELD for the host-config slices
->   (LANG-EFFECT-SURFACE-AUTHORITY-HOST-CONFIG-READINESS-P13 /
->   LANG-EFFECT-SURFACE-AUTHORITY-HOST-CONFIG-P14), so no production runner
->   enforces configured authority yet. Proof: machine
+>   **Proof/loopback only — NOT production-wired**: the follow-on slices
+>   (host-config P14, runner-wire P16, prod-gate P19, write-bridge P20)
+>   landed the config→runner chain plus an operator smoke app
+>   (lab `server/igniter-web/examples/authority_demo_app`), all at
+>   proof/loopback scope; public bind stays human-gated, so no production
+>   runner enforces configured authority yet. Proof: machine
 >   `tests/capability_io_authority_policy_tests.rs` (7/7).
 > - `compensation <ContractName>` / `no_compensation` parse as body-level
 >   metadata in both toolchains (LANG-EFFECT-SURFACE-COMPENSATION-P22);
@@ -293,9 +309,10 @@ in a profile that only permits `compensatable` is a compile-time error (OOF-M2).
 >   all stub-era proofs updated). Fields: `capability_bindings[{capability_name,
 >   capability_type, effect_name}]` (capability_type follows **CR-001** — `IO.*`
 >   normalizes to the `"IO.Capability"` sentinel), `affects_scope`/
->   `affects_target` (defaults until the `affects` slice), `authority_ref`
->   (null until the `authority` slice), `idempotency_mode`/`idempotency_key_expr`,
->   `receipt_type`/`failure_type`. The Rust flat fields and
+>   `affects_target` (parsed since the `affects` slice P5), `authority_ref`
+>   (parsed since the `authority` slice P10), `idempotency_mode`/
+>   `idempotency_key_expr`, `receipt_type`/`failure_type`, and — since P22 —
+>   `compensation_mode`/`compensation_ref`. The Rust flat fields and
 >   `capabilities[]`/`effects[]` arrays remain as LEGACY compatibility surfaces
 >   (igniter-machine `discover_effect_surface` consumes the arrays; the arrays
 >   keep the concrete `IO.*` type name); new consumers read `effect_surface`.
