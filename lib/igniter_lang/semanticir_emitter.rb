@@ -531,7 +531,9 @@ module IgniterLang
       # justifies an effect_surface object even before any capability is declared.
       receipt_decl = decls.find { |d| d.fetch("kind") == "receipt" }
       failure_decl = decls.find { |d| d.fetch("kind") == "failure" }
-      return nil if cap_decls.empty? && receipt_decl.nil? && failure_decl.nil?
+      # LANG-EFFECT-SURFACE-IDEMPOTENCY-P2: parsed idempotency clause.
+      idem_decl = decls.find { |d| d.fetch("kind") == "idempotency" }
+      return nil if cap_decls.empty? && receipt_decl.nil? && failure_decl.nil? && idem_decl.nil?
 
       eff_decls = decls.select { |d| d.fetch("kind") == "effect_binding" }
       bindings  = cap_decls.map do |cap|
@@ -550,8 +552,10 @@ module IgniterLang
         "affects_scope"        => "external",
         "affects_target"       => "IO.Capability",
         "authority_ref"        => nil,
-        "idempotency_mode"     => "none",
-        "idempotency_key_expr" => nil,
+        # LANG-EFFECT-SURFACE-IDEMPOTENCY-P2: parsed idempotency clause replaces the
+        # former hardcoded "none". Absent clause stays "none" (v0-stub default).
+        "idempotency_mode"     => idem_decl&.fetch("mode", "none") || "none",
+        "idempotency_key_expr" => idem_decl&.fetch("expr", nil),
         # Parsed values (full type_ir) replace the former hardcoded nils.
         "receipt_type"         => receipt_decl&.fetch("type", nil),
         "failure_type"         => failure_decl&.fetch("type", nil)

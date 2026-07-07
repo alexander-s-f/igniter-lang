@@ -176,20 +176,32 @@ in a profile that only permits `compensatable` is a compile-time error (OOF-M2).
 > undeclared-capability-ref / unbound-capability), dual-toolchain proven. The
 > table above is this chapter's TARGET-requirement prose; its rules will receive
 > fresh codes as each field slice lands (do not read table codes as implemented).
-> Codes allocated so far by completion slices: **OOF-M6** — `receipt`/`failure`
-> illegal placement (pure contract) or duplicate clause; **OOF-M10** —
-> `receipt`/`failure` references an unresolvable type. (OOF-M3 stays reserved
-> for authority resolution / PROP-034 territory; OOF-M7/M8 are taken by
-> PROP-040 profile binding; OOF-M9 by PROP-034 evidence.) Tracked as ledger
-> row D-009 in igniter-gov `DELTA-LEDGER.md`.
+> Codes allocated so far by completion slices: **OOF-M6** — Effect Surface
+> metadata illegal placement (pure contract; observed for `idempotency`) or
+> duplicate clause; **OOF-M10** — `receipt`/`failure` references an
+> unresolvable type; **OOF-M11** — malformed `idempotency` mode (parse-time).
+> (OOF-M3 stays reserved for authority resolution / PROP-034 territory;
+> OOF-M7/M8 are taken by PROP-040 profile binding; OOF-M9 by PROP-034
+> evidence.) Tracked as ledger row D-009 in igniter-gov `DELTA-LEDGER.md`.
 >
-> **Implemented so far (2026-07-06):** `receipt <TypeRef>` and
-> `failure <TypeRef>` parse as body-level Effect Surface metadata in both
-> toolchains; typechecker resolves the referenced type (declared type/variant
-> or builtin scalar) and fails closed otherwise; SemanticIR carries the parsed
-> `receipt_type`/`failure_type` (Ruby `effect_surface_v0_stub`; Rust
-> `contract_ir` fields). Proofs: `experiments/effect_surface_receipt_failure_proof/`
-> (18/18) + lab `tests/effect_surface_receipt_failure_tests.rs` (8/8).
+> **Implemented so far (2026-07-06):**
+> - `receipt <TypeRef>` / `failure <TypeRef>` parse as body-level Effect
+>   Surface metadata in both toolchains; typechecker resolves the referenced
+>   type (declared type/variant or builtin scalar) and fails closed otherwise;
+>   SemanticIR carries the parsed `receipt_type`/`failure_type` (Ruby
+>   `effect_surface_v0_stub`; Rust `contract_ir` fields). Proofs:
+>   `experiments/effect_surface_receipt_failure_proof/` (18/18) + lab
+>   `tests/effect_surface_receipt_failure_tests.rs` (8/8).
+> - `idempotency key <expr>` / `natural` / `none` parse as body-level metadata
+>   in both toolchains (LANG-EFFECT-SURFACE-IDEMPOTENCY-P2); the key expression
+>   types through normal inference; placement = effect/privileged/irreversible
+>   only (pure AND observed refused — idempotency governs mutation retry);
+>   SemanticIR carries parsed `idempotency_mode`/`idempotency_key_expr`.
+>   Proofs: `experiments/effect_surface_idempotency_proof/` (16/16) + lab
+>   `tests/effect_surface_idempotency_tests.rs` (9/9). The §12.5 target rule
+>   "`idempotency: none` in a retry-enabled profile" stays **HELD** for the
+>   profile-policy follow-up — no retry-enabled profile flag exists in either
+>   toolchain yet.
 
 ---
 

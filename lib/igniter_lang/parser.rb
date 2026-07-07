@@ -890,6 +890,8 @@ module IgniterLang
       # LANG-EFFECT-SURFACE-RECEIPT-FAILURE-P1: Effect Surface metadata clauses
       when "receipt"     then advance; parse_receipt_decl
       when "failure"     then advance; parse_failure_decl
+      # LANG-EFFECT-SURFACE-IDEMPOTENCY-P2: idempotency clause
+      when "idempotency" then advance; parse_idempotency_decl
       when "stream"      then advance; parse_stream_decl
       when "fold_stream" then advance; parse_fold_stream_decl
       when "invariant"   then advance; parse_invariant_decl
@@ -1155,6 +1157,34 @@ module IgniterLang
 
     def parse_failure_decl
       { "kind" => "failure", "type_annotation" => parse_type_ref }
+    end
+
+    # LANG-EFFECT-SURFACE-IDEMPOTENCY-P2: `idempotency key <expr>` | `idempotency
+    # natural` | `idempotency none` — Effect Surface metadata declaring the
+    # idempotency contract of an effectful operation. Metadata only: no retry
+    # runner, no enforcement. The key expression flows through the pipeline as a
+    # normal expr (`"expr"` field) so classifier/typechecker handle it uniformly.
+    def parse_idempotency_decl
+      tok = peek
+      case tok&.value
+      when "key"
+        advance
+        { "kind" => "idempotency", "mode" => "key", "expr" => parse_expr }
+      when "natural", "none"
+        mode = tok.value
+        advance
+        { "kind" => "idempotency", "mode" => mode }
+      else
+        add_parse_error(
+          rule: "OOF-M11",
+          message: "idempotency clause requires a mode: 'key <expr>', 'natural', or 'none'",
+          token: tok&.value.to_s,
+          line: tok&.line || 0,
+          col: tok&.col || 0
+        )
+        skip_invalid_body_decl
+        nil
+      end
     end
 
     # PINV-3: parse invariant declaration
@@ -1909,6 +1939,13 @@ module IgniterLang
     end
 
     def form_invocation_start?
+      # LANG-RUBY-IF-COND-BARE-IDENT-FORM-GUARD-P1: inside an `if` condition a
+      # lowercase ident before `{` must stay a plain ref — the `{` opens the
+      # then-block, not a Gap-I form invocation (`if flag { ... } else { ... }`).
+      # Rust parity: lab parser only constructs on PascalCase ident before `{`,
+      # so bare value idents in conditions never claim the block there either.
+      return false if (@if_cond_depth || 0).positive?
+
       peek_type?(:lbrace) ||
         (%i[ident keyword].include?(peek&.type) && peek(1)&.type == :assign)
     end
@@ -1943,7 +1980,14 @@ module IgniterLang
     end
 
     def parse_if_expr
-      cond = parse_expr
+      # LANG-RUBY-IF-COND-BARE-IDENT-FORM-GUARD-P1: suppress form-invocation
+      # detection while parsing the condition so its `{` opens the then-block.
+      @if_cond_depth = (@if_cond_depth || 0) + 1
+      begin
+        cond = parse_expr
+      ensure
+        @if_cond_depth -= 1
+      end
       then_block = parse_block_body
       else_block = nil
       if peek_kw?("else")

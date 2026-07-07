@@ -162,6 +162,16 @@ module IgniterLang
           kind = node.fetch("kind")
           effect_surface_meta[kind] << node
           declarations << classified_decl(node.merge("name" => kind), "core", [], [])
+        when "idempotency"
+          # LANG-EFFECT-SURFACE-IDEMPOTENCY-P2: Effect Surface metadata — the
+          # idempotency contract of an effectful operation. Same core-metadata
+          # treatment as receipt/failure; the key expression (mode "key") flows
+          # through classified_decl's standard "expr" passthrough. Placement rules
+          # run post-loop (OOF-M6; observed is refused — idempotency governs the
+          # retry of mutations, and an observation has no mutation to dedupe).
+          effect_surface_meta["idempotency"] << node
+          declarations << classified_decl(node.merge("name" => "idempotency"), "core", [], [])
+                            .merge("mode" => node.fetch("mode"))
         when "read"
           fragment = temporal_type?(node["type_annotation"]) ? "temporal" : "escape"
           symbol_fragments[node.fetch("name")] = fragment == "temporal" ? "core" : "escape"
@@ -324,12 +334,23 @@ module IgniterLang
       # Legal on effect/privileged/irreversible (full Effect Surface) and observed
       # (ch12 allows receipt/failure for the observation result). Refused on pure:
       # a pure contract has no external consequence to receipt or fail.
+      # LANG-EFFECT-SURFACE-IDEMPOTENCY-P2: idempotency is additionally refused on
+      # observed — it governs retry of MUTATIONS; an observation has no mutation
+      # to dedupe (machine evidence keys idempotency to write effects).
       effect_surface_meta.each do |meta_kind, nodes|
         if modifier == "pure" && nodes.any?
           diagnostics << oof(
             "OOF-M6",
             "pure contract '#{contract.fetch("name")}' cannot declare '#{meta_kind}' " \
             "Effect Surface metadata; use 'effect' or 'observed' modifier",
+            contract.fetch("name")
+          )
+        end
+        if meta_kind == "idempotency" && modifier == "observed" && nodes.any?
+          diagnostics << oof(
+            "OOF-M6",
+            "observed contract '#{contract.fetch("name")}' cannot declare 'idempotency'; " \
+            "idempotency governs mutation retry and requires an effect-family modifier",
             contract.fetch("name")
           )
         end

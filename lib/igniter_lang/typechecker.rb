@@ -477,6 +477,18 @@ module IgniterLang
           type = type_ir("Unit")
           symbol_types[decl.fetch("name")] = type
           typed_decls << typed_decl(decl, type, nil, decl.fetch("deps", []))
+        when "idempotency"
+          # LANG-EFFECT-SURFACE-IDEMPOTENCY-P2: Effect Surface metadata. Mode "key"
+          # carries an expression typed with the normal inference path (unknown
+          # refs/type errors fail closed exactly like a compute expression);
+          # "natural"/"none" carry no expression. Metadata itself types as Unit.
+          mode = decl.fetch("mode", "none")
+          typed_expr = nil
+          if mode == "key" && decl.key?("expr")
+            typed_expr = infer_expr(decl.fetch("expr"), symbol_types, type_errors, type_warnings, "idempotency")
+          end
+          typed_decls << typed_decl(decl, type_ir("Unit"), typed_expr, [])
+                           .merge("mode" => mode)
         when "receipt", "failure"
           # LANG-EFFECT-SURFACE-RECEIPT-FAILURE-P1: Effect Surface metadata — the
           # referenced type must resolve (declared record/variant or builtin scalar);
