@@ -113,6 +113,7 @@ module IgniterLang
       fold_stream_stream_refs = Hash.new { |refs, stream_name| refs[stream_name] = [] }
       capability_declarations = {}  # PROP-035: cap_name => node
       effect_bindings = []          # PROP-035: cap_refs that have effect bindings
+      effect_surface_meta = Hash.new { |h, k| h[k] = [] } # LANG-EFFECT-SURFACE-RECEIPT-FAILURE-P1: "receipt"/"failure" => nodes
       evidence_output_names = []    # PROP-034: output names that carry evidence refs
       parsed_program.fetch("olap_points", []).each do |point|
         symbol_fragments[point.fetch("name")] = "escape"
@@ -152,6 +153,15 @@ module IgniterLang
           symbol_kinds[node.fetch("name")] = "effect_binding"
           deps = capability_declarations.key?(cap_ref) ? [cap_ref] : []
           declarations << classified_decl(node, "escape", deps, [])
+        when "receipt", "failure"
+          # LANG-EFFECT-SURFACE-RECEIPT-FAILURE-P1: Effect Surface metadata clauses.
+          # Pure metadata: they declare the audit-proof / declared-failure types and
+          # carry no behavior, so they classify as "core" and do not flip the
+          # contract's fragment class (the effect-ness comes from the modifier and
+          # capability/effect declarations). Placement rules run post-loop (OOF-M6).
+          kind = node.fetch("kind")
+          effect_surface_meta[kind] << node
+          declarations << classified_decl(node.merge("name" => kind), "core", [], [])
         when "read"
           fragment = temporal_type?(node["type_annotation"]) ? "temporal" : "escape"
           symbol_fragments[node.fetch("name")] = fragment == "temporal" ? "core" : "escape"
@@ -306,6 +316,29 @@ module IgniterLang
             "OOF-M5",
             "capability '#{cap_name}' declared but has no effect...using binding",
             cap_name
+          )
+        end
+      end
+
+      # LANG-EFFECT-SURFACE-RECEIPT-FAILURE-P1: OOF-M6 — receipt/failure placement.
+      # Legal on effect/privileged/irreversible (full Effect Surface) and observed
+      # (ch12 allows receipt/failure for the observation result). Refused on pure:
+      # a pure contract has no external consequence to receipt or fail.
+      effect_surface_meta.each do |meta_kind, nodes|
+        if modifier == "pure" && nodes.any?
+          diagnostics << oof(
+            "OOF-M6",
+            "pure contract '#{contract.fetch("name")}' cannot declare '#{meta_kind}' " \
+            "Effect Surface metadata; use 'effect' or 'observed' modifier",
+            contract.fetch("name")
+          )
+        end
+        if nodes.length > 1
+          diagnostics << oof(
+            "OOF-M6",
+            "contract '#{contract.fetch("name")}' declares '#{meta_kind}' more than once; " \
+            "the Effect Surface carries exactly one #{meta_kind} type",
+            contract.fetch("name")
           )
         end
       end

@@ -887,6 +887,9 @@ module IgniterLang
       when "escape"      then advance; parse_escape_decl
       when "capability"  then advance; parse_capability_decl
       when "effect"      then advance; parse_effect_binding_decl
+      # LANG-EFFECT-SURFACE-RECEIPT-FAILURE-P1: Effect Surface metadata clauses
+      when "receipt"     then advance; parse_receipt_decl
+      when "failure"     then advance; parse_failure_decl
       when "stream"      then advance; parse_stream_decl
       when "fold_stream" then advance; parse_fold_stream_decl
       when "invariant"   then advance; parse_invariant_decl
@@ -1141,6 +1144,17 @@ module IgniterLang
       expect_kw!("using")
       cap_ref = name_token!(%i[ident])
       { "kind" => "effect_binding", "name" => name, "capability_ref" => cap_ref }
+    end
+
+    # LANG-EFFECT-SURFACE-RECEIPT-FAILURE-P1: `receipt <TypeRef>` / `failure <TypeRef>`
+    # Effect Surface metadata — declares the audit-proof / declared-failure output
+    # types of an effectful contract. Metadata only: no behavior, no executor.
+    def parse_receipt_decl
+      { "kind" => "receipt", "type_annotation" => parse_type_ref }
+    end
+
+    def parse_failure_decl
+      { "kind" => "failure", "type_annotation" => parse_type_ref }
     end
 
     # PINV-3: parse invariant declaration
@@ -1934,7 +1948,19 @@ module IgniterLang
       else_block = nil
       if peek_kw?("else")
         advance
-        else_block = parse_block_body
+        else_block =
+          if peek_kw?("if")
+            # LAB-IGNITER-ELSE-IF-CHAINING-IMPL-P1: `else if` is source-surface sugar.
+            # Desugar to the existing nested form `else { if ... }` by parsing the
+            # trailing `if` as the else branch's sole return expression — the AST is
+            # byte-identical to the hand-written nesting, so no new node kind, no new
+            # diagnostics: the innermost `if` keeps its own required-else obligation.
+            # LL(1)-clean: after `else`, `if` can never open a block (blocks start `{`).
+            advance
+            { "stmts" => [], "return_expr" => parse_if_expr }
+          else
+            parse_block_body
+          end
       end
       { "kind" => "if_expr", "cond" => cond, "then" => then_block, "else" => else_block }
     end

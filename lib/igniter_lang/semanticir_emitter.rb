@@ -527,7 +527,11 @@ module IgniterLang
 
       decls     = contract.fetch("declarations", [])
       cap_decls = decls.select { |d| d.fetch("kind") == "capability" }
-      return nil if cap_decls.empty?
+      # LANG-EFFECT-SURFACE-RECEIPT-FAILURE-P1: parsed receipt/failure metadata also
+      # justifies an effect_surface object even before any capability is declared.
+      receipt_decl = decls.find { |d| d.fetch("kind") == "receipt" }
+      failure_decl = decls.find { |d| d.fetch("kind") == "failure" }
+      return nil if cap_decls.empty? && receipt_decl.nil? && failure_decl.nil?
 
       eff_decls = decls.select { |d| d.fetch("kind") == "effect_binding" }
       bindings  = cap_decls.map do |cap|
@@ -548,8 +552,9 @@ module IgniterLang
         "authority_ref"        => nil,
         "idempotency_mode"     => "none",
         "idempotency_key_expr" => nil,
-        "receipt_type"         => nil,
-        "failure_type"         => nil
+        # Parsed values (full type_ir) replace the former hardcoded nils.
+        "receipt_type"         => receipt_decl&.fetch("type", nil),
+        "failure_type"         => failure_decl&.fetch("type", nil)
       }
     end
 

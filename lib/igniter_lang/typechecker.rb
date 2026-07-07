@@ -477,6 +477,23 @@ module IgniterLang
           type = type_ir("Unit")
           symbol_types[decl.fetch("name")] = type
           typed_decls << typed_decl(decl, type, nil, decl.fetch("deps", []))
+        when "receipt", "failure"
+          # LANG-EFFECT-SURFACE-RECEIPT-FAILURE-P1: Effect Surface metadata — the
+          # referenced type must resolve (declared record/variant or builtin scalar);
+          # an unresolvable type fails closed with OOF-M10.
+          raw   = decl.fetch("type_annotation", "Unknown")
+          tname = raw.is_a?(Hash) ? (raw["name"] || "Unknown") : raw.to_s
+          unless @type_shapes.key?(tname) || @variant_shapes.key?(tname) ||
+                 EFFECT_SURFACE_BUILTIN_TYPES.include?(tname)
+            type_errors << oof(
+              "OOF-M10",
+              "#{decl.fetch("kind")} declares unknown type '#{tname}'; declare it as a " \
+              "type/variant in this module or use a builtin",
+              decl.fetch("kind")
+            )
+          end
+          type = type_ir(raw)
+          typed_decls << typed_decl(decl, type, nil, [])
         when "window"
           typed_decls << typed_decl(decl, type_ir("Window"), nil, [])
         when "fold_stream"
@@ -3018,6 +3035,10 @@ module IgniterLang
     # Scalar sum returns the element type EXACTLY (Decimal scale preserved); the empty
     # identity is the additive zero of T's family (LANG-STDLIB-COLLECTION-SUM-SCALAR-P1).
     NUMERIC_SUM_FAMILIES = %w[Integer Float Decimal Unknown].freeze
+
+    # LANG-EFFECT-SURFACE-RECEIPT-FAILURE-P1: scalar types a receipt/failure clause
+    # may reference without a module-level type/variant declaration.
+    EFFECT_SURFACE_BUILTIN_TYPES = %w[Integer Float Decimal Bool Text String Unit].freeze
 
     def infer_sum_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
       qualified = "stdlib.collection.sum"

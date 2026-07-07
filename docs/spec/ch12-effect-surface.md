@@ -170,13 +170,26 @@ in a profile that only permits `compensatable` is a compile-time error (OOF-M2).
 | OOF-M4 | `idempotency: none` used in a retry-enabled profile | error |
 | OOF-M5 | `reversibility` exceeds profile maximum | error |
 
-> **Numbering caution (2026-07-06).** PROP-035 v0 (experiment-pass) allocated
-> OOF-M2/M4/M5 to its capability/effect_binding **structural** checks
-> (pure-with-capability / undeclared-capability-ref / unbound-capability). The
-> table above is this chapter's target allocation and does **not** match the
-> implemented v0 codes. Reconciling the OOF-M* numbering is part of Effect
-> Surface completion — tracked as ledger row D-009 in igniter-gov
-> `DELTA-LEDGER.md`.
+> **Numbering decision (2026-07-06, LANG-EFFECT-SURFACE-RECEIPT-FAILURE-P1 D1).**
+> The implemented v0 allocation is KEPT: OOF-M2/M4/M5 remain PROP-035's
+> capability/effect_binding **structural** checks (pure-with-capability /
+> undeclared-capability-ref / unbound-capability), dual-toolchain proven. The
+> table above is this chapter's TARGET-requirement prose; its rules will receive
+> fresh codes as each field slice lands (do not read table codes as implemented).
+> Codes allocated so far by completion slices: **OOF-M6** — `receipt`/`failure`
+> illegal placement (pure contract) or duplicate clause; **OOF-M10** —
+> `receipt`/`failure` references an unresolvable type. (OOF-M3 stays reserved
+> for authority resolution / PROP-034 territory; OOF-M7/M8 are taken by
+> PROP-040 profile binding; OOF-M9 by PROP-034 evidence.) Tracked as ledger
+> row D-009 in igniter-gov `DELTA-LEDGER.md`.
+>
+> **Implemented so far (2026-07-06):** `receipt <TypeRef>` and
+> `failure <TypeRef>` parse as body-level Effect Surface metadata in both
+> toolchains; typechecker resolves the referenced type (declared type/variant
+> or builtin scalar) and fails closed otherwise; SemanticIR carries the parsed
+> `receipt_type`/`failure_type` (Ruby `effect_surface_v0_stub`; Rust
+> `contract_ir` fields). Proofs: `experiments/effect_surface_receipt_failure_proof/`
+> (18/18) + lab `tests/effect_surface_receipt_failure_tests.rs` (8/8).
 
 ---
 
