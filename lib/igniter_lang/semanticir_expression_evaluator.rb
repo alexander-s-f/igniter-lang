@@ -10,7 +10,7 @@
 #
 # Boundary:
 #   internal, direct-require-only, not root-required
-#   supported expression kinds: literal, ref, if_expr
+#   supported expression kinds: literal, ref, if_expr, option_construct
 #   not integrated into RuntimeSmoke, CompilerOrchestrator, CompilerResult,
 #   CompilationReport, Diagnostics, public API/CLI, release harness, or Spark
 #
@@ -57,11 +57,26 @@ module IgniterLang
     # Referenced name is not present in the values hash
     MissingReferenceError = Class.new(Error)
 
+    # option_construct node has a missing/unknown arm or lacks its some-arm value
+    MalformedOptionConstructError = Class.new(Error)
+
     # -------------------------------------------------------------------------
-    # Supported expression kinds (Slice 1 core)
+    # Supported expression kinds (Slice 1 core + option_construct)
+    #
+    # LANG-OPTIONAL-FIELD-VM-LOWERING-P4: `option_construct` is the
+    # TC-synthesized node for optional record fields (omit→none arm,
+    # raw-T present→some arm; no source syntax produces it — see
+    # LANG-OPTIONAL-FIELD-PARTIAL-RECORD-P3). It ERASES to the existing
+    # nullable Option runtime representation shared with igniter-vm
+    # (or_else/is_some/map_get convention):
+    #   none arm    → nil        (VM: Value::Nil)
+    #   some(value) → the raw evaluated inner value (no wrapper)
+    # Deliberately NOT the tagged `__arm` variant record of source-level
+    # some(v)/none(): or_else is the v0 optional-field reader and would
+    # return a tagged wrapper unopened. No third convention.
     # -------------------------------------------------------------------------
 
-    SUPPORTED_KINDS = %w[literal ref if_expr].freeze
+    SUPPORTED_KINDS = %w[literal ref if_expr option_construct].freeze
 
     # -------------------------------------------------------------------------
     # Public interface
@@ -122,6 +137,12 @@ module IgniterLang
 
       when "if_expr"
         eval_if_expr(expr, values, call_trace)
+
+      when "option_construct"
+        # LANG-OPTIONAL-FIELD-VM-LOWERING-P4: erase onto the nullable Option
+        # runtime representation (none → nil, some → raw inner value).
+        # Recursion stays inside the Slice 1 pipeline.
+        eval_option_construct(expr) { |inner| eval_expr(inner, values, call_trace) }
 
       else
         # Unknown expression kind in selected path: fail closed.
@@ -202,6 +223,14 @@ module IgniterLang
       when "if_expr"
         eval_if_expr_ext(expr, values, call_trace, external_evaluator)
 
+      when "option_construct"
+        # LANG-OPTIONAL-FIELD-VM-LOWERING-P4: same erasure as Slice 1; the
+        # some-arm inner value recurses through the Slice 2 pipeline so an
+        # unsupported inner kind still reaches external_evaluator.
+        eval_option_construct(expr) do |inner|
+          eval_expr_ext(inner, values, call_trace, external_evaluator)
+        end
+
       else
         # PRT-IF3 / PRT-IF4 / PRT-IF5: selected-path kind unsupported by evaluator.
         # Delegate to external_evaluator (proof RuntimeMachine local handler).
@@ -263,6 +292,39 @@ module IgniterLang
       expr.fetch("value") do
         raise MalformedIfExprError,
               "Literal expression is missing 'value' key"
+      end
+    end
+
+    # Evaluate a TC-synthesized option_construct expression node
+    # (LANG-OPTIONAL-FIELD-VM-LOWERING-P4).
+    #
+    # Runtime representation (parity with igniter-vm compiler.rs/vm.rs arms —
+    # the shape existing or_else/unwrap_or/is_some/is_none/map_get consume):
+    #   { "kind" => "option_construct", "arm" => "none", ... } → nil
+    #   { "kind" => "option_construct", "arm" => "some", "value" => <expr>, ... }
+    #     → the evaluated inner value, unwrapped (no wrapper record)
+    #
+    # The caller supplies the recursion as a block so this helper is shared by
+    # the Slice 1 and Slice 2 pipelines without cross-linking them.
+    # Fail closed on unknown arm / missing some-arm value.
+    def eval_option_construct(expr)
+      arm = expr.fetch("arm") do
+        raise MalformedOptionConstructError,
+              "option_construct is missing 'arm' key"
+      end
+
+      case arm
+      when "none"
+        nil
+      when "some"
+        inner = expr.fetch("value") do
+          raise MalformedOptionConstructError,
+                "option_construct some arm is missing 'value' key"
+        end
+        yield inner
+      else
+        raise MalformedOptionConstructError,
+              "option_construct arm must be 'some' or 'none'; got #{arm.inspect}"
       end
     end
 
