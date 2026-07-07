@@ -548,6 +548,11 @@ module IgniterLang
         when "no_compensation"
           # LANG-EFFECT-SURFACE-COMPENSATION-P22: explicit waiver (≠ absence).
           typed_decls << typed_decl(decl, type_ir("Unit"), nil, [])
+        when "reversibility"
+          # LANG-EFFECT-SURFACE-REVERSIBILITY-P25: pure metadata — the scale value
+          # was validated at parse time (OOF-M16); nothing to resolve.
+          typed_decls << typed_decl(decl, type_ir("Unit"), nil, [])
+                           .merge("value" => decl.fetch("value"))
         when "authority"
           # LANG-EFFECT-SURFACE-AUTHORITY-PARSER-P10: declared authority intent —
           # a bare role symbol resolved HOST-side (never by the compiler).

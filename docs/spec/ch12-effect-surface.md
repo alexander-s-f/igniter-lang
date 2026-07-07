@@ -9,17 +9,17 @@ Governance: META-EXPERT-013
 Delta tracking: igniter-gov `DELTA-LEDGER.md` rows D-001 / D-005 / D-009
 Last updated: 2026-07-07
 
-> **Proposed, six of seven fields implemented.** PROP-035 v0's scope was the
+> **Proposed, all seven fields implemented as parsed metadata.** PROP-035 v0's scope was the
 > body-level `capability` / `effect ... using` declarations plus structural
 > checks — NOT the seven-field Effect Surface this chapter defines. Completion
-> slices have since landed **six of the seven fields** as dual-toolchain parsed
+> slices have since landed **all seven fields** as dual-toolchain parsed
 > metadata in the unified `effect_surface_v1` IR object emitted by BOTH
 > compilers (Ruby's former `effect_surface_v0_stub` was renamed by
 > IR-UNIFICATION-P3): `receipt`/`failure` (18/18 + 8/8), `idempotency`
 > (16/16 + 9/9), `affects` (12/12 + 8/8), `authority` (12/12 + 9/9;
-> declared intent only — see §12.3), and `compensation` (17/17 + 8/8);
-> proof anchors and per-slice caveats in §12.5. Still open: `reversibility`
-> (the last v1 field, held with the profile-policy question),
+> declared intent only — see §12.3), `compensation` (17/17 + 8/8), and
+> `reversibility` (15/15 + 8/8; no default, absent ⇒ null);
+> proof anchors and per-slice caveats in §12.5. Still open:
 > required-field enforcement (the target OOF-M2), the seven-outcome taxonomy
 > as TYPES (outcomes are proven at the host boundary, not as language types),
 > and profile-policy enforcement (target OOF-M5). Authority host-policy
@@ -303,6 +303,19 @@ in a profile that only permits `compensatable` is a compile-time error (OOF-M2).
 >   deferred to a PROP-002-aligned slice. Proofs:
 >   `experiments/effect_surface_compensation_proof/` (17/17) + lab
 >   `tests/effect_surface_compensation_tests.rs` (8/8).
+> - `reversibility :<value>` parses as body-level metadata in both toolchains
+>   (LANG-EFFECT-SURFACE-REVERSIBILITY-P25; the SEVENTH and final field):
+>   colon symbol required, six ch12 scale values, bare value emitted as
+>   `effect_surface_v1.reversibility`, **absent ⇒ null — no default**;
+>   placement/duplicate → OOF-M6; unknown value → OOF-M16; the ONE specified
+>   contradiction (`:irreversible`/`:destructive` + `compensation <Ref>`) →
+>   OOF-M6 (soft capable-but-waived cases deliberately accepted). HELD:
+>   profile max-reversibility (future profile PROP + a FRESH code — the
+>   target-table "OOF-M5" collides with implemented M5 = unbound capability),
+>   required-field enforcement, host/executor interpretation, scale ordering
+>   (encoded nowhere in v0). Proofs:
+>   `experiments/effect_surface_reversibility_proof/` (15/15) + lab
+>   `tests/effect_surface_reversibility_tests.rs` (8/8).
 > - **Unified IR object (LANG-EFFECT-SURFACE-IR-UNIFICATION-P3):** both
 >   toolchains emit the same nested `contract_ir["effect_surface"]` with
 >   `kind: "effect_surface_v1"` (Ruby's former `effect_surface_v0_stub` renamed;

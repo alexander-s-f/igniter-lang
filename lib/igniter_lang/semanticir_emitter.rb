@@ -563,8 +563,11 @@ module IgniterLang
       # LANG-EFFECT-SURFACE-COMPENSATION-P22: parsed compensation decision.
       comp_decl    = decls.find { |d| d.fetch("kind") == "compensation" }
       no_comp_decl = decls.find { |d| d.fetch("kind") == "no_compensation" }
+      # LANG-EFFECT-SURFACE-REVERSIBILITY-P25: parsed reversibility scale value.
+      rev_decl     = decls.find { |d| d.fetch("kind") == "reversibility" }
       if cap_decls.empty? && receipt_decl.nil? && failure_decl.nil? && idem_decl.nil? &&
-         affects_decl.nil? && authority_decl.nil? && comp_decl.nil? && no_comp_decl.nil?
+         affects_decl.nil? && authority_decl.nil? && comp_decl.nil? && no_comp_decl.nil? &&
+         rev_decl.nil?
         return nil
       end
 
@@ -598,6 +601,9 @@ module IgniterLang
         # Declaration only: no authority, no host binding, no execution.
         "compensation_mode"    => comp_decl ? "ref" : (no_comp_decl ? "none" : nil),
         "compensation_ref"     => comp_decl&.fetch("contract_ref", nil),
+        # LANG-EFFECT-SURFACE-REVERSIBILITY-P25: bare scale value; ABSENT ⇒ null —
+        # no default (the scale has none; required-enforcement is a later slice).
+        "reversibility"        => rev_decl&.fetch("value", nil),
         # Parsed values (full type_ir) replace the former hardcoded nils.
         "receipt_type"         => receipt_decl&.fetch("type", nil),
         "failure_type"         => failure_decl&.fetch("type", nil)

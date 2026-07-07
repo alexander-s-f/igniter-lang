@@ -902,6 +902,8 @@ module IgniterLang
       # LANG-EFFECT-SURFACE-COMPENSATION-P22: compensation clauses
       when "compensation"    then advance; parse_compensation_decl
       when "no_compensation" then advance; { "kind" => "no_compensation" }
+      # LANG-EFFECT-SURFACE-REVERSIBILITY-P25: reversibility clause
+      when "reversibility"   then advance; parse_reversibility_decl
       # LANG-EFFECT-SURFACE-AUTHORITY-PARSER-P10: authority clause (declared intent only)
       when "authority"   then advance; parse_authority_decl
       when "stream"      then advance; parse_stream_decl
@@ -1232,6 +1234,44 @@ module IgniterLang
         skip_invalid_body_decl
         nil
       end
+    end
+
+    # LANG-EFFECT-SURFACE-REVERSIBILITY-P25: `reversibility :<value>` — the last
+    # Effect Surface metadata field. Colon symbol REQUIRED (severity/lifecycle
+    # precedent; value stored WITHOUT the colon). Exactly the six ch12 scale
+    # values; anything else fails closed with OOF-M16. Metadata only: no profile
+    # max, no host/executor comparison, no required-field enforcement.
+    REVERSIBILITY_VALUES = %w[reversible compensatable refundable append_only irreversible destructive].freeze
+
+    def parse_reversibility_decl
+      tok = peek
+      unless tok && tok.type == :symbol_lit
+        add_parse_error(
+          rule: "OOF-M16",
+          message: "reversibility requires a colon symbol value " \
+                   "(:reversible|:compensatable|:refundable|:append_only|:irreversible|:destructive)",
+          token: tok&.value.to_s,
+          line: tok&.line || 0,
+          col: tok&.col || 0
+        )
+        skip_invalid_body_decl unless tok.nil? || peek_type?(:rbrace)
+        return nil
+      end
+      value = advance.value
+      unless REVERSIBILITY_VALUES.include?(value)
+        add_parse_error(
+          rule: "OOF-M16",
+          message: "unknown reversibility value ':#{value}'; allowed: " \
+                   ":reversible :compensatable :refundable :append_only :irreversible :destructive",
+          token: value,
+          line: tok.line,
+          col: tok.col
+        )
+        # symbol token already consumed — nothing to skip (P22 lesson: skipping
+        # after a fully-consumed clause eats the contract's closing brace).
+        return nil
+      end
+      { "kind" => "reversibility", "value" => value }
     end
 
     # LANG-EFFECT-SURFACE-COMPENSATION-P22: `compensation <ContractName>` |

@@ -192,6 +192,13 @@ module IgniterLang
           # absence (the three-state distinction is load-bearing, Covenant P17).
           effect_surface_meta["no_compensation"] << node
           declarations << classified_decl(node.merge("name" => "no_compensation"), "core", [], [])
+        when "reversibility"
+          # LANG-EFFECT-SURFACE-REVERSIBILITY-P25: the last Effect Surface metadata
+          # field — where the action sits on the ch12 scale. Metadata only;
+          # placement/duplicate/contradiction run post-loop (OOF-M6).
+          effect_surface_meta["reversibility"] << node
+          declarations << classified_decl(node.merge("name" => "reversibility"), "core", [], [])
+                            .merge("value" => node.fetch("value"))
         when "authority"
           # LANG-EFFECT-SURFACE-AUTHORITY-PARSER-P10: declared authority intent
           # (ratified model F). Core metadata; placement post-loop (OOF-M6;
@@ -391,9 +398,9 @@ module IgniterLang
             contract.fetch("name")
           )
         end
-        # LANG-EFFECT-SURFACE-COMPENSATION-P22: compensation reverses a MUTATION —
-        # an observation mutates nothing, so observed is refused like pure.
-        if %w[compensation no_compensation].include?(meta_kind) && modifier == "observed" && nodes.any?
+        # LANG-EFFECT-SURFACE-COMPENSATION-P22 / REVERSIBILITY-P25: compensation
+        # and reversibility describe a MUTATION — observed is refused like pure.
+        if %w[compensation no_compensation reversibility].include?(meta_kind) && modifier == "observed" && nodes.any?
           diagnostics << oof(
             "OOF-M6",
             "observed contract '#{contract.fetch("name")}' cannot declare '#{meta_kind}'; " \
@@ -429,6 +436,23 @@ module IgniterLang
           "OOF-M6",
           "contract '#{contract.fetch("name")}' declares both 'compensation' and " \
           "'no_compensation'; the Effect Surface carries exactly one compensation decision",
+          contract.fetch("name")
+        )
+      end
+
+      # LANG-EFFECT-SURFACE-REVERSIBILITY-P25: the ONE specified contradiction —
+      # the ch12 scale defines :irreversible ("No compensation is possible") and
+      # :destructive; declaring either together with `compensation <Ref>` is
+      # self-contradictory. The soft cases (reversible/compensatable/refundable +
+      # no_compensation = capable-but-waived) are deliberately NOT checked.
+      rev_node = effect_surface_meta["reversibility"].first
+      if rev_node && %w[irreversible destructive].include?(rev_node.fetch("value", "")) &&
+         effect_surface_meta["compensation"].any?
+        diagnostics << oof(
+          "OOF-M6",
+          "contract '#{contract.fetch("name")}' declares reversibility " \
+          ":#{rev_node.fetch("value")} (no compensation possible) together with " \
+          "'compensation'; the scale definition contradicts the named compensator",
           contract.fetch("name")
         )
       end
