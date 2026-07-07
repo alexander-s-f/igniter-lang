@@ -136,8 +136,14 @@ module IgniterLang
     # Produced by parser.rb parse_decreases_decl when lparen follows the first identifier.
     T3_CALL_FORM_RE = /\A(\w+)\((\w+)\)\z/
 
-    def initialize(typechecker_version: DEFAULT_VERSION)
+    # LANG-OPTIONAL-FIELD-PARTIAL-RECORD-P3 (board G4: gated activation):
+    # `optional_fields: true` activates `f : T?` ≡ `f : Option[T]` semantics
+    # (omit→None injection, T→Some auto-wrap, Option[T] passthrough) per the
+    # PROVED PROP-P2 design. Default OFF — with the gate off, type_shapes drop
+    # the optional flag exactly as before and behavior is byte-identical.
+    def initialize(typechecker_version: DEFAULT_VERSION, optional_fields: false)
       @typechecker_version = typechecker_version
+      @optional_fields = optional_fields
     end
 
     def typecheck(classified_program, cross_module_registry: {}, per_module_imports: {}, per_contract_module: {})
@@ -255,9 +261,50 @@ module IgniterLang
     def type_shapes(classified_program)
       classified_program.fetch("type_declarations").each_with_object({}) do |type, shapes|
         shapes[type.fetch("name")] = type.fetch("fields", []).each_with_object({}) do |field, fields|
-          fields[field.fetch("name")] = type_ir(field.fetch("type_annotation"))  # PROP-043 C1: preserve Map[K,V] params
+          # LANG-OPTIONAL-FIELD-PARTIAL-RECORD-P3 (gate ON only): `f : T?` desugars
+          # to shape type Option[T] carrying `optional: true`. Gate OFF keeps the
+          # exact legacy line — the optional flag is dropped, byte-identical.
+          if @optional_fields && field.fetch("optional", false)
+            fields[field.fetch("name")] = optional_field_type_ir(field.fetch("type_annotation"))
+          else
+            fields[field.fetch("name")] = type_ir(field.fetch("type_annotation"))  # PROP-043 C1: preserve Map[K,V] params
+          end
         end
       end
+    end
+
+    # LANG-OPTIONAL-FIELD-PARTIAL-RECORD-P3: shape IR for a declared-optional field.
+    # `Option[T]` + `optional: true` flag (PROP-P2 Q1 — no other metadata invented).
+    # The flag can only appear in shapes when the gate is ON, so downstream rules
+    # (missing-field exemption, auto-wrap) key off the flag, not the gate.
+    def optional_field_type_ir(annotation)
+      option_type_ir(type_ir(annotation)).merge("optional" => true)
+    end
+
+    # True when a SHAPE field type IR is a declared-optional field (gate-ON only).
+    def optional_shape_field?(tir)
+      tir.is_a?(Hash) && tir.fetch("optional", false) == true
+    end
+
+    # Inner T of a declared-optional Option[T] shape field.
+    def optional_inner_type(tir)
+      type_ir(tir.fetch("params", []).fetch(0, "Unknown"))
+    end
+
+    # LANG-OPTIONAL-FIELD-PARTIAL-RECORD-P3: TC-synthesized option_construct nodes.
+    # Unlike variant_construct there is NO source syntax that produces these —
+    # they originate in the typechecker at record-literal construction sites
+    # (omit → arm "none", raw-T value → arm "some" auto-wrap). Layout is modeled
+    # on variant_construct (kind/arm/resolved_type) with value+inner_type payload.
+    def option_some_node(typed_value, inner_type)
+      typed_expr("option_construct", option_type_ir(inner_type),
+                 typed_value.fetch("deps", []),
+                 "arm" => "some", "inner_type" => inner_type, "value" => typed_value)
+    end
+
+    def option_none_node(inner_type)
+      typed_expr("option_construct", option_type_ir(inner_type), [],
+                 "arm" => "none", "inner_type" => inner_type)
     end
 
     # PROP-044 P5: 3-level store: variant_name → arm_name → field_name → type_ir
@@ -3711,6 +3758,13 @@ module IgniterLang
       typed_fields = fields.each_with_object({}) do |(fname, val_expr), acc|
         field_node_name = record_literal_field_node_name(node_name, fname)
         expected_field_type = expected_fields_for_hint[fname]
+        # LANG-OPTIONAL-FIELD-PARTIAL-RECORD-P3: a nested record literal in a
+        # declared-optional Option[Rec] field is hinted with the INNER record
+        # type; the validation loop below wraps the typed result in Some.
+        if optional_shape_field?(expected_field_type)
+          inner = optional_inner_type(expected_field_type)
+          expected_field_type = inner if @type_shapes.key?(type_name(inner))
+        end
 
         if val_expr.is_a?(Hash) &&
            val_expr.fetch("kind", nil) == "record_literal" &&
@@ -3742,15 +3796,42 @@ module IgniterLang
         expected_fields.each do |fname, expected_type|
           if typed_fields.key?(fname)
             actual_type = typed_fields[fname].fetch("resolved_type")
-            unless type_name(actual_type) == type_name(expected_type) ||
-                   type_name(actual_type) == "Unknown"
-              field_errors << oof(
-                "OOF-TY0",
-                "record literal field '#{fname}': expected #{type_name(expected_type)}, " \
-                "got #{type_name(actual_type)}",
-                node_name
-              )
+            # LANG-OPTIONAL-FIELD-PARTIAL-RECORD-P3 (flag present only when the
+            # gate is ON): present Option[T] → passthrough; present raw T →
+            # auto-wrap to Some (TC-synthesized option_construct); Unknown stays
+            # permissive (house rule); anything else falls through to the
+            # existing OOF-TY0 (fail-closed, no new code).
+            if optional_shape_field?(expected_type)
+              inner_type = optional_inner_type(expected_type)
+              actual_name = type_name(actual_type)
+              if actual_name == "Option" || actual_name == "Unknown"
+                # passthrough as-is
+              elsif actual_name == type_name(inner_type) ||
+                    structurally_assignable?(actual_type, inner_type) ||
+                    empty_collection_assignable?(actual_type, inner_type)
+                typed_fields[fname] = option_some_node(typed_fields[fname], inner_type)
+              else
+                field_errors << oof(
+                  "OOF-TY0",
+                  "record literal field '#{fname}': expected #{type_name(expected_type)}, " \
+                  "got #{type_name(actual_type)}",
+                  node_name
+                )
+              end
+            else
+              unless type_name(actual_type) == type_name(expected_type) ||
+                     type_name(actual_type) == "Unknown"
+                field_errors << oof(
+                  "OOF-TY0",
+                  "record literal field '#{fname}': expected #{type_name(expected_type)}, " \
+                  "got #{type_name(actual_type)}",
+                  node_name
+                )
+              end
             end
+          elsif optional_shape_field?(expected_type)
+            # P3: omitted declared-optional field → present-with-None (rectangular).
+            typed_fields[fname] = option_none_node(optional_inner_type(expected_type))
           else
             field_errors << oof("OOF-TY0", "record literal missing required field: #{fname}", node_name)
           end
@@ -3775,17 +3856,28 @@ module IgniterLang
       # whose field types are compatible (Unknown literal values are permissive).
       literal_field_names = typed_fields.keys.sort
       candidates = @type_shapes.select do |tn, shape_fields|
-        shape_fields.keys.sort == literal_field_names &&
-          shape_fields.all? do |fname, exp_type|
-            act_type = typed_fields[fname].fetch("resolved_type")
-            type_name(act_type) == "Unknown" ||
-              structurally_assignable?(act_type, exp_type) ||
-              empty_collection_assignable?(act_type, exp_type)
-          end
+        if @optional_fields && shape_fields.any? { |_, t| optional_shape_field?(t) }
+          # LANG-OPTIONAL-FIELD-PARTIAL-RECORD-P3 (gate ON, shape has optional
+          # fields): the literal may omit ONLY declared-optional fields —
+          # required ⊆ literal ⊆ all — and present optional values match
+          # against inner T or Option[T].
+          optional_aware_structural_match?(shape_fields, typed_fields, literal_field_names)
+        else
+          shape_fields.keys.sort == literal_field_names &&
+            shape_fields.all? do |fname, exp_type|
+              act_type = typed_fields[fname].fetch("resolved_type")
+              type_name(act_type) == "Unknown" ||
+                structurally_assignable?(act_type, exp_type) ||
+                empty_collection_assignable?(act_type, exp_type)
+            end
+        end
       end
 
       if candidates.length == 1
-        matched_name, = candidates.first
+        matched_name, matched_fields = candidates.first
+        # P3: rectangular lowering for the structurally-matched shape too —
+        # inject None for omitted optional fields, auto-wrap present raw-T values.
+        apply_optional_construction!(typed_fields, matched_fields) if @optional_fields
         return typed_expr("record_literal", type_ir(matched_name), deps, "fields" => typed_fields)
       elsif candidates.length > 1
         type_errors << oof(
@@ -3796,6 +3888,48 @@ module IgniterLang
       end
 
       typed_expr("record_literal", type_ir("Unknown"), deps, "fields" => typed_fields)
+    end
+
+    # LANG-OPTIONAL-FIELD-PARTIAL-RECORD-P3: structural candidate matching when the
+    # shape declares optional fields (gate ON only — flags never appear otherwise).
+    # required ⊆ literal ⊆ all; present optional values match inner T or Option[T].
+    def optional_aware_structural_match?(shape_fields, typed_fields, literal_field_names)
+      required = shape_fields.reject { |_, t| optional_shape_field?(t) }.keys.sort
+      all_names = shape_fields.keys.sort
+      return false unless (required - literal_field_names).empty? &&
+                          (literal_field_names - all_names).empty?
+      shape_fields.all? do |fname, exp_type|
+        next true unless typed_fields.key?(fname)
+        act_type = typed_fields[fname].fetch("resolved_type")
+        next true if type_name(act_type) == "Unknown"
+        if optional_shape_field?(exp_type)
+          inner = optional_inner_type(exp_type)
+          type_name(act_type) == "Option" ||
+            structurally_assignable?(act_type, inner) ||
+            empty_collection_assignable?(act_type, inner)
+        else
+          structurally_assignable?(act_type, exp_type) ||
+            empty_collection_assignable?(act_type, exp_type)
+        end
+      end
+    end
+
+    # LANG-OPTIONAL-FIELD-PARTIAL-RECORD-P3: rectangular construction lowering for
+    # an already-matched shape — omitted optional fields become option_construct
+    # `none`, present raw-T values are wrapped in option_construct `some`
+    # (present Option/Unknown values pass through). Mutates typed_fields in place.
+    def apply_optional_construction!(typed_fields, shape_fields)
+      shape_fields.each do |fname, exp_type|
+        next unless optional_shape_field?(exp_type)
+        inner = optional_inner_type(exp_type)
+        if typed_fields.key?(fname)
+          actual_name = type_name(typed_fields[fname].fetch("resolved_type"))
+          next if actual_name == "Option" || actual_name == "Unknown"
+          typed_fields[fname] = option_some_node(typed_fields[fname], inner)
+        else
+          typed_fields[fname] = option_none_node(inner)
+        end
+      end
     end
 
     # PROP-044 P5: infer a variant_construct expression.

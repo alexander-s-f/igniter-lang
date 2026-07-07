@@ -1,6 +1,15 @@
 # LANG-OPTIONAL-FIELD-PARTIAL-RECORD-PROP-P2 — Optional Record Fields (`field : T?`)
 
 **Status:** CLOSED — PROP PROVED 57/57 — ROUTE: P3 IMPLEMENTATION READINESS (conditional)
+**Implementation status (2026-07-07):** IMPLEMENTED — GATED (board G4: gated activation,
+default OFF) by `LANG-OPTIONAL-FIELD-PARTIAL-RECORD-P3`. Ruby `TypeChecker.new(optional_fields: true)`
+/ Rust `TypeChecker::new().with_optional_fields(true)`; §6 precondition (2) resolved as
+**gated activation** (§5 option b) — vector_editor unmigrated, byte-identical gate-OFF.
+`option_construct` SIR node live in both emitters (`arm: some|none` + `inner_type` +
+`value` + `resolved_type`); §3's bare-`Option[T]`-omissible toggle NOT adopted in v0
+(`?`-spelled fields only). VM execution of `option_construct` is a named follow-up.
+Proofs: `verify_optional_field_p3.rb` 68/68 · P2 proof still 57/57 ·
+`igniter-compiler tests/optional_field_gated_tests.rs` 17/17.
 **Track:** lang / PROP / optional record fields
 **Date:** 2026-06-14
 **Authority:** full PROP authoring only — no compiler implementation, no app migration

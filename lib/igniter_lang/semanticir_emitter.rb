@@ -346,6 +346,11 @@ module IgniterLang
         # PROP-044 P6: variant_construct → typed variant_construct node
         elsif expr.fetch("kind", nil) == "variant_construct"
           semantic_variant_construct(expr)
+        # LANG-OPTIONAL-FIELD-PARTIAL-RECORD-P3: option_construct → SIR node.
+        # TC-synthesized only (no source syntax): appears when the optional-fields
+        # gate is ON, at record-literal fields (omit→none / raw-T→some).
+        elsif expr.fetch("kind", nil) == "option_construct"
+          semantic_option_construct(expr)
         # PROP-044 P6: match_expr → typed match_node (renamed to avoid confusion with parse AST)
         elsif expr.fetch("kind", nil) == "match_expr"
           semantic_match_node(expr)
@@ -450,6 +455,24 @@ module IgniterLang
       # LANG-SUMTYPE-CONSTRUCT-MATCH-P3: sealed-only marker; absent for user variants
       # so their SIR byte shape is unchanged.
       node["sealed"] = true if expr.fetch("sealed", false)
+      node
+    end
+
+    # LANG-OPTIONAL-FIELD-PARTIAL-RECORD-P3: lower a TypeChecker option_construct
+    # node to SemanticIR shape. Modeled on semantic_variant_construct; the node is
+    # TC-synthesized (no source syntax for Some/None — that is the one structural
+    # difference from variant_construct). SIR layout (parity-locked with Rust):
+    #   { "kind": "option_construct", "arm": "some"|"none",
+    #     "inner_type": <T ir>, "value": <expr — some arm only>,
+    #     "resolved_type": { "name": "Option", "params": [<T ir>] } }
+    def semantic_option_construct(expr)
+      node = {
+        "kind"       => "option_construct",
+        "arm"        => expr.fetch("arm"),
+        "inner_type" => expr.fetch("inner_type")
+      }
+      node["value"] = semantic_expr(expr.fetch("value")) if expr.key?("value")
+      node["resolved_type"] = expr.fetch("resolved_type")
       node
     end
 

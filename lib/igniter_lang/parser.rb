@@ -191,6 +191,11 @@ module IgniterLang
         end
       when "," then advance; Token.new(:comma, ",", l, c)
       when "@" then advance; Token.new(:at, "@", l, c)
+      # LANG-OPTIONAL-FIELD-PARTIAL-RECORD-P3: emit `?` so parse_type_decl's existing
+      # :question branch (optional field marker `f : T?`) actually fires. This is
+      # CAPTURE, not activation — the optional flag is inert unless the TypeChecker
+      # is constructed with `optional_fields: true` (gate default OFF).
+      when "?" then advance; Token.new(:question, "?", l, c)
       when /[a-zA-Z_]/ then read_ident_or_keyword(l, c)
       else
         advance
