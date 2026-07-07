@@ -180,6 +180,13 @@ module IgniterLang
           effect_surface_meta["affects"] << node
           declarations << classified_decl(node.merge("name" => "affects"), "core", [], [])
                             .merge("scope" => node.fetch("scope"), "target" => node.fetch("target"))
+        when "authority"
+          # LANG-EFFECT-SURFACE-AUTHORITY-PARSER-P10: declared authority intent
+          # (ratified model F). Core metadata; placement post-loop (OOF-M6;
+          # observed refused — authority gates mutation execution).
+          effect_surface_meta["authority"] << node
+          declarations << classified_decl(node.merge("name" => "authority"), "core", [], [])
+                            .merge("ref" => node.fetch("ref"))
         when "read"
           fragment = temporal_type?(node["type_annotation"]) ? "temporal" : "escape"
           symbol_fragments[node.fetch("name")] = fragment == "temporal" ? "core" : "escape"
@@ -369,6 +376,16 @@ module IgniterLang
             "OOF-M6",
             "observed contract '#{contract.fetch("name")}' cannot declare 'affects'; " \
             "affects names a mutation target and requires an effect-family modifier",
+            contract.fetch("name")
+          )
+        end
+        # LANG-EFFECT-SURFACE-AUTHORITY-PARSER-P10: authority gates mutation
+        # execution; observed is refused like pure.
+        if meta_kind == "authority" && modifier == "observed" && nodes.any?
+          diagnostics << oof(
+            "OOF-M6",
+            "observed contract '#{contract.fetch("name")}' cannot declare 'authority'; " \
+            "authority gates mutation execution and requires an effect-family modifier",
             contract.fetch("name")
           )
         end

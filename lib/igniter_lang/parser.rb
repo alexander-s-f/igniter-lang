@@ -894,6 +894,8 @@ module IgniterLang
       when "idempotency" then advance; parse_idempotency_decl
       # LANG-EFFECT-SURFACE-AFFECTS-P5: affects clause
       when "affects"     then advance; parse_affects_decl
+      # LANG-EFFECT-SURFACE-AUTHORITY-PARSER-P10: authority clause (declared intent only)
+      when "authority"   then advance; parse_authority_decl
       when "stream"      then advance; parse_stream_decl
       when "fold_stream" then advance; parse_fold_stream_decl
       when "invariant"   then advance; parse_invariant_decl
@@ -1159,6 +1161,45 @@ module IgniterLang
 
     def parse_failure_decl
       { "kind" => "failure", "type_annotation" => parse_type_ref }
+    end
+
+    # LANG-EFFECT-SURFACE-AUTHORITY-PARSER-P10: `authority <ident>` — DECLARED
+    # authority intent only (ratified model F, ch12 §12.3): a bare role symbol
+    # the HOST later resolves to passport scope(s). Parsing this clause is NOT
+    # runtime enforcement. Dotted refs and string literals are refused
+    # (OOF-M13) — roles are bare idents, host vocabulary stays out of source.
+    def parse_authority_decl
+      tok = peek
+      if tok && %i[ident keyword].include?(tok.type)
+        ref = advance.value
+        # Dotted refs arrive two ways: `Billing.Operator` lexes as ONE ident
+        # token (Module.Name path rule), `billing.operator` as ident + :dot.
+        # The ident is already consumed here, so skip only the dotted TAIL if
+        # one remains (skip_invalid_body_decl would eat one token too many).
+        if ref.include?(".") || peek_type?(:dot)
+          add_parse_error(
+            rule: "OOF-M13",
+            message: "authority reference must be a bare role ident (no dotted refs); got '#{ref}'",
+            token: ref,
+            line: tok.line,
+            col: tok.col
+          )
+          skip_until_body_boundary if peek_type?(:dot)
+          nil
+        else
+          { "kind" => "authority", "ref" => ref }
+        end
+      else
+        add_parse_error(
+          rule: "OOF-M13",
+          message: "authority clause requires a bare role ident (e.g. 'authority billing_operator'); string literals are not accepted",
+          token: tok&.value.to_s,
+          line: tok&.line || 0,
+          col: tok&.col || 0
+        )
+        skip_invalid_body_decl
+        nil
+      end
     end
 
     # LANG-EFFECT-SURFACE-AFFECTS-P5: `affects external|internal <qualified-name>`

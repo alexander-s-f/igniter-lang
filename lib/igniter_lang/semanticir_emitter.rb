@@ -535,7 +535,10 @@ module IgniterLang
       idem_decl = decls.find { |d| d.fetch("kind") == "idempotency" }
       # LANG-EFFECT-SURFACE-AFFECTS-P5: parsed affects clause.
       affects_decl = decls.find { |d| d.fetch("kind") == "affects" }
-      if cap_decls.empty? && receipt_decl.nil? && failure_decl.nil? && idem_decl.nil? && affects_decl.nil?
+      # LANG-EFFECT-SURFACE-AUTHORITY-PARSER-P10: parsed authority clause.
+      authority_decl = decls.find { |d| d.fetch("kind") == "authority" }
+      if cap_decls.empty? && receipt_decl.nil? && failure_decl.nil? && idem_decl.nil? &&
+         affects_decl.nil? && authority_decl.nil?
         return nil
       end
 
@@ -557,7 +560,9 @@ module IgniterLang
         # hardcoded constants. Absent clause keeps the documented defaults.
         "affects_scope"        => affects_decl&.fetch("scope", nil) || "external",
         "affects_target"       => affects_decl&.fetch("target", nil) || "IO.Capability",
-        "authority_ref"        => nil,
+        # LANG-EFFECT-SURFACE-AUTHORITY-PARSER-P10: parsed DECLARED-INTENT role
+        # ident (ratified model F); nil when absent. NOT runtime enforcement.
+        "authority_ref"        => authority_decl&.fetch("ref", nil),
         # LANG-EFFECT-SURFACE-IDEMPOTENCY-P2: parsed idempotency clause replaces the
         # former hardcoded "none". Absent clause stays "none" (v0-stub default).
         "idempotency_mode"     => idem_decl&.fetch("mode", "none") || "none",

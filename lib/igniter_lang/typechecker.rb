@@ -483,6 +483,11 @@ module IgniterLang
           # (the target names an EXTERNAL/INTERNAL system, not a language type).
           typed_decls << typed_decl(decl, type_ir("Unit"), nil, [])
                            .merge("scope" => decl.fetch("scope"), "target" => decl.fetch("target"))
+        when "authority"
+          # LANG-EFFECT-SURFACE-AUTHORITY-PARSER-P10: declared authority intent —
+          # a bare role symbol resolved HOST-side (never by the compiler).
+          typed_decls << typed_decl(decl, type_ir("Unit"), nil, [])
+                           .merge("ref" => decl.fetch("ref"))
         when "idempotency"
           # LANG-EFFECT-SURFACE-IDEMPOTENCY-P2: Effect Surface metadata. Mode "key"
           # carries an expression typed with the normal inference path (unknown

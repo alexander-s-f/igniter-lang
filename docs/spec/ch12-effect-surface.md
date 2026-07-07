@@ -213,7 +213,9 @@ in a profile that only permits `compensatable` is a compile-time error (OOF-M2).
 > metadata illegal placement (pure contract; observed for `idempotency` and
 > `affects`) or duplicate clause; **OOF-M10** — `receipt`/`failure` references
 > an unresolvable type; **OOF-M11** — malformed `idempotency` mode
-> (parse-time); **OOF-M12** — malformed `affects` scope (parse-time).
+> (parse-time); **OOF-M12** — malformed `affects` scope (parse-time);
+> **OOF-M13** — malformed `authority` reference form (dotted ref or string
+> literal; parse-time).
 > (OOF-M3 stays reserved for authority resolution — **PROP-030
 > executor-approval territory, with PROP-040 `requires_authority`
 > interaction**; the older "deferred to PROP-034" pointer from the PROP-035
@@ -248,6 +250,16 @@ in a profile that only permits `compensatable` is a compile-time error (OOF-M2).
 >   `allowed_effects` enforcement stays **HELD** (profile policy). Proofs:
 >   `experiments/effect_surface_affects_proof/` (12/12) + lab
 >   `tests/effect_surface_affects_tests.rs` (8/8).
+> - `authority <ident>` parses as body-level DECLARED-INTENT metadata in both
+>   toolchains (LANG-EFFECT-SURFACE-AUTHORITY-PARSER-P10, under the ratified
+>   model F): bare role symbol only — dotted refs and string literals fail
+>   closed with OOF-M13; placement = effect/privileged/irreversible only
+>   (pure AND observed refused, OOF-M6); `effect_surface_v1.authority_ref`
+>   carries the parsed ident, absent → null. **Parser acceptance is NOT
+>   runtime enforcement** — host role→scope resolution stays HELD (see the
+>   ratification block in §12.3). Proofs:
+>   `experiments/effect_surface_authority_proof/` (12/12) + lab
+>   `tests/effect_surface_authority_tests.rs` (9/9).
 > - **Unified IR object (LANG-EFFECT-SURFACE-IR-UNIFICATION-P3):** both
 >   toolchains emit the same nested `contract_ir["effect_surface"]` with
 >   `kind: "effect_surface_v1"` (Ruby's former `effect_surface_v0_stub` renamed;
