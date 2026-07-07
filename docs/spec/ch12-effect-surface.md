@@ -256,10 +256,24 @@ in a profile that only permits `compensatable` is a compile-time error (OOF-M2).
 >   closed with OOF-M13; placement = effect/privileged/irreversible only
 >   (pure AND observed refused, OOF-M6); `effect_surface_v1.authority_ref`
 >   carries the parsed ident, absent → null. **Parser acceptance is NOT
->   runtime enforcement** — host role→scope resolution stays HELD (see the
->   ratification block in §12.3). Proofs:
+>   runtime enforcement** — the declaration-vs-enforcement rule in §12.3
+>   stays load-bearing; runtime status is the next bullet. Proofs:
 >   `experiments/effect_surface_authority_proof/` (12/12) + lab
 >   `tests/effect_surface_authority_tests.rs` (9/9).
+> - Host-side role→scope resolution has a machine PROOF
+>   (LANG-EFFECT-SURFACE-AUTHORITY-HOST-POLICY-P12, the runtime half of the
+>   ratified model F): igniter-machine's host-constructed `AuthorityPolicy`
+>   resolves the declared role to required passport scope(s) on the UNCHANGED
+>   `verify_passport` seam; a declared role with no mapping **fails closed**
+>   (`AuthRefusal::UnmappedAuthorityRole`, before the executor, no receipt);
+>   receipts gain additive `declared_authority_role` / `resolved_scopes` /
+>   `authority_policy_digest`; null `authority_ref` is a nil-safe passthrough.
+>   **Proof-only — NOT wired into any production runner or host config**;
+>   production wiring stays HELD for the host-config slices
+>   (LANG-EFFECT-SURFACE-AUTHORITY-HOST-CONFIG-READINESS-P13 /
+>   LANG-EFFECT-SURFACE-AUTHORITY-HOST-CONFIG-P14), so no production runner
+>   enforces configured authority yet. Proof: machine
+>   `tests/capability_io_authority_policy_tests.rs` (7/7).
 > - **Unified IR object (LANG-EFFECT-SURFACE-IR-UNIFICATION-P3):** both
 >   toolchains emit the same nested `contract_ir["effect_surface"]` with
 >   `kind: "effect_surface_v1"` (Ruby's former `effect_surface_v0_stub` renamed;
