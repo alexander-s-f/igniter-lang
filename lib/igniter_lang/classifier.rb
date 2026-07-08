@@ -517,6 +517,33 @@ module IgniterLang
         end
       end
 
+      # PROP-050/P46: ConvergentLoop obligations. A `convergent` contract must
+      # declare its convergence metric (`variant`), threshold (`convergence
+      # epsilon`), fuel cap (`max_steps` — the compile-time TERMINATION guarantee;
+      # the compiler does NOT prove convergence), and exhaustion policy
+      # (`on_exhaustion`). Each missing clause is a hard error. Model: convergent
+      # = fuel_bounded recursion + a declared metric + an exhaustion policy.
+      if modifier == "convergent"
+        body = contract.fetch("body")
+        # NB: OOF-R8..R11 are TAKEN (PROP-041 size-relations / PROP-042 numeric
+        # measures — the ch13 §13.7 "R1..R7" list was stale). Convergent
+        # obligations use fresh OOF-R12/R13/R14; missing max_steps reuses OOF-R4
+        # (its existing "loop class needs a static max_steps" condition).
+        {
+          "OOF-R12" => ["convergence_variant", "a 'variant <metric>' convergence metric"],
+          "OOF-R13" => ["convergence",         "a 'convergence epsilon: <n>' threshold"],
+          "OOF-R4"  => ["max_steps",           "a static 'max_steps' fuel cap"],
+          "OOF-R14" => ["on_exhaustion",       "an 'on_exhaustion :<action>' policy"]
+        }.each do |rule, (kind, human)|
+          next if body.any? { |n| n.fetch("kind") == kind }
+          diagnostics << oof(
+            rule,
+            "convergent contract '#{contract.fetch("name")}' requires #{human}",
+            contract.fetch("name")
+          )
+        end
+      end
+
       # PROP-040: OOF-M7/M8 — profile binding validation (must precede contract_fragment_for)
       via_profile = contract.fetch("via_profile", nil)
       profile_authority = nil
@@ -652,6 +679,7 @@ module IgniterLang
             contract_loop_classes = []
             contract_loop_classes << "recursive"    if modifier == "recursive"
             contract_loop_classes << "fuel_bounded"  if modifier == "fuel_bounded"
+            contract_loop_classes << "convergent"    if modifier == "convergent"
             contract_loop_classes << "budgeted"      if declarations.any? { |d| d.fetch("kind", "") == "budgeted_loop" }
             # LANG-PROFILE-LOOP-CLASS-FINITE-P44: the `for` FiniteLoop is a live
             # loop-class (kind `for_loop`); P42's first cut missed it, so `loop:

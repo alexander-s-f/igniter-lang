@@ -410,7 +410,10 @@ module IgniterLang
       contract_modifier = classified_contract.fetch("modifier", "pure")
       contract_name_str = classified_contract.fetch("name")
       @current_contract_name = contract_name_str  # LAB-RUBY-CALL-CONTRACT-PARITY-P3: self-recursion guard
-      recur_authorized  = %w[recursive fuel_bounded].include?(contract_modifier)
+      # PROP-050/P46: `convergent` is recur-authorized like `fuel_bounded` —
+      # convergent iteration runs via recur(), fuel-capped by max_steps; it has no
+      # `decreases` variant, so OOF-R3 (structural decrease) does not apply.
+      recur_authorized  = %w[recursive fuel_bounded convergent].include?(contract_modifier)
       all_decls = classified_contract.fetch("declarations")
       recur_inputs = all_decls.select { |d| d.fetch("kind","") == "input" }
       recur_outputs = all_decls.select { |d| d.fetch("kind","") == "output" }

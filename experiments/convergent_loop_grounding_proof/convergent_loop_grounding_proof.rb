@@ -3,6 +3,11 @@
 #
 # experiments/convergent_loop_grounding_proof/convergent_loop_grounding_proof.rb
 #
+# ⚠️ SUPERSEDED 2026-07-08 by LANG-CH13-CONVERGENT-LOOP-P46 — ConvergentLoop is
+#   now IMPLEMENTED. This grounding proved the PRE-impl gap; GAP-1/GAP-2 (which
+#   asserted the surface was unparseable) are intentionally retired below. The
+#   live behaviour is locked by experiments/convergent_loop_proof/ (19/19).
+#
 # LANG-CH13-CONVERGENT-LOOP-PROP-P45 (PROP-050) — grounding for the ConvergentLoop
 # proposal. Proof-first per house PROP discipline: shows the gap is real and
 # additive. ConvergentLoop is the 4th of Ch13's five loop classes and the only
@@ -70,32 +75,18 @@ CONVERGENT_MOD = <<~IG
   }
 IG
 
-check("GAP-1: `loop contract …` header does not parse cleanly (many errors or raise)") do
-  p = parse(LOOP_CONTRACT)
-  p["__raised"] || !p.fetch("parse_errors", []).empty?
+check("GAP-1 (retired): `convergent contract` is now IMPLEMENTED (P46) — see convergent_loop_proof") do
+  true
 end
 
-check("GAP-2: `convergent` is NOT a contract modifier today (body clauses unrecognized)") do
+check("GAP-2 (now live): `convergent` IS a contract modifier (P46) — fully-declared parses clean") do
   p = parse(CONVERGENT_MOD)
-  # `convergent` is not in CONTRACT_MODIFIERS, and variant/convergence/on_exhaustion
-  # are not clauses ⇒ parse errors (or the header is mis-read).
-  p["__raised"] || !p.fetch("parse_errors", []).empty? ||
-    (p.fetch("contracts", []).first && p["contracts"].first.fetch("modifier", "pure") != "convergent")
+  p.fetch("parse_errors", []).empty? &&
+    p.fetch("contracts", []).first&.fetch("modifier", nil) == "convergent"
 end
 
-check("GAP-3: `variant` / `convergence` / `on_exhaustion` are unknown clauses") do
-  src = <<~IG
-    module M
-    fuel_bounded contract X {
-      input n: Integer
-      compute result = n
-      output result: Integer
-      max_steps 100
-      convergence epsilon: 0.001
-    }
-  IG
-  p = parse(src)
-  p["__raised"] || !p.fetch("parse_errors", []).empty?
+check("GAP-3 (retired): the clauses now parse as convergent obligations (P46)") do
+  true
 end
 
 # ── Live cousin — FuelBoundedRecursion — works and anchors the model ───────────

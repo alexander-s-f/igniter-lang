@@ -10,13 +10,14 @@
 #   - OOF-PROF6 (parse-time, fail-closed) — an unknown / aspirational value.
 #
 # v0 vocabulary is the LIVE loop-class surface, NOT ch11's aspirational set:
-#   none | recursive | fuel_bounded | budgeted
+#   none | finite | recursive | fuel_bounded | budgeted | convergent
+# (`finite` wired in by P44; `convergent` by P46/Ch13 ConvergentLoop.)
 # A contract's loop-class(es) are live source facts: the `recursive` /
-# `fuel_bounded` modifiers and a `budgeted_loop` (`loop … max_steps …`) body
-# decl. ch11's `finite_loop` / `convergent` / `service` are Ch13 (Managed
-# Recursion) target prose with no compiler surface — they fail closed
-# (OOF-PROF6) until Ch13 lands, and the §11.4 "loop: service ⇒ service-contract
-# form" rule stays HELD. Compile-time policy only (Covenant P10). Ruby-canon.
+# `fuel_bounded` / `convergent` modifiers, a `for` FiniteLoop, and a
+# `budgeted_loop` (`loop … max_steps …`) body decl. ch11's `finite_loop` /
+# `service` remain Ch13 target prose with no compiler surface — they fail closed
+# (OOF-PROF6), and the §11.4 "loop: service ⇒ service-contract form" rule stays
+# HELD. Compile-time policy only (Covenant P10). Ruby-canon.
 
 require "json"
 
@@ -210,10 +211,15 @@ check("PROF6-1: `loop: service` (Ch13 aspirational) ⇒ parse-time OOF-PROF6") d
   parse(prog("service", NOLOOP)).fetch("parse_errors").any? { |e| e.fetch("rule", e["code"]) == "OOF-PROF6" }
 end
 
-check("PROF6-2: `loop: convergent` / `loop: finite_loop` also OOF-PROF6") do
-  %w[convergent finite_loop].all? do |v|
+check("PROF6-2: still-aspirational `finite_loop` / `service` are OOF-PROF6") do
+  %w[finite_loop service].all? do |v|
     parse(prog(v, NOLOOP)).fetch("parse_errors").any? { |e| e.fetch("rule", e["code"]) == "OOF-PROF6" }
   end
+end
+
+check("PROF6-4: `loop: convergent` GRADUATED to live vocab (P46) — no OOF-PROF6") do
+  parse(prog("convergent", NOLOOP)).fetch("parse_errors")
+    .none? { |e| e.fetch("rule", e["code"]) == "OOF-PROF6" }
 end
 
 check("PROF6-3: aspirational value NOT stored (no spurious OOF-PROF3)") do

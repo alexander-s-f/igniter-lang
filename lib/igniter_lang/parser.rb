@@ -424,7 +424,12 @@ module IgniterLang
 
     # ---- Top-level declarations --------------------------------------------
 
-    CONTRACT_MODIFIERS = %w[pure observed effect privileged irreversible recursive fuel_bounded].freeze
+    # `convergent` (Ch13 ConvergentLoop, PROP-050/P46) is the 4th local loop-class
+    # modifier — it repeats while driving a metric toward a threshold, terminating
+    # on convergence OR fuel exhaustion. It sits alongside recursive/fuel_bounded.
+    CONTRACT_MODIFIERS = %w[pure observed effect privileged irreversible recursive fuel_bounded convergent].freeze
+    # ConvergentLoop `on_exhaustion :<action>` — v0 actions (Ch13 §13.1).
+    ON_EXHAUSTION_ACTIONS = %w[return_partial suspend].freeze
 
     def parse_top_decl
       tok = peek
@@ -516,7 +521,7 @@ module IgniterLang
     # first cut omitted it. ch11's aspirational `finite_loop`/`convergent`/
     # `service` values remain Ch13 (Managed Recursion) target prose with no
     # compiler surface — they fail closed (OOF-PROF6) until Ch13 lands.
-    LOOP_CLASS_VALUES = %w[none finite recursive fuel_bounded budgeted].freeze
+    LOOP_CLASS_VALUES = %w[none finite recursive fuel_bounded budgeted convergent].freeze
 
     # PROP-040: profile declarations. PROP-048 adds the `retry`
     # (LANG-PROFILE-IDEMPOTENCY-RETRY-P31) and `max_reversibility`
@@ -1067,6 +1072,10 @@ module IgniterLang
       when "loop"        then advance; parse_budgeted_loop
       when "decreases"   then advance; parse_decreases_decl
       when "max_steps"   then advance; parse_max_steps_decl
+      # PROP-050/P46: ConvergentLoop obligation clauses (`convergent` contracts)
+      when "variant"       then advance; parse_convergence_variant_decl
+      when "convergence"   then advance; parse_convergence_decl
+      when "on_exhaustion" then advance; parse_on_exhaustion_decl
       # PROP-039 gate 8: loop body declarations (valid inside loop body only; TypeChecker rejects at contract level)
       when "lead"        then advance; parse_lead_decl
       # PROP-045: intent descriptor — queryable purpose metadata, not a behavior declaration
@@ -1859,6 +1868,72 @@ module IgniterLang
       advance if peek_type?(:colon)    # optional ":"
       tok = expect_type!(:int_lit)
       { "kind" => "max_steps", "value" => tok.value }
+    end
+
+    # PROP-050/P46: ConvergentLoop obligation clauses. These are DECLARATIONS the
+    # compiler checks for presence (OOF-R12/R13/R14 — R8..R11 are TAKEN by
+    # PROP-041/042 size-relations/measures, despite the stale ch13 §13.7 "R1..R7"
+    # list); the metric/threshold are a RUNTIME concern — the compiler never
+    # proves convergence. Termination is guaranteed by `max_steps` (fuel),
+    # exactly like `fuel_bounded`.
+
+    # `variant <metric-expr>` — the convergence metric (e.g. `loss(params)`).
+    # Parsed like `decreases` (fn(arg) / ident / dotted); presence is what matters.
+    def parse_convergence_variant_decl
+      fn_or_var = name_token!(%i[ident])
+      if peek_type?(:lparen)
+        advance
+        arg = name_token!(%i[ident])
+        expect_type!(:rparen)
+        return { "kind" => "convergence_variant", "metric" => "#{fn_or_var}(#{arg})" }
+      end
+      parts = [fn_or_var]
+      while peek_type?(:dot)
+        advance
+        parts << name_token!(%i[ident])
+      end
+      { "kind" => "convergence_variant", "metric" => parts.join(".") }
+    end
+
+    # `convergence epsilon: <numeric-literal>` — the convergence threshold.
+    def parse_convergence_decl
+      expect_value!("epsilon")
+      expect_type!(:colon)
+      tok = peek
+      if peek_type?(:float_lit) || peek_type?(:int_lit)
+        advance
+        { "kind" => "convergence", "epsilon" => tok.value }
+      else
+        add_parse_error(
+          rule: "OOF-R13",
+          message: "convergence epsilon must be a numeric literal",
+          token: tok&.value.to_s,
+          line: tok&.line || 0,
+          col: tok&.col || 0
+        )
+        nil
+      end
+    end
+
+    # `on_exhaustion :<action>` — behaviour when fuel exhausts before convergence.
+    # Malformed / unknown action fails closed (dropped) so the classifier reports
+    # the obligation as missing (OOF-R14).
+    def parse_on_exhaustion_decl
+      tok = peek
+      unless peek_type?(:symbol_lit) && ON_EXHAUSTION_ACTIONS.include?(tok.value)
+        add_parse_error(
+          rule: "OOF-R14",
+          message: "on_exhaustion requires a :symbol action " \
+                   "(#{ON_EXHAUSTION_ACTIONS.map { |a| ":#{a}" }.join(' | ')})",
+          token: tok&.value.to_s,
+          line: tok&.line || 0,
+          col: tok&.col || 0
+        )
+        advance if peek_type?(:symbol_lit)   # consume the bad symbol if present
+        return nil
+      end
+      advance
+      { "kind" => "on_exhaustion", "action" => tok.value }
     end
 
     def parse_implements_clause

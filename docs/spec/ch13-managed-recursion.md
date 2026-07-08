@@ -86,13 +86,16 @@ service contract LiveNewsClarityService()
 | `FiniteLoop` | Terminates when collection is exhausted | Collection size is finite; proven by type |
 | `StructuralRecursion` | Terminates because structural variant strictly decreases | Compiler performs syntactic_v0 decrease check at every `recur()` site: whitelist `variant−N`, `variant.tail`, `variant.rest`; other forms fire OOF-R3 |
 | `FuelBoundedRecursion` | Terminates when fuel counter reaches zero | `max_steps` is a static literal |
-| `ConvergentLoop` | Terminates when metric reaches threshold or fuel exhausts | Convergence criterion and `max_steps` required |
+| `ConvergentLoop` | Terminates when metric reaches threshold or fuel exhausts | `convergent` modifier + `variant`/`convergence epsilon`/`max_steps`/`on_exhaustion` declared. **Implemented Ruby-canon (PROP-050 / LANG-CH13-CONVERGENT-LOOP-P46).** Termination is guaranteed by `max_steps` (fuel); the compiler does NOT prove convergence. |
 | `ServiceLoop` | Does not terminate by design; must be stoppable, observable, and bounded per step | Heartbeat, checkpoint, cancellation, and `max_step_latency` verified |
 
-The first four classes are managed local repetition territory and require a
-future PROP-039+ proposal/proof before parser, TypeChecker, SemanticIR, runtime,
-or fixture authority. `ServiceLoop` is a service-liveness surface whose source
-binding and descriptor obligations are governed by PROP-037 companion wording.
+`FiniteLoop`, `StructuralRecursion`, `FuelBoundedRecursion` (PROP-039) and now
+`ConvergentLoop` (PROP-050/P46) are implemented managed-local-repetition classes.
+`ServiceLoop` is a service-liveness surface whose source binding and descriptor
+obligations are governed by PROP-037 companion wording — still deferred
+(Stage-4). Spelling note: the aspirational `loop contract` header in §13.1 is
+realised as the **`convergent` contract modifier** (`convergent` sits alongside
+`recursive`/`fuel_bounded`; `loop` stays a body keyword).
 
 ---
 
@@ -208,6 +211,30 @@ All OOF-R1..R7 codes are PROP-039 canon experiment-pass compiler surface.
 | OOF-R5 | `recur()` arity mismatch — arg count does not match input count | error | **experiment-pass** — typechecker.rb; recursive_body_proof 100/100 |
 | OOF-R6 | `recur()` argument type mismatch — arg type does not match corresponding input type | error | **experiment-pass** — typechecker.rb; recursive_body_proof 100/100 |
 | OOF-R7 | `recur()` return type unavailable or ambiguous — contract does not have exactly one output | error | **experiment-pass** — typechecker.rb; recursive_body_proof 100/100 |
+
+### ConvergentLoop (PROP-050 / LANG-CH13-CONVERGENT-LOOP-P46)
+
+A `convergent` contract must declare four obligations; each missing one is a hard
+error. **Termination is guaranteed by `max_steps` (fuel) — the compiler does not
+prove convergence** (undecidable); `variant`/`convergence`/`on_exhaustion`
+declare intent and exhaustion behaviour.
+
+| Code | Condition | Severity | Status |
+|------|-----------|----------|--------|
+| OOF-R12 | `convergent` contract missing a `variant <metric>` clause | error | **experiment-pass** — classifier.rb; convergent_loop_proof 19/19 |
+| OOF-R13 | `convergent` contract missing `convergence epsilon: <n>` (or a non-numeric epsilon) | error | **experiment-pass** — classifier.rb/parser.rb |
+| OOF-R14 | `convergent` contract missing `on_exhaustion :<action>` (or an unknown action) | error | **experiment-pass** — classifier.rb/parser.rb |
+
+Missing `max_steps` reuses **OOF-R4** (its "loop class requiring a static
+max_steps" condition). `convergent` is recur-authorized (like `fuel_bounded`);
+it has no `decreases`, so OOF-R3 does not apply. v0 actions: `:return_partial`,
+`:suspend`. `loop: convergent` (ch11) now enforces the class.
+
+> **Code-numbering correction (P46):** OOF-R8..R11 are **NOT** free — they are
+> taken by PROP-041 (structural size-relations: R8 missing relation, R9
+> mismatch) and PROP-042 (numeric measures: R10 unknown measure fn, R11
+> call-site check). The "OOF-R1..R7 owned by PROP-039" framing below predates
+> those allocations; ConvergentLoop therefore uses fresh **OOF-R12/R13/R14**.
 
 OOF-R1..R7 are managed local recursion codes owned by PROP-039.
 OOF-R3 scope: `recursive` contracts with named (non-fuel) `decreases` variant only;
