@@ -2487,7 +2487,10 @@ module IgniterLang
         expr
       else
         @errors << { "message" => "Unexpected token in expression: #{tok.type}(#{tok.value})", "line" => tok.line }
-        advance
+        # LANG-RUBY-VARIANT-MATCH-PARSER-P1: never consume the :eof sentinel —
+        # doing so left peek == nil and crashed every enclosing loop with
+        # NoMethodError on truncated input (fail-open, not fail-closed).
+        advance unless tok.type == :eof
         { "kind" => "error", "token" => tok.value }
       end
     end
@@ -2496,9 +2499,12 @@ module IgniterLang
       # LANG-RUBY-IF-COND-BARE-IDENT-FORM-GUARD-P1: inside an `if` condition a
       # lowercase ident before `{` must stay a plain ref — the `{` opens the
       # then-block, not a Gap-I form invocation (`if flag { ... } else { ... }`).
+      # LANG-RUBY-VARIANT-MATCH-PARSER-P1: same guard for `match` subjects —
+      # `match v { A { x } => x }` must keep `v` a plain ref so `{` opens the
+      # match body (IGDB-P23 crash class).
       # Rust parity: lab parser only constructs on PascalCase ident before `{`,
-      # so bare value idents in conditions never claim the block there either.
-      return false if (@if_cond_depth || 0).positive?
+      # so bare value idents in these header positions never claim the block.
+      return false if (@form_guard_depth || 0).positive?
 
       peek_type?(:lbrace) ||
         (%i[ident keyword].include?(peek&.type) && peek(1)&.type == :assign)
@@ -2533,15 +2539,22 @@ module IgniterLang
       { "kind" => "form_invocation", "trigger" => trigger, "attrs" => attrs, "children" => children }
     end
 
+    # Shared guard for block-header positions (`if` conditions, `match`
+    # subjects): while active, a bare ident before `{` stays a plain ref
+    # instead of opening a Gap-I form invocation.
+    def suppress_form_invocation
+      @form_guard_depth = (@form_guard_depth || 0) + 1
+      begin
+        yield
+      ensure
+        @form_guard_depth -= 1
+      end
+    end
+
     def parse_if_expr
       # LANG-RUBY-IF-COND-BARE-IDENT-FORM-GUARD-P1: suppress form-invocation
       # detection while parsing the condition so its `{` opens the then-block.
-      @if_cond_depth = (@if_cond_depth || 0) + 1
-      begin
-        cond = parse_expr
-      ensure
-        @if_cond_depth -= 1
-      end
+      cond = suppress_form_invocation { parse_expr }
       then_block = parse_block_body
       else_block = nil
       if peek_kw?("else")
@@ -2625,16 +2638,102 @@ module IgniterLang
     # ── PROP-044-P3: match expression ─────────────────────────────────────
 
     def parse_match_expr
-      subject = parse_expr
-      expect_type!(:lbrace)
+      # LANG-RUBY-VARIANT-MATCH-PARSER-P1: the subject parses under the form
+      # guard so `match v {` keeps `v` a plain ref — without it the `{` of the
+      # match body was claimed as a Gap-I form invocation and the first arm
+      # (`A { x } =>`) crashed variant-construct parsing with an uncaught
+      # "Expected colon, got rbrace" (IGDB-P23).
+      subject =
+        begin
+          suppress_form_invocation { parse_expr }
+        rescue ParseError => e
+          record_match_parse_failure(e, "match subject")
+          recover_past_match_header
+          return { "kind" => "error", "token" => "match" }
+        end
+
+      unless peek_type?(:lbrace)
+        tok = peek
+        add_parse_error(
+          rule: "OOF-P0",
+          message: "Expected '{' to open match body, got #{tok&.type}(#{tok&.value})",
+          token: tok&.value.to_s,
+          line: tok&.line || 0,
+          col: tok&.col || 0
+        )
+        recover_past_match_header
+        return { "kind" => "error", "token" => "match" }
+      end
+      advance # consume {
+
+      # Fail-closed recovery anchor: locate the `}` closing the match body by
+      # balanced scan BEFORE arm parsing, so a malformed arm becomes a recorded
+      # parse error plus a clean skip to the end of the match — never an
+      # uncaught ParseError (the IGDB-P23 crash class).
+      close_pos = matching_rbrace_pos
+
       arms = []
-      until peek_type?(:rbrace) || peek_type?(:eof)
-        arm = parse_match_arm
-        arms << arm if arm
+      until peek.nil? || peek_type?(:rbrace) || peek_type?(:eof)
+        begin
+          arm = parse_match_arm
+          arms << arm if arm
+        rescue ParseError => e
+          record_match_parse_failure(e, "match arm")
+          @pos = close_pos || (@tokens.length - 1)
+          break
+        end
         advance if peek_type?(:comma)
       end
-      expect_type!(:rbrace)
+
+      if peek_type?(:rbrace)
+        advance
+      else
+        tok = peek
+        add_parse_error(
+          rule: "OOF-P0",
+          message: "Unterminated match body",
+          token: tok&.value.to_s,
+          line: tok&.line || 0,
+          col: tok&.col || 0
+        )
+      end
       { "kind" => "match_expr", "subject" => subject, "arms" => arms }
+    end
+
+    def record_match_parse_failure(err, where)
+      add_parse_error(
+        rule: "OOF-P0",
+        message: "Malformed #{where}: #{err.message}",
+        token: peek&.value.to_s,
+        line: err.line || peek&.line || 0,
+        col: err.col || peek&.col || 0
+      )
+    end
+
+    # After a failed match header (bad subject or missing `{`), skip forward to
+    # the body block if one follows and consume it whole, so the enclosing
+    # declaration can resynchronize on its own boundaries.
+    def recover_past_match_header
+      until peek_type?(:eof) || peek_type?(:lbrace) || peek_type?(:rbrace) || body_boundary_token?(peek)
+        advance
+      end
+      skip_balanced_block if peek_type?(:lbrace)
+    end
+
+    # Index of the `}` that closes the currently-open brace (assumes the `{`
+    # was just consumed, i.e. depth starts at 1). Returns nil when unbalanced.
+    def matching_rbrace_pos
+      depth = 1
+      idx = @pos
+      while (tok = @tokens[idx]) && tok.type != :eof
+        depth += 1 if tok.type == :lbrace
+        if tok.type == :rbrace
+          depth -= 1
+          return idx if depth.zero?
+        end
+        idx += 1
+      end
+      nil
     end
 
     def parse_match_arm
@@ -2647,6 +2746,7 @@ module IgniterLang
 
     def parse_match_pattern
       tok = peek
+      return nil if tok.nil? # fail-closed: truncated stream (past eof)
       if tok.type == :ident && tok.value == "_"
         advance
         return { "wildcard" => true, "arm" => "_", "bindings" => [] }
