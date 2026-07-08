@@ -207,23 +207,22 @@ end
 # ══════════════════════════════════════════════════════════════════════════════
 section "OOF-PROF6 — aspirational / unknown loop value fails closed at parse"
 
-check("PROF6-1: `loop: service` (Ch13 aspirational) ⇒ parse-time OOF-PROF6") do
-  parse(prog("service", NOLOOP)).fetch("parse_errors").any? { |e| e.fetch("rule", e["code"]) == "OOF-PROF6" }
+check("PROF6-1: `loop: finite_loop` (ch11 aspirational spelling) ⇒ parse-time OOF-PROF6") do
+  parse(prog("finite_loop", NOLOOP)).fetch("parse_errors").any? { |e| e.fetch("rule", e["code"]) == "OOF-PROF6" }
 end
 
-check("PROF6-2: still-aspirational `finite_loop` / `service` are OOF-PROF6") do
-  %w[finite_loop service].all? do |v|
-    parse(prog(v, NOLOOP)).fetch("parse_errors").any? { |e| e.fetch("rule", e["code"]) == "OOF-PROF6" }
+check("PROF6-2: an unknown value (`whirl`) is OOF-PROF6") do
+  parse(prog("whirl", NOLOOP)).fetch("parse_errors").any? { |e| e.fetch("rule", e["code"]) == "OOF-PROF6" }
+end
+
+check("PROF6-4: `loop: convergent` (P46) and `loop: service` (P50) GRADUATED to live vocab — no OOF-PROF6") do
+  %w[convergent service].all? do |v|
+    parse(prog(v, NOLOOP)).fetch("parse_errors").none? { |e| e.fetch("rule", e["code"]) == "OOF-PROF6" }
   end
 end
 
-check("PROF6-4: `loop: convergent` GRADUATED to live vocab (P46) — no OOF-PROF6") do
-  parse(prog("convergent", NOLOOP)).fetch("parse_errors")
-    .none? { |e| e.fetch("rule", e["code"]) == "OOF-PROF6" }
-end
-
 check("PROF6-3: aspirational value NOT stored (no spurious OOF-PROF3)") do
-  !parse(prog("service", NOLOOP)).fetch("profiles").first.key?("loop")
+  !parse(prog("finite_loop", NOLOOP)).fetch("profiles").first.key?("loop")
 end
 
 # ══════════════════════════════════════════════════════════════════════════════

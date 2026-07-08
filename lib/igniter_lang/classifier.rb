@@ -544,6 +544,30 @@ module IgniterLang
         end
       end
 
+      # PROP-037 annex/P50: ServiceLoop obligations. A `service` contract must
+      # DECLARE its three ch13 §13.4 liveness obligations. These are compile-time
+      # DECLARATION checks only — a passing check GRANTS NO runtime liveness (the
+      # heartbeat actually arriving, a step staying within the latency budget is a
+      # RUNTIME property, undecidable here; OOF-SL10+ HELD, PROP-037 + lab
+      # machine). `checkpoint` is optional in v0. The mode of `cancellation` is
+      # captured but not enforced (required-vs-none is a later refinement).
+      if modifier == "service"
+        body = contract.fetch("body")
+        {
+          "OOF-SL1" => ["heartbeat",        "a 'heartbeat every <duration>' obligation (Observable)"],
+          "OOF-SL2" => ["cancellation",     "a 'cancellation required' obligation (Stoppable)"],
+          "OOF-SL3" => ["max_step_latency", "a 'max_step_latency <duration>' obligation (Bounded per step)"]
+        }.each do |rule, (kind, human)|
+          next if body.any? { |n| n.fetch("kind") == kind }
+          diagnostics << oof(
+            rule,
+            "service contract '#{contract.fetch("name")}' requires #{human}; " \
+            "declaring it grants no runtime liveness (PROP-037)",
+            contract.fetch("name")
+          )
+        end
+      end
+
       # PROP-040: OOF-M7/M8 — profile binding validation (must precede contract_fragment_for)
       via_profile = contract.fetch("via_profile", nil)
       profile_authority = nil
@@ -680,6 +704,7 @@ module IgniterLang
             contract_loop_classes << "recursive"    if modifier == "recursive"
             contract_loop_classes << "fuel_bounded"  if modifier == "fuel_bounded"
             contract_loop_classes << "convergent"    if modifier == "convergent"
+            contract_loop_classes << "service"        if modifier == "service"
             contract_loop_classes << "budgeted"      if declarations.any? { |d| d.fetch("kind", "") == "budgeted_loop" }
             # LANG-PROFILE-LOOP-CLASS-FINITE-P44: the `for` FiniteLoop is a live
             # loop-class (kind `for_loop`); P42's first cut missed it, so `loop:

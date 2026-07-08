@@ -427,9 +427,16 @@ module IgniterLang
     # `convergent` (Ch13 ConvergentLoop, PROP-050/P46) is the 4th local loop-class
     # modifier — it repeats while driving a metric toward a threshold, terminating
     # on convergence OR fuel exhaustion. It sits alongside recursive/fuel_bounded.
-    CONTRACT_MODIFIERS = %w[pure observed effect privileged irreversible recursive fuel_bounded convergent].freeze
+    # `service` (Ch13 ServiceLoop, PROP-037 annex / P50) is the 5th loop class —
+    # a non-terminating, liveness-governed loop. v0 is a DECLARATION slice: the
+    # `service` modifier + obligation clauses are checked for presence only; the
+    # form is a modifier for parser-parity (ch13 §13.8 "distinct form" prose is
+    # updated at impl — see P49 ⚑). Runtime liveness stays HELD (PROP-037).
+    CONTRACT_MODIFIERS = %w[pure observed effect privileged irreversible recursive fuel_bounded convergent service].freeze
     # ConvergentLoop `on_exhaustion :<action>` — v0 actions (Ch13 §13.1).
     ON_EXHAUSTION_ACTIONS = %w[return_partial suspend].freeze
+    # ServiceLoop `cancellation <mode>` — v0 modes (ch11 §11.3).
+    CANCELLATION_MODES = %w[required optional none].freeze
 
     def parse_top_decl
       tok = peek
@@ -521,7 +528,7 @@ module IgniterLang
     # first cut omitted it. ch11's aspirational `finite_loop`/`convergent`/
     # `service` values remain Ch13 (Managed Recursion) target prose with no
     # compiler surface — they fail closed (OOF-PROF6) until Ch13 lands.
-    LOOP_CLASS_VALUES = %w[none finite recursive fuel_bounded budgeted convergent].freeze
+    LOOP_CLASS_VALUES = %w[none finite recursive fuel_bounded budgeted convergent service].freeze
 
     # PROP-040: profile declarations. PROP-048 adds the `retry`
     # (LANG-PROFILE-IDEMPOTENCY-RETRY-P31) and `max_reversibility`
@@ -1076,6 +1083,11 @@ module IgniterLang
       when "variant"       then advance; parse_convergence_variant_decl
       when "convergence"   then advance; parse_convergence_decl
       when "on_exhaustion" then advance; parse_on_exhaustion_decl
+      # PROP-037 annex/P50: ServiceLoop obligation clauses (`service` contracts)
+      when "heartbeat"        then advance; parse_heartbeat_decl
+      when "checkpoint"       then advance; parse_checkpoint_decl
+      when "cancellation"     then advance; parse_cancellation_decl
+      when "max_step_latency" then advance; parse_max_step_latency_decl
       # PROP-039 gate 8: loop body declarations (valid inside loop body only; TypeChecker rejects at contract level)
       when "lead"        then advance; parse_lead_decl
       # PROP-045: intent descriptor — queryable purpose metadata, not a behavior declaration
@@ -1934,6 +1946,54 @@ module IgniterLang
       end
       advance
       { "kind" => "on_exhaustion", "action" => tok.value }
+    end
+
+    # PROP-037 annex/P50: ServiceLoop obligation clauses. These are compile-time
+    # DECLARATION checks (presence only, OOF-SL1/2/3) — they grant NO runtime
+    # liveness; a step blocking the heartbeat or exceeding the latency budget is
+    # a RUNTIME condition (OOF-SL10+, HELD, PROP-037 + the lab machine). A
+    # `<duration>` is `<int>.<unit>` (e.g. `10.seconds`); v0 captures it loosely.
+
+    def parse_duration
+      n = expect_type!(:int_lit)
+      expect_type!(:dot)
+      unit = name_token!(%i[ident])
+      "#{n.value}.#{unit}"
+    end
+
+    # `heartbeat every <duration>`
+    def parse_heartbeat_decl
+      expect_value!("every")
+      { "kind" => "heartbeat", "interval" => parse_duration }
+    end
+
+    # `checkpoint every <duration>` (optional in v0)
+    def parse_checkpoint_decl
+      expect_value!("every")
+      { "kind" => "checkpoint", "interval" => parse_duration }
+    end
+
+    # `cancellation <required|optional|none>`
+    def parse_cancellation_decl
+      tok = peek
+      unless (tok&.type == :ident || tok&.type == :keyword) && CANCELLATION_MODES.include?(tok.value)
+        add_parse_error(
+          rule: "OOF-SL2",
+          message: "cancellation requires a mode (#{CANCELLATION_MODES.join(' | ')})",
+          token: tok&.value.to_s,
+          line: tok&.line || 0,
+          col: tok&.col || 0
+        )
+        advance if tok && (tok.type == :ident || tok.type == :keyword)
+        return nil
+      end
+      advance
+      { "kind" => "cancellation", "mode" => tok.value }
+    end
+
+    # `max_step_latency <duration>`
+    def parse_max_step_latency_decl
+      { "kind" => "max_step_latency", "budget" => parse_duration }
     end
 
     def parse_implements_clause

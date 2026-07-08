@@ -87,7 +87,7 @@ service contract LiveNewsClarityService()
 | `StructuralRecursion` | Terminates because structural variant strictly decreases | Compiler performs syntactic_v0 decrease check at every `recur()` site: whitelist `variant−N`, `variant.tail`, `variant.rest`; other forms fire OOF-R3 |
 | `FuelBoundedRecursion` | Terminates when fuel counter reaches zero | `max_steps` is a static literal |
 | `ConvergentLoop` | Terminates when metric reaches threshold or fuel exhausts | `convergent` modifier + `variant`/`convergence epsilon`/`max_steps`/`on_exhaustion` declared. **Implemented Ruby-canon (PROP-050 / LANG-CH13-CONVERGENT-LOOP-P46).** Termination is guaranteed by `max_steps` (fuel); the compiler does NOT prove convergence. |
-| `ServiceLoop` | Does not terminate by design; must be stoppable, observable, and bounded per step | Heartbeat, checkpoint, cancellation, and `max_step_latency` verified |
+| `ServiceLoop` | Does not terminate by design; must be stoppable, observable, and bounded per step | **v0 declaration slice implemented (PROP-037 annex / P50):** `service` modifier + `heartbeat`/`cancellation`/`max_step_latency` obligations checked for **declaration presence** (OOF-SL1/2/3). Actual liveness (heartbeat arrives, step within budget) is RUNTIME — **HELD** (OOF-SL10+, PROP-037 + lab machine). Declaring the obligations grants no liveness. |
 
 `FiniteLoop`, `StructuralRecursion`, `FuelBoundedRecursion` (PROP-039) and now
 `ConvergentLoop` (PROP-050/P46) are implemented managed-local-repetition classes.
@@ -152,6 +152,18 @@ A service loop must satisfy three compiler-checked obligations:
 
 Service loops do not have a termination proof. Instead, they are governed by
 liveness theory: the loop is alive as long as heartbeat signals arrive.
+
+> **v0 declaration slice (PROP-037 annex / LANG-CH13-SERVICE-LOOP-P50, Ruby-canon;
+> Stage-4 lane opened 2026-07-08).** The compiler checks that a `service` contract
+> **declares** its three obligations — missing `heartbeat` ⇒ **OOF-SL1**, missing
+> `cancellation` ⇒ **OOF-SL2**, missing `max_step_latency` ⇒ **OOF-SL3** (hard).
+> `checkpoint every N` is optional in v0. **A passing check grants NO runtime
+> liveness** — the "step blocks heartbeat / exceeds latency" conditions above are
+> RUNTIME (OOF-SL10+), HELD to PROP-037 + the lab machine
+> (`igniter-machine/src/service_loop.rs`); declaration is not enforcement (the
+> same boundary as ch12 authority declaration-vs-enforcement). Timer binding
+> (§13.5) and `write ... evidence` (§13.6) remain HELD. `loop: service` (ch11)
+> now enforces the class.
 
 ---
 
@@ -242,19 +254,30 @@ OOF-R3 scope: `recursive` contracts with named (non-fuel) `decreases` variant on
 Full termination proof, SMT verification, and dotted-path variant support remain
 Stage 4 design work — not claimed by the syntactic_v0 gate.
 
-### Service Loop Obligations (PROP-037 territory — migration pending)
+### Service Loop Obligations (`OOF-SL*`)
 
-The service-loop conditions previously listed here under the OOF-R namespace
-(heartbeat, latency, suspension) are PROP-037 territory. They will be
-assigned to the `OOF-SL*` namespace when PROP-037 service liveness
-implementation is authorized. Until then, they are deferred:
+The `OOF-SL*` namespace splits **compile-time declaration** (low numbers, live
+via the P50 v0 slice) from **runtime liveness** (SL10+, HELD, PROP-037). The two
+never collide.
 
-| Deferred code | Condition | Future namespace |
-|---------------|-----------|-----------------|
-| *(was R2)* | Service loop step blocks heartbeat window | OOF-SL* (PROP-037) |
-| *(was R3)* | Service loop step exceeds `max_step_latency` | OOF-SL* (PROP-037) |
-| *(was R4)* | `on_exhaustion: :suspend` without suspension point | OOF-SL* (PROP-037) |
-| *(was R5)* | Unbounded loop without proof | OOF-SL* or OOF-R5 (pending) |
+**Compile-time — declaration presence (PROP-037 annex / P50, experiment-pass):**
+
+| Code | Condition | Severity | Status |
+|------|-----------|----------|--------|
+| OOF-SL1 | `service` contract missing a `heartbeat every <dur>` obligation | error | **experiment-pass** — classifier.rb; service_loop_proof 18/18 |
+| OOF-SL2 | `service` contract missing `cancellation <mode>` (or a malformed mode) | error | **experiment-pass** — classifier.rb/parser.rb |
+| OOF-SL3 | `service` contract missing a `max_step_latency <dur>` obligation | error | **experiment-pass** — classifier.rb |
+
+`checkpoint every <dur>` is optional in v0. A passing check grants NO runtime
+liveness. `OOF-SL4` is reserved for a future required-checkpoint decision.
+
+**Runtime — liveness (HELD; PROP-037 + lab machine; SL10+ reserved):**
+
+| Reserved code | Condition | Home |
+|---------------|-----------|------|
+| OOF-SL10 | Service loop step blocks heartbeat window | PROP-037 runtime |
+| OOF-SL11 | Service loop step exceeds `max_step_latency` | PROP-037 runtime |
+| OOF-SL12 | `on_exhaustion: :suspend` without suspension point | PROP-037 runtime |
 
 ### Local Loop (PROP-039 OOF-L*)
 
@@ -283,7 +306,11 @@ fixtures must include unnamed-loop robustness for Postulate 28 (the R246/R247
   and `max_step_latency` profile properties bind to the service loop obligations
   defined here.
 - **Ch10 (Contract Modifiers):** service loops are declared with the `service`
-  keyword, not a modifier. The `service contract` form is syntactically distinct.
+  keyword. **v0 (P50) realises `service` as a contract modifier** (alongside
+  `recursive`/`fuel_bounded`/`convergent`) for parser-parity — the original
+  "syntactically distinct form" intent is deferred; the structural differences
+  (no output, timer-bound body) live in the HELD parts (§13.5/§13.6), not the v0
+  declaration slice.
 - **Ch9 (Stage 2 Reserved):** `fold_stream @window_bounded` and `fold_stream
   @count_bounded(n)` are stream/window bounded folds, not arbitrary managed
   local loops. They remain separate from PROP-039+ local loop/recursion work.

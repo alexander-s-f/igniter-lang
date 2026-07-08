@@ -1,7 +1,7 @@
 {
   "kind": "stdlib_inventory",
   "format_version": "v0",
-  "stdlib_surface_digest": "d6ec4b7fddc931243c4b59d925680a63da2814fa6aae041b5dcd05f756daf0bc",
+  "stdlib_surface_digest": "33f272bb4fa68653ff02ada27b358f45efa364da3711fc6da32c9074cd79d326",
   "note": "Normatively referenced by Ch8. Digest is computed from canonical re-serialization of entries sorted by canonical_name with entry_digest fields stripped — never from raw file bytes. P3 proof verifies determinism. P5 adds stdlib.collection.map + stdlib.collection.filter entries and updates stdlib.collection.count proof_lineage. CONSTRUCT-P1 adds stdlib.decimal.decimal (explicit Decimal constructor) and recomputes the digest. FLATMAP-P5 adds stdlib.collection.flat_map and recomputes the digest. PREDICATE-OPS-P4 adds stdlib.collection.find/any/all and recomputes the digest.",
   "entries": [
     {
@@ -1948,6 +1948,50 @@
       "compatibility_note": "Explicit Decimal constructor: value is exact minor units (Integer), scale is a non-negative Integer literal so Decimal[scale] is statically known. OOF-TY0 on arity != 2 or non-Integer value; OOF-DM4 on non-literal/negative scale. No implicit Float/Integer -> Decimal coercion (stays OOF-TY1). VM lowers to Value::Decimal{value, scale}. Dual-toolchain (Ruby canon TC + Rust lab TC/VM).",
       "owner_surface": "LAB-NUMERIC-DECIMAL-CONSTRUCT-P1",
       "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.collection.zip",
+      "semantic_ir_name": "stdlib.collection.zip",
+      "legacy_sir": null,
+      "aliases": [
+        {
+          "kind": "source_alias",
+          "name": "zip"
+        }
+      ],
+      "category": "collection",
+      "lifecycle_status": "lab-implemented",
+      "semantic_stability": "experiment-pass",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "total",
+      "type_params": [
+        "A",
+        "B"
+      ],
+      "input_signature": [
+        "Collection[A]",
+        "Collection[B]"
+      ],
+      "output_signature": "Collection[Pair[A, B]]",
+      "diagnostics": [
+        "OOF-COL1",
+        "OOF-COL2"
+      ],
+      "failure_behavior": "none",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "LAB-STDLIB-COLLECTION-ZIP-READINESS-P1 — verify-first found zip already wired (untested) in the lab Rust compiler; recommended prove+lock",
+        "LAB-STDLIB-COLLECTION-ZIP-PROOF-P2 — Rust compiler typing (Collection[Pair[A,B]] + Pair field-access fix) + VM ({first, second} records, truncate-to-min), 6 e2e tests",
+        "LANG-STDLIB-COLLECTION-ZIP-RUBY-PARITY-P3 — canon Ruby typechecker registration (infer_zip_call + Pair field access) + this inventory entry; parity restoration (the surface shipped Rust+VM before canon registry)"
+      ],
+      "examples": [
+        "zip([1, 2, 3], [10, 20]) -> [{first: 1, second: 10}, {first: 2, second: 20}]"
+      ],
+      "compatibility_note": "Truncate-to-min on unequal lengths (the VM law). Element type is the built-in Pair{first: A, second: B}; field access resolves from the type params and is Unknown-permissive (a Pair with missing params yields Unknown fields without OOF-P1), mirroring the Rust fallback Pair[Unknown, Unknown]."
     }
   ]
 }

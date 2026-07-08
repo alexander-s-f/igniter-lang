@@ -1236,6 +1236,17 @@ module IgniterLang
         end
         object = infer_expr(expr.fetch("object"), symbol_types, type_errors, type_warnings, node_name)
         object_type = type_name(object.fetch("resolved_type"))
+        # LANG-STDLIB-COLLECTION-ZIP-RUBY-PARITY-P3: built-in Pair{first, second} — the element
+        # type `zip` produces. Fields resolve from the type params ([A, B]); a missing/empty param
+        # stays Unknown WITHOUT OOF-P1 (permissive, mirroring the Rust Pair field-access fix from
+        # LAB-STDLIB-COLLECTION-ZIP-PROOF-P2).
+        if object_type == "Pair" && %w[first second].include?(expr.fetch("field"))
+          pair_params = object.fetch("resolved_type", {}).fetch("params", [])
+          pair_field = pair_params[expr.fetch("field") == "first" ? 0 : 1]
+          pair_field = type_ir("Unknown") unless pair_field.is_a?(Hash) && !pair_field.empty?
+          return typed_expr("field_access", pair_field, object.fetch("deps"),
+                            "object" => object, "field" => expr.fetch("field"))
+        end
         field_type = @type_shapes.fetch(object_type, {})[expr.fetch("field")] || type_ir("Unknown")
         if type_name(field_type) == "Unknown"
           type_errors << oof("OOF-P1", "Unresolved field: #{object_type}.#{expr.fetch("field")}", node_name)
@@ -1390,6 +1401,11 @@ module IgniterLang
       when "concat"
         # LANG-STDLIB-COLLECTION-CONCAT-PROP-P3: shared source alias — route by first-arg type
         infer_concat_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
+      when "zip"
+        # LANG-STDLIB-COLLECTION-ZIP-RUBY-PARITY-P3: zip(Collection[A], Collection[B]) ->
+        # Collection[Pair[A, B]] — canon registration of the surface already live on the lab
+        # Rust compiler + VM ({first, second} records, truncate-to-min).
+        infer_zip_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
       when *TEXT_STDLIB_FNS.keys
         # igniter-string-core-units-and-pure-stdlib-boundary-v0
         infer_text_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
@@ -3162,6 +3178,40 @@ module IgniterLang
       end
 
       typed_expr("call", option_type_ir(inner_type), deps,
+                 "fn" => qualified, "args" => typed_args)
+    end
+
+    # LANG-STDLIB-COLLECTION-ZIP-RUBY-PARITY-P3: zip(Collection[A], Collection[B]) ->
+    # Collection[Pair[A, B]]. Canon Ruby registration of the surface already live on the lab Rust
+    # compiler (stdlib_calls "zip") and the VM ({first, second} records, truncate-to-min).
+    # OOF-COL1: arity != 2. OOF-COL2: non-Collection argument (Unknown stays permissive, mirroring
+    # the Rust fallback Pair[Unknown, Unknown]).
+    def infer_zip_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
+      qualified = "stdlib.collection.zip"
+      typed_args = args.map { |arg| infer_expr(arg, symbol_types, type_errors, type_warnings, node_name) }
+      deps = typed_args.flat_map { |arg| arg.fetch("deps", []) }.uniq
+
+      unless args.length == 2
+        type_errors << oof("OOF-COL1",
+          "#{qualified}: expected 2 arguments (collection, collection), got #{args.length}",
+          node_name)
+        return typed_expr("call", type_ir("Unknown"), deps, "fn" => qualified, "args" => typed_args)
+      end
+
+      inners = typed_args.map do |typed|
+        resolved = typed.fetch("resolved_type", {})
+        arg_name = resolved.is_a?(Hash) ? resolved.fetch("name", "Unknown") : "Unknown"
+        unless %w[Collection Unknown].include?(arg_name)
+          type_errors << oof("OOF-COL2",
+            "#{qualified}: expected Collection argument, got #{arg_name}",
+            node_name)
+        end
+        extracted = element_type_from_collection(resolved)
+        extracted.is_a?(Hash) && !extracted.empty? ? extracted : type_ir("Unknown")
+      end
+
+      pair_type = { "name" => "Pair", "params" => inners }
+      typed_expr("call", { "name" => "Collection", "params" => [pair_type] }, deps,
                  "fn" => qualified, "args" => typed_args)
     end
 
