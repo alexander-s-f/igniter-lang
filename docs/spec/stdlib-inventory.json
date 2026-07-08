@@ -1,7 +1,7 @@
 {
   "kind": "stdlib_inventory",
   "format_version": "v0",
-  "stdlib_surface_digest": "8463c41d83afcaee8e83eb453ea5fdb91eafbdcee2055cb754faae9847089418",
+  "stdlib_surface_digest": "78dcedf306261c21489e05e36cbb68ba2da11934b67c9a0557c8da4e1f3ccfbd",
   "note": "Normatively referenced by Ch8. Digest is computed from canonical re-serialization of entries sorted by canonical_name with entry_digest fields stripped — never from raw file bytes. P3 proof verifies determinism. P5 adds stdlib.collection.map + stdlib.collection.filter entries and updates stdlib.collection.count proof_lineage. CONSTRUCT-P1 adds stdlib.decimal.decimal (explicit Decimal constructor) and recomputes the digest. FLATMAP-P5 adds stdlib.collection.flat_map and recomputes the digest. PREDICATE-OPS-P4 adds stdlib.collection.find/any/all and recomputes the digest. LANG-STDLIB-NUMERIC-TEXT-CONVERSION-P1 adds stdlib.integer.parse_int/int_to_text/modulo (category numeric) and recomputes the digest.",
   "entries": [
     {
@@ -2135,6 +2135,53 @@
         "zip([1, 2, 3], [10, 20]) -> [{first: 1, second: 10}, {first: 2, second: 20}]"
       ],
       "compatibility_note": "Truncate-to-min on unequal lengths (the VM law). Element type is the built-in Pair{first: A, second: B}; field access resolves from the type params and is Unknown-permissive (a Pair with missing params yields Unknown fields without OOF-P1), mirroring the Rust fallback Pair[Unknown, Unknown]."
+    },
+    {
+      "canonical_name": "stdlib.collection.fold",
+      "semantic_ir_name": "stdlib.collection.fold",
+      "legacy_sir": null,
+      "aliases": [
+        {
+          "kind": "source_alias",
+          "name": "fold"
+        }
+      ],
+      "category": "collection",
+      "lifecycle_status": "lab-implemented",
+      "semantic_stability": "experiment-pass",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "total",
+      "type_params": [
+        "T",
+        "Acc"
+      ],
+      "input_signature": [
+        "Collection[T]",
+        "Acc",
+        "(Acc, T) -> Acc"
+      ],
+      "output_signature": "Acc",
+      "diagnostics": [
+        "OOF-COL1",
+        "OOF-COL2"
+      ],
+      "failure_behavior": "none",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "LANG-STDLIB-FOLD-PROP-P1/P3 canon Ruby typechecker.rb — accumulator HOF stdlib.collection.fold (callable both toolchains)",
+        "LAB-VM-NESTED-FOLD-MAP-REDUCE-AGGREGATE-P4 — fold executes nested (eval_ast map_reduce_aggregate arm)",
+        "LANG-STDLIB-COLLECTION-IMPORT-SURFACE-P1 — inventory entry added; importability reconciled (P2 drift ratchet)"
+      ],
+      "examples": [
+        "fold([1, 2, 3], 0, (acc, x) -> acc + x) -> 6"
+      ],
+      "compatibility_note": "Accumulator HOF: fold(Collection[T], Acc, (Acc, T) -> Acc) -> Acc. Semantics UNCHANGED by this card; only importability + inventory visibility added (LANG-STDLIB-COLLECTION-IMPORT-SURFACE-P1).",
+      "owner_surface": "LANG-STDLIB-COLLECTION-IMPORT-SURFACE-P1",
+      "entry_digest": null
     }
   ]
 }
