@@ -23,11 +23,18 @@ Last updated: 2026-07-07
 > has a **gated warning** layer: `required_effect_surface` (default OFF) emits
 > `OOF-M17` for effect-family contracts missing a required field (19/19 + 9/9;
 > LANG-EFFECT-SURFACE-REQUIRED-FIELDS-P28) — a fresh code, NOT the target-table
-> OOF-M2 (retired). Still open: the seven-outcome taxonomy as TYPES (outcomes
-> are proven at the host boundary, not as language types), and profile-policy
-> enforcement (fresh M18+ codes — target OOF-M4/M5 collide with implemented
-> structural codes). Escalation of OOF-M17 from warn to error and default-ON
-> stay explicit later decisions. Authority host-policy
+> OOF-M2 (retired). Profile-policy enforcement has begun in the `OOF-PROF*`
+> namespace (ch11 §11.4): the target-table OOF-M4 rule ("`idempotency none` in a
+> retry-enabled profile") is implemented as **OOF-PROF4** (PROP-048 /
+> LANG-PROFILE-IDEMPOTENCY-RETRY-P31, Ruby-canon, hard error); target OOF-M5
+> ("reversibility exceeds profile maximum") is implemented as **OOF-PROF5**
+> (PROP-048 / LANG-PROFILE-MAX-REVERSIBILITY-P32 — which encodes the ch12
+> reversibility scale ordering for the first time). The target-table OOF-M4/M5
+> codes stay retired prose (they collide with implemented PROP-035 structural
+> codes). Still open: the seven-outcome taxonomy as TYPES (outcomes are proven at
+> the host boundary, not as language types), and profile `allowed_effects`
+> (OOF-PROF1). Escalation of OOF-M17 from warn to error and default-ON stay
+> explicit later decisions. Authority host-policy
 > resolution exists as proof/loopback machine wiring only — no production
 > runner enforces it (public bind stays human-gated). Chapter status stays
 > `proposed`; it advances to `accepted` when the full surface regression
@@ -216,8 +223,8 @@ in a profile that only permits `compensatable` is a compile-time error (OOF-M2).
 |------|-----------|----------|
 | OOF-M17 | `effect/privileged/irreversible` missing a required Effect Surface field, under the `required_effect_surface` completeness gate | warn |
 | OOF-M3 | `irreversible` without `compensation` or `no_compensation` | warn |
-| OOF-M4 | `idempotency: none` used in a retry-enabled profile | error (HELD — profile policy) |
-| OOF-M5 | `reversibility` exceeds profile maximum | error (HELD — profile policy) |
+| OOF-M4 | `idempotency: none` used in a retry-enabled profile | **implemented as `OOF-PROF4`** (ch11 §11.4; PROP-048/P31, hard error) — this M4 code stays retired prose |
+| OOF-M5 | `reversibility` exceeds profile maximum | **implemented as `OOF-PROF5`** (ch11 §11.4; PROP-048/P32, hard error) — this M5 code stays retired prose |
 
 > The target-prose row "OOF-M2 — missing required Effect Surface fields (error)"
 > is **RETIRED**: implemented `OOF-M2` is PROP-035's structural
@@ -244,8 +251,8 @@ in a profile that only permits `compensatable` is a compile-time error (OOF-M2).
 > "OOF-M2 = missing required fields" prose: M2 stays PROP-035 structural, and
 > completeness is a fresh gated warning. The profile-policy target rows
 > (OOF-M4 idempotency-none-in-retry-profile, OOF-M5 reversibility-exceeds-max)
-> likewise stay target-prose and will take **fresh** codes (M18+) when the
-> profile-policy wave lands — their table codes collide with implemented
+> likewise stay target-prose and landed as **fresh profile-policy codes**
+> `OOF-PROF4/OOF-PROF5` in ch11 — their table codes collide with implemented
 > PROP-035 structural M4/M5.
 > (**OOF-M3 resolution history:** the PROP-035 card once deferred "M3 =
 > authority resolution" to "PROP-034" — a numbering-era ghost (PROP-034 is
@@ -273,9 +280,9 @@ in a profile that only permits `compensatable` is a compile-time error (OOF-M2).
 >   SemanticIR carries parsed `idempotency_mode`/`idempotency_key_expr`.
 >   Proofs: `experiments/effect_surface_idempotency_proof/` (16/16) + lab
 >   `tests/effect_surface_idempotency_tests.rs` (9/9). The §12.5 target rule
->   "`idempotency: none` in a retry-enabled profile" stays **HELD** for the
->   profile-policy follow-up — no retry-enabled profile flag exists in either
->   toolchain yet.
+>   "`idempotency: none` in a retry-enabled profile" is now implemented in the
+>   profile-policy namespace as **OOF-PROF4** (Ruby-canon; see ch11 §11.4 and
+>   LANG-PROFILE-IDEMPOTENCY-RETRY-P31).
 > - `affects external|internal <qualified-name>` parses as body-level metadata
 >   in both toolchains (LANG-EFFECT-SURFACE-AFFECTS-P5); the dotted target
 >   preserves source spelling; placement = effect/privileged/irreversible only

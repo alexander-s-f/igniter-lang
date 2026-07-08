@@ -92,6 +92,8 @@ contract-decl ::= contract-modifier? "contract" ident type-params?
 | `checkpoint` | `required`, `optional`, `none` | Service loop checkpoint obligation |
 | `cancellation` | `required`, `optional`, `none` | Service loop cancellation handling obligation |
 | `max_step_latency` | duration | Maximum time budget per loop step |
+| `retry` | `enabled`, `disabled` | Whether the host may replay a bound contract's effect. `enabled` + a bound `idempotency none` contract ⇒ OOF-PROF4. **Implemented (PROP-048/P31).** |
+| `max_reversibility` | reversibility scale value | Ceiling on a bound contract's ch12 `reversibility`; exceeding it ⇒ OOF-PROF5. **Implemented (PROP-048/P32).** |
 
 ---
 
@@ -99,6 +101,30 @@ contract-decl ::= contract-modifier? "contract" ident type-params?
 
 Profile-system diagnostics use the `OOF-PROF*` namespace. `OOF-PR*` is reserved
 for PROP-037 progression diagnostics.
+
+> **Namespace split (LANG-CH11-OOF-NAMESPACE-RECONCILE-P30, 2026-07-08).** The
+> profile system emits two diagnostic families, and they use different code
+> prefixes for compatibility reasons:
+>
+> - **Binding diagnostics** (shipped, PROP-040 experiment-pass) use `OOF-M7`
+>   (contract modifier authority below the profile's declared authority) and
+>   `OOF-M8` (unknown profile name). These are **stable** — they are asserted by
+>   committed evidence (`profile_declarations_proof`, 63/63) — and are **not**
+>   renumbered into `OOF-PROF*`. A future `accepted`-stage decision may add
+>   `OOF-PROF*` *aliases*, but never a silent renumber.
+> - **Policy diagnostics** (the obligations/restrictions below) use the
+>   `OOF-PROF*` namespace: `OOF-PROF1`–`OOF-PROF3` (target rows below),
+>   `OOF-PROF4` (retry-enabled profile bound to an `idempotency none` contract;
+>   PROP-048 — **implemented Ruby-canon, LANG-PROFILE-IDEMPOTENCY-RETRY-P31**),
+>   `OOF-PROF5` (bound contract `reversibility` exceeds the profile's
+>   `max_reversibility`; PROP-048 — **implemented Ruby-canon,
+>   LANG-PROFILE-MAX-REVERSIBILITY-P32**), `OOF-PROF6` (malformed profile policy
+>   field value — an unknown `retry`/`max_reversibility` value; fail-closed at
+>   parse — **implemented with the fields, P31/P32**). `OOF-PROF4/5/6` are
+>   declared contradictions between two explicit declarations and are **hard
+>   errors**, not warnings. Both PROP-048 policy fields have landed: `retry`
+>   (`enabled | disabled`, P31) and `max_reversibility` (ch12 scale value, P32 —
+>   which encodes the scale ORDERING for the first time).
 
 For each contract with a `via` clause, the compiler checks:
 

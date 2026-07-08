@@ -507,19 +507,66 @@ module IgniterLang
       advance while peek && !peek_type?(:eof) && peek.line == line
     end
 
-    # PROP-040: profile declarations
+    # LANG-PROFILE-IDEMPOTENCY-RETRY-P31 (PROP-048): legal `retry` profile values.
+    RETRY_VALUES = %w[enabled disabled].freeze
+
+    # PROP-040: profile declarations. PROP-048 adds the `retry`
+    # (LANG-PROFILE-IDEMPOTENCY-RETRY-P31) and `max_reversibility`
+    # (LANG-PROFILE-MAX-REVERSIBILITY-P32) policy fields; other unrecognized
+    # fields still parse and are dropped as before (additive).
     def parse_profile_decl
       name = name_token!(%i[ident])
       expect_type!(:lbrace)
       authority = nil
+      retry_val = nil
+      max_rev   = nil
       until peek_type?(:rbrace) || peek_type?(:eof)
         field_name = name_token!(%i[ident keyword])
         expect_type!(:colon)
+        val_tok    = peek
         field_val  = name_token!(%i[ident keyword])
-        authority  = field_val if field_name == "authority"
+        case field_name
+        when "authority"
+          authority = field_val
+        when "retry"
+          # PROP-048 retry policy field. Malformed value fails closed at parse
+          # time with OOF-PROF6 (mirrors OOF-M11/M16); the field is NOT stored,
+          # so no OOF-PROF4 fires on an already-refused profile.
+          if RETRY_VALUES.include?(field_val)
+            retry_val = field_val
+          else
+            add_parse_error(
+              rule: "OOF-PROF6",
+              message: "profile '#{name}' declares invalid 'retry: #{field_val}'; " \
+                       "allowed: enabled | disabled",
+              token: field_val.to_s,
+              line: val_tok&.line || 0,
+              col: val_tok&.col || 0
+            )
+          end
+        when "max_reversibility"
+          # PROP-048 max_reversibility ceiling. Value is a bare ch12 scale name
+          # (no colon — profile field position). Malformed fails closed
+          # (OOF-PROF6); field not stored, so no OOF-PROF5 on a refused profile.
+          if REVERSIBILITY_VALUES.include?(field_val)
+            max_rev = field_val
+          else
+            add_parse_error(
+              rule: "OOF-PROF6",
+              message: "profile '#{name}' declares invalid 'max_reversibility: #{field_val}'; " \
+                       "allowed: #{REVERSIBILITY_VALUES.join(' | ')}",
+              token: field_val.to_s,
+              line: val_tok&.line || 0,
+              col: val_tok&.col || 0
+            )
+          end
+        end
       end
       expect_type!(:rbrace)
-      { "kind" => "profile", "name" => name, "authority" => authority }
+      node = { "kind" => "profile", "name" => name, "authority" => authority }
+      node["retry"] = retry_val if retry_val
+      node["max_reversibility"] = max_rev if max_rev
+      node
     end
 
     # PROP-041: size_relation TypeName accessor

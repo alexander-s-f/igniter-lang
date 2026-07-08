@@ -537,6 +537,47 @@ module IgniterLang
               contract.fetch("name")
             )
           end
+          # LANG-PROFILE-IDEMPOTENCY-RETRY-P31 (PROP-048): OOF-PROF4 — a
+          # retry-enabled profile bound to a contract declaring `idempotency none`
+          # is a declared contradiction (a retried effect without an idempotency
+          # key can double-apply). Compile-time POLICY only (Covenant P10); grants
+          # nothing at runtime. Hard error per P30. `key`/`natural` are safe;
+          # `retry: disabled` / absent retry / no `via` impose no constraint.
+          if resolved.fetch("retry", nil) == "enabled"
+            idem = declarations.find { |d| d.fetch("kind", "") == "idempotency" }
+            if idem && idem.fetch("mode", nil) == "none"
+              diagnostics << oof(
+                "OOF-PROF4",
+                "contract '#{contract.fetch("name")}' declares 'idempotency none' but binds " \
+                "retry-enabled profile '#{via_profile}'; a retried effect without an idempotency " \
+                "key can double-apply (declare 'idempotency key <expr>' or set the profile to " \
+                "'retry: disabled')",
+                contract.fetch("name")
+              )
+            end
+          end
+          # LANG-PROFILE-MAX-REVERSIBILITY-P32 (PROP-048): OOF-PROF5 — a bound
+          # contract whose declared ch12 `reversibility` exceeds the profile's
+          # `max_reversibility` ceiling. First place the reversibility scale
+          # ORDERING is encoded (P25 deliberately left it un-encoded). Absent
+          # ceiling ⇒ no constraint; absent contract reversibility ⇒ no violation
+          # (P25 absence is null, not a default). Hard error per P30.
+          profile_max_rev = resolved.fetch("max_reversibility", nil)
+          if profile_max_rev
+            rev_rank = { "reversible" => 0, "compensatable" => 1, "refundable" => 2,
+                         "append_only" => 3, "irreversible" => 4, "destructive" => 5 }
+            rev_decl = declarations.find { |d| d.fetch("kind", "") == "reversibility" }
+            declared_rev = rev_decl && rev_decl.fetch("value", nil)
+            if declared_rev && rev_rank.fetch(declared_rev, -1) > rev_rank.fetch(profile_max_rev, 99)
+              diagnostics << oof(
+                "OOF-PROF5",
+                "contract '#{contract.fetch("name")}' declares reversibility ':#{declared_rev}' " \
+                "which exceeds the maximum ':#{profile_max_rev}' permitted by profile " \
+                "'#{via_profile}'",
+                contract.fetch("name")
+              )
+            end
+          end
         else
           # OOF-M8: profile name not declared in module
           diagnostics << oof(
