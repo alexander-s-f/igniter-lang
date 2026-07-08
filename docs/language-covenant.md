@@ -607,7 +607,7 @@ binding when PROP-040 is active" — not "runtime authority was granted".
 | 6, 20 | ch10 (Modifiers §10.5) | PROP-031, PROP-034 | PROP-034 ✅ for output `evidence []` syntax/metadata | `experiment-pass` syntax; evidence-chain validation still `planned PROP` |
 | 8 | ch12 (receipt field) | PROP-035 | pending | `planned PROP` |
 | 9 | ch12 (authority field) | PROP-035 | pending | `planned PROP` |
-| 10 | ch11 (Profile System) | PROP-033 ✅, PROP-040 ✅ | PROP-033 ✅ PROP-040 ✅ | `experiment-pass` (binding + declarations + OOF-M7/M8; runtime authority closed) |
+| 10 | ch11 (Profile System) | PROP-033 ✅, PROP-040 ✅, PROP-048 ✅, PROP-049 ✅ | PROP-033 ✅ PROP-040 ✅ PROP-048 ✅ PROP-049 ✅ | `accepted (scoped)` — binding + policy-restriction set (OOF-M7/M8, OOF-PROF1–6) Ruby-canon; obligations / stdlib profiles / Rust parity / runtime authority HELD |
 | 11 | ch10 (observed modifier) | PROP-031 | ✅ | `planned PROP` (PROP-035 required-field enforcement) |
 | 12 | ch10 (observed modifier) | PROP-031 | ✅ | `planned PROP` (PROP-035 receipt type enforcement) |
 | 13 | ch10 (observed modifier) | PROP-031 | ✅ | `enforced` (classifier fragment class) |
@@ -672,7 +672,7 @@ a formal status to every postulate and defines the rule for new additions.
 | P7 | Effect Surface readable from contract header alone | `planned PROP` | PROP-035 — `capability`/`effect_binding` body declarations are experiment-pass; broader Effect Surface header/readability field set remains pending |
 | P8 | Receipts are immutable proofs of specific operations | `planned PROP` | PROP-035 — receipt field schema with required fields |
 | P9 | Authority is a typed value, not an ambient role | `planned PROP` | PROP-035 — `authority:` required field on privileged/irreversible contracts |
-| P10 | Profiles are compile-time policy, not runtime config | `experiment-pass` | PROP-033 `via profile` binding + PROP-040 profile declarations and OOF-M7/M8 checks; runtime profile injection/resolution remains closed |
+| P10 | Profiles are compile-time policy, not runtime config | `accepted (scoped)` | PROP-033 `via` binding + PROP-040 declarations/OOF-M7/M8 + the full PROP-048/049 policy-restriction set (OOF-PROF1–6), all compile-time (Ruby-canon); runtime profile injection/resolution remains closed |
 | P11 | Uncertainty is a required typed field, not silently dropped | `planned PROP` | PROP-035 — required-field enforcement on observation types; PROP-031 ✅ classifies modifier |
 | P12 | Simulated receipts are a different type from real receipts | `planned PROP` | PROP-031 ✅ classifies fragment; PROP-035 enforces type incompatibility at contract boundaries |
 | P13 | Real / model / human observations are distinct types | `enforced` | PROP-031 ✅ — classifier assigns fragment class; modifier system enforces distinction at classification |
@@ -681,7 +681,7 @@ a formal status to every postulate and defines the rule for new additions.
 | P16 | Non-idempotent operations under retry are a compile error | `planned PROP` | PROP-035 — idempotency key requirement on retry-enabled profiles |
 | P17 | Irreversible contracts name their compensation or declare `no_compensation` | `planned PROP` | PROP-035 — `compensation:` required field on irreversible contracts |
 | P18 | Irreversible contract unreachable from pure context | `enforced` | PROP-031 ✅ — pure/irreversible separation enforced at classifier; TypeChecker propagates fragment class |
-| P19 | Profile may declare max reversibility level; exceeding it is a compile error | `planned PROP` | PROP-040 validates v0 profile existence/authority only; reversibility scale and broader profile policy enforcement remain pending under Effect/Profile policy work |
+| P19 | Profile may declare max reversibility level; exceeding it is a compile error | `accepted (scoped)` | PROP-048 `max_reversibility` implemented (LANG-PROFILE-MAX-REVERSIBILITY-P32): the ch12 reversibility scale ordering is encoded and a bound contract exceeding the ceiling is a hard OOF-PROF5; Ruby-canon (Rust parity HELD, P33) |
 | P20 | Contract composition preserves evidence chains | `planned PROP` | PROP-034 provides output evidence syntax/metadata only; evidence-chain DAG validation at composition boundaries remains pending |
 | P21 | A program names all its consequences | `planned PROP` | PROP-035 — Effect Surface; all effect fields required at declaration |
 | P22 | Every assumption is declared, typed, and carried through evidence | `experiment-pass` syntax/use; evidence carrying still `planned PROP` | PROP-032 (Gap-H) — `assumptions {}` block and `uses assumptions NAME` surface are experiment-pass. GI-1 numbering is resolved in the proposal index: PROP-032 = assumptions block; PROP-033 = `via profile` binding. Typed assumption semantics, evidence-chain carrying, and receipt validation remain pending. |

@@ -606,6 +606,63 @@ module IgniterLang
               end
             end
           end
+          # LANG-PROFILE-REQUIRES-AUTHORITY-P41 (PROP-049): OOF-PROF2 — a bound
+          # contract must DECLARE a ch12 `authority` clause whose role is among
+          # the profile's `requires_authority` list. Missing authority clause, or
+          # a declared role outside the required set ⇒ hard error. This is a
+          # DECLARATION-CONSISTENCY check over source facts only (Covenant P10):
+          # it resolves no roles, checks no passport, and GRANTS NOTHING at
+          # runtime — the runtime authority line (ch12 authority_ref → host
+          # AuthorityPolicy) is separate and HELD. Absent `requires_authority` ⇒
+          # no constraint; no `via` ⇒ no constraint. v0 matches against the
+          # contract's single declared role; multi-role "must declare ALL" is
+          # deferred to a ch12 multi-authority-clause extension.
+          required_roles = resolved.fetch("requires_authority", nil)
+          if required_roles
+            auth_decl = declarations.find { |d| d.fetch("kind", "") == "authority" }
+            declared_role = auth_decl && auth_decl.fetch("ref", nil)
+            if declared_role.nil?
+              diagnostics << oof(
+                "OOF-PROF2",
+                "contract '#{contract.fetch("name")}' binds profile '#{via_profile}' which " \
+                "requires authority #{required_roles.inspect} but declares no 'authority' clause",
+                contract.fetch("name")
+              )
+            elsif !required_roles.include?(declared_role)
+              diagnostics << oof(
+                "OOF-PROF2",
+                "contract '#{contract.fetch("name")}' declares authority '#{declared_role}', " \
+                "not one of the roles #{required_roles.inspect} required by profile " \
+                "'#{via_profile}'",
+                contract.fetch("name")
+              )
+            end
+          end
+          # LANG-PROFILE-LOOP-CLASS-P42 (PROP-048): OOF-PROF3 — a bound contract
+          # whose loop-class is not the one permitted by the profile's `loop:`.
+          # The contract's loop-class(es) are LIVE source facts: modifier
+          # `recursive`/`fuel_bounded`, and a `budgeted_loop` body decl. A contract
+          # using no loop construct is unrestricted (nothing exceeds the ceiling).
+          # `loop: none` ⇒ any loop construct violates. Absent `loop` ⇒ no
+          # constraint; no `via` ⇒ no constraint. Hard error (P30). ch11's
+          # aspirational finite_loop/convergent/service (Ch13 service contracts)
+          # are HELD — the parser refuses them (OOF-PROF6), so they never reach here.
+          permitted_loop = resolved.fetch("loop", nil)
+          if permitted_loop
+            contract_loop_classes = []
+            contract_loop_classes << "recursive"    if modifier == "recursive"
+            contract_loop_classes << "fuel_bounded"  if modifier == "fuel_bounded"
+            contract_loop_classes << "budgeted"      if declarations.any? { |d| d.fetch("kind", "") == "budgeted_loop" }
+            violating = contract_loop_classes.reject { |c| c == permitted_loop }
+            unless violating.empty?
+              diagnostics << oof(
+                "OOF-PROF3",
+                "contract '#{contract.fetch("name")}' uses loop class #{violating.inspect} " \
+                "but profile '#{via_profile}' permits only '#{permitted_loop}'",
+                contract.fetch("name")
+              )
+            end
+          end
         else
           # OOF-M8: profile name not declared in module
           diagnostics << oof(

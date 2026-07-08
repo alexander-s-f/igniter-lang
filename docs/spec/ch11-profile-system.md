@@ -1,20 +1,46 @@
 # Chapter 11: Profile System
 
-Status: proposed (binding + declarations experiment-pass via PROP-033/PROP-040)
+Status: accepted (profile binding + policy-restriction surface: OOF-M7/M8,
+  OOF-PROF1–6) — obligation-side + stdlib profiles + Rust parity remain
+  HELD/target (see scope note)
 Stage: 3 (Phase 2)
-Source PROPs: PROP-033 (via profile binding, experiment-pass) +
-  PROP-040 (profile declarations + OOF-M7/M8, experiment-pass;
-  renumbered out of the original PROP-035 slot on 2026-06-07)
+Source PROPs: PROP-033 (via profile binding) + PROP-040 (profile declarations +
+  OOF-M7/M8; renumbered out of the original PROP-035 slot on 2026-06-07) +
+  PROP-048 (retry / max_reversibility / allowed_effects / loop) +
+  PROP-049 (requires_authority)
 Governance: META-EXPERT-013
-Last updated: 2026-07-06
+Last updated: 2026-07-08
 
-> **Proposed, partially proven.** Profile binding syntax (PROP-033) and v0
-> profile declarations with OOF-M7/M8 binding checks (PROP-040) are
-> experiment-pass. Runtime profile injection/authority resolution, the
-> reversibility scale, and broader profile policy remain closed until
-> separately authorized. Status advances to `accepted` when the full
-> profile-system regression suite passes. (Historical note: this chapter
-> originally cited "PROP-034", which is now Output Evidence Syntax.)
+> **Accepted — scoped.** The **declaration + policy-restriction** surface is
+> conformant and regression-locked (Ruby-canon):
+> - `via` profile binding (PROP-033) and v0 profile declarations;
+> - the authority min-modifier floor — **OOF-M7** (modifier below profile
+>   authority) / **OOF-M8** (unknown profile) — dual-proven
+>   (`profile_declarations_proof` 63/63);
+> - the full §11.4 policy-restriction set (PROP-048/049): **OOF-PROF1**
+>   (`allowed_effects`), **OOF-PROF2** (`requires_authority`, declaration-
+>   consistency — grants nothing at runtime), **OOF-PROF3** (`loop` class),
+>   **OOF-PROF4** (retry × idempotency), **OOF-PROF5** (reversibility ceiling),
+>   **OOF-PROF6** (malformed policy field). All hard errors; per-field proofs in
+>   §11.4.
+>
+> **Explicitly HELD / target (NOT covered by this acceptance):**
+> - the §11.4 rule-1 **obligation** checks (`evidence: required`, `time:
+>   explicit`) — unimplemented;
+> - the §11.3 **obligation properties** (`time`/`lifecycle`/`backend`/`evidence`/
+>   `heartbeat`/`checkpoint`/`cancellation`/`max_step_latency`) — not parsed as
+>   profile fields yet;
+> - the §11.5 **stdlib profiles** — not shipped;
+> - runtime profile injection / authority resolution — separate HELD host line
+>   (ch12 §12.3, P12–P20);
+> - the aspirational loop vocabulary (`finite_loop`/`convergent`/`service`) and
+>   the service-contract rule — Ch13 (Managed Recursion);
+> - **Rust lab-compiler parity** — profiles are Ruby-canon-only (P33 HOLD until
+>   this scoped acceptance is a stable target).
+>
+> Each HELD item advances this Status further when its own slice lands and
+> regression-locks. (Historical note: this chapter originally cited "PROP-034",
+> now Output Evidence Syntax.)
 
 ---
 
@@ -86,8 +112,8 @@ contract-decl ::= contract-modifier? "contract" ident type-params?
 | `backend` | `:memory`, `:ledger`, `:external` | Required storage backend |
 | `evidence` | `required`, `optional`, `none` | Whether `output ... evidence [...]` is mandatory |
 | `allowed_effects` | list of `<scope>.<system>` refs | Restricts which Effect Surface `affects` targets a bound contract may declare (dot-boundary prefix match). Exceeding ⇒ OOF-PROF1. **Implemented (PROP-048/P35).** |
-| `requires_authority` | list of authority symbols | Contract must receive matching authority |
-| `loop` | `none`, `finite_loop`, `fuel_bounded`, `convergent`, `service` | Permitted loop class |
+| `requires_authority` | list of bare role idents | A bound contract must DECLARE a ch12 `authority` clause whose role is one of the list; missing/other ⇒ OOF-PROF2. Declaration-consistency only — **grants no runtime authority**. **Implemented (PROP-049/P41).** |
+| `loop` | `none`, `recursive`, `fuel_bounded`, `budgeted` | Permitted loop class of a bound contract; a different class ⇒ OOF-PROF3. **Implemented (PROP-048/P42)** over the LIVE loop vocabulary. `finite_loop`/`convergent`/`service` remain Ch13 target prose (unimplemented; a profile naming one fails closed with OOF-PROF6). |
 | `heartbeat` | `required`, `optional`, `none` | Service loop heartbeat obligation |
 | `checkpoint` | `required`, `optional`, `none` | Service loop checkpoint obligation |
 | `cancellation` | `required`, `optional`, `none` | Service loop cancellation handling obligation |
@@ -115,21 +141,33 @@ for PROP-037 progression diagnostics.
 > - **Policy diagnostics** (the obligations/restrictions below) use the
 >   `OOF-PROF*` namespace: `OOF-PROF1` (bound `affects` target not in the
 >   profile's `allowed_effects`; PROP-048 — **implemented Ruby-canon,
->   LANG-PROFILE-ALLOWED-EFFECTS-P35**), `OOF-PROF2`–`OOF-PROF3` (target rows
->   below — `requires_authority` is HELD, see the P36 readiness packet),
+>   LANG-PROFILE-ALLOWED-EFFECTS-P35**), `OOF-PROF2` (bound contract's declared
+>   ch12 `authority` role not among the profile's `requires_authority`; PROP-049
+>   — **implemented Ruby-canon, LANG-PROFILE-REQUIRES-AUTHORITY-P41;
+>   declaration-consistency, grants nothing at runtime**), `OOF-PROF3` (bound
+>   contract's loop-class not the one permitted by the profile's `loop:`;
+>   PROP-048 — **implemented Ruby-canon, LANG-PROFILE-LOOP-CLASS-P42**, over the
+>   live loop vocabulary; ch11's aspirational `finite_loop`/`convergent`/`service`
+>   stay Ch13-HELD),
 >   `OOF-PROF4` (retry-enabled profile bound to an `idempotency none` contract;
 >   PROP-048 — **implemented Ruby-canon, LANG-PROFILE-IDEMPOTENCY-RETRY-P31**),
 >   `OOF-PROF5` (bound contract `reversibility` exceeds the profile's
 >   `max_reversibility`; PROP-048 — **implemented Ruby-canon,
 >   LANG-PROFILE-MAX-REVERSIBILITY-P32**), `OOF-PROF6` (malformed profile policy
->   field value — an unknown `retry`/`max_reversibility` value or an
+>   field value — an unknown `retry`/`max_reversibility`/`loop` value or an
 >   `allowed_effects` entry lacking an `external|internal` scope; fail-closed at
->   parse — **implemented with the fields, P31/P32/P35**). `OOF-PROF1/4/5/6` are
->   declared contradictions between two explicit declarations and are **hard
->   errors**, not warnings. Three PROP-048 policy fields have landed: `retry`
->   (`enabled | disabled`, P31), `max_reversibility` (ch12 scale value, P32 —
->   which encodes the scale ORDERING for the first time), and `allowed_effects`
->   (`[<scope>.<system>, ...]`, P35 — affects-target allow-list).
+>   parse — **implemented with the fields, P31/P32/P35/P42**).
+>   `OOF-PROF1/2/3/4/5/6` are declared-consistency violations between explicit
+>   declarations and are **hard errors**, not warnings. **The ch11 §11.4
+>   obligations/restrictions set is now fully implemented** (five policy fields):
+>   `retry` (`enabled | disabled`, PROP-048/P31), `max_reversibility` (ch12 scale
+>   value, PROP-048/P32 — first scale ordering), `allowed_effects`
+>   (`[<scope>.<system>, ...]`, PROP-048/P35 — affects-target allow-list),
+>   `requires_authority` (`[role, ...]`, PROP-049/P41 — a bound contract must
+>   declare a matching ch12 `authority` role; declaration-consistency, **grants
+>   nothing at runtime**), and `loop` (live loop-class ceiling, PROP-048/P42).
+>   The obligation-side rows (`time`/`lifecycle`/`backend`/`evidence` and the
+>   service-loop obligations) remain Ch13/target prose.
 
 For each contract with a `via` clause, the compiler checks:
 
@@ -148,11 +186,32 @@ For each contract with a `via` clause, the compiler checks:
    cross-contract system identity — not local capability aliases; see the P34
    readiness packet.)
 
-3. **Authority**: if `requires_authority` is set, the contract modifier must be
-   `privileged` or `irreversible`. Violation: OOF-PROF2.
+3. **Authority** (**implemented, PROP-049/P41**): if `requires_authority` is set
+   (a list of bare role idents), a bound contract must DECLARE a ch12 `authority`
+   clause whose role is one of the list. No `authority` clause, or a declared
+   role outside the list ⇒ **OOF-PROF2** (hard). This is a **declaration-
+   consistency** check over source facts only — it resolves no role, checks no
+   passport, and **grants no runtime authority**: a passing OOF-PROF2 confers
+   nothing; runtime authority remains the separate, HELD ch12 `authority_ref` →
+   host `AuthorityPolicy` seam. (v0 is an is-one-of check against the contract's
+   single declared role; a multi-role "must declare ALL" obligation is deferred
+   until ch12 allows multiple `authority` clauses. The earlier modifier-floor
+   reading of this rule is RETIRED — the profile `authority:` min-modifier +
+   OOF-M7 already enforces the modifier floor. See PROP-049.)
 
-4. **Loop class**: if `loop: service` is declared, the contract modifier must be
-   absent or use the `service contract` form (Ch13). Violation: OOF-PROF3.
+4. **Loop class** (**implemented, PROP-048/P42**): if `loop:` is set (one of the
+   LIVE classes `none | recursive | fuel_bounded | budgeted`), a `via`-bound
+   contract whose loop-class differs from the permitted one ⇒ **OOF-PROF3**
+   (hard). A contract's loop-class(es) are live source facts: the `recursive` /
+   `fuel_bounded` modifiers and a `budgeted_loop` (`loop … max_steps …`) body
+   decl; a contract using no loop construct is unrestricted. `loop: none` forbids
+   any loop construct. Absent `loop` ⇒ no constraint. Compile-time policy
+   (Covenant P10); grants nothing at runtime.
+   > The ch11 aspirational values `finite_loop` / `convergent` / `service` and
+   > the original "`loop: service` ⇒ `service contract` form" reading are **HELD**
+   > for Ch13 (Managed Recursion) — no compiler surface backs them, so a profile
+   > naming one fails closed at parse (OOF-PROF6) rather than silently accepting
+   > an unenforceable class.
 
 ---
 

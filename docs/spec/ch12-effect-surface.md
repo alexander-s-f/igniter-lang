@@ -33,11 +33,17 @@ Last updated: 2026-07-07
 > codes stay retired prose (they collide with implemented PROP-035 structural
 > codes). Profile `allowed_effects` (OOF-PROF1) also landed — it restricts a
 > bound contract's `affects` targets (PROP-048 / LANG-PROFILE-ALLOWED-EFFECTS-P35,
-> Ruby-canon, hard error). Still open: the seven-outcome taxonomy as TYPES
-> (outcomes are proven at the host boundary, not as language types), and profile
-> `requires_authority` (OOF-PROF2 — HELD until a profile-authority PROP is
-> authored; see the P36 readiness packet). Escalation of OOF-M17 from warn to
-> error and default-ON stay explicit later decisions. Authority host-policy
+> Ruby-canon, hard error). Profile `requires_authority` (OOF-PROF2) also landed —
+> a bound contract must declare a ch12 `authority` role the profile requires
+> (PROP-049 / LANG-PROFILE-REQUIRES-AUTHORITY-P41, Ruby-canon, hard error); it is
+> declaration-consistency only and **grants no runtime authority** (the runtime
+> `authority_ref` → host `AuthorityPolicy` line stays separate and HELD). Profile
+> loop-class (OOF-PROF3) also landed (PROP-048 / LANG-PROFILE-LOOP-CLASS-P42, live
+> loop vocabulary, hard error) — **the ch11 §11.4 profile-policy set
+> (OOF-PROF1–6) is now complete Ruby-canon**. Still open: the seven-outcome
+> taxonomy as TYPES (outcomes are proven at the host boundary, not as language
+> types). Escalation of OOF-M17 from warn to error and default-ON stay explicit
+> later decisions; Rust profile parity stays HELD (P33). Authority host-policy
 > resolution exists as proof/loopback machine wiring only — no production
 > runner enforces it (public bind stays human-gated). Chapter status stays
 > `proposed`; it advances to `accepted` when the full surface regression

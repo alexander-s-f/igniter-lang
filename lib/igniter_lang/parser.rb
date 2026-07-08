@@ -510,6 +510,12 @@ module IgniterLang
     # LANG-PROFILE-IDEMPOTENCY-RETRY-P31 (PROP-048): legal `retry` profile values.
     RETRY_VALUES = %w[enabled disabled].freeze
 
+    # LANG-PROFILE-LOOP-CLASS-P42 (PROP-048): the LIVE loop-class vocabulary a
+    # profile `loop:` may name. ch11's aspirational `finite_loop`/`convergent`/
+    # `service` values are Ch13 (Managed Recursion) target prose with no compiler
+    # surface — they fail closed (OOF-PROF6) until Ch13 lands.
+    LOOP_CLASS_VALUES = %w[none recursive fuel_bounded budgeted].freeze
+
     # PROP-040: profile declarations. PROP-048 adds the `retry`
     # (LANG-PROFILE-IDEMPOTENCY-RETRY-P31) and `max_reversibility`
     # (LANG-PROFILE-MAX-REVERSIBILITY-P32) policy fields; other unrecognized
@@ -521,6 +527,8 @@ module IgniterLang
       retry_val = nil
       max_rev   = nil
       allowed_effects = nil
+      requires_authority = nil
+      loop_class = nil
       until peek_type?(:rbrace) || peek_type?(:eof)
         field_name = name_token!(%i[ident keyword])
         expect_type!(:colon)
@@ -528,6 +536,12 @@ module IgniterLang
         # list value (all other profile fields are scalar `field: ident`).
         if field_name == "allowed_effects"
           allowed_effects = parse_allowed_effects_list(name)
+          next
+        end
+        # LANG-PROFILE-REQUIRES-AUTHORITY-P41 (PROP-049): `requires_authority`
+        # takes a bracketed list of bare role idents.
+        if field_name == "requires_authority"
+          requires_authority = parse_requires_authority_list(name)
           next
         end
         val_tok    = peek
@@ -567,6 +581,24 @@ module IgniterLang
               col: val_tok&.col || 0
             )
           end
+        when "loop"
+          # LANG-PROFILE-LOOP-CLASS-P42 (PROP-048): permitted loop class. Value
+          # is a LIVE loop-class name; ch11's aspirational finite_loop/convergent/
+          # service (Ch13) fail closed (OOF-PROF6) with a pointer, since no
+          # compiler surface backs them yet. Field not stored ⇒ no OOF-PROF3.
+          if LOOP_CLASS_VALUES.include?(field_val)
+            loop_class = field_val
+          else
+            add_parse_error(
+              rule: "OOF-PROF6",
+              message: "profile '#{name}' declares invalid 'loop: #{field_val}'; " \
+                       "allowed live loop classes: #{LOOP_CLASS_VALUES.join(' | ')} " \
+                       "(finite_loop/convergent/service are Ch13 target prose, not yet implemented)",
+              token: field_val.to_s,
+              line: val_tok&.line || 0,
+              col: val_tok&.col || 0
+            )
+          end
         end
       end
       expect_type!(:rbrace)
@@ -574,7 +606,39 @@ module IgniterLang
       node["retry"] = retry_val if retry_val
       node["max_reversibility"] = max_rev if max_rev
       node["allowed_effects"] = allowed_effects if allowed_effects
+      node["requires_authority"] = requires_authority if requires_authority
+      node["loop"] = loop_class if loop_class
       node
+    end
+
+    # LANG-PROFILE-REQUIRES-AUTHORITY-P41 (PROP-049): parse a profile
+    # `requires_authority: [role, ...]` list. Each entry is a BARE role ident
+    # (matching the ch12 `authority` clause's bare-role-ident form). A dotted
+    # entry (`Billing.Operator`) fails closed at parse with OOF-PROF6 and is
+    # dropped. Returns a list of role idents. NOTE: this check grants NOTHING at
+    # runtime — it only obligates a source `authority` declaration (see PROP-049).
+    def parse_requires_authority_list(profile_name)
+      expect_type!(:lbracket)
+      roles = []
+      until peek_type?(:rbracket) || peek_type?(:eof)
+        tok = peek
+        raw = parse_qualified_ref
+        if raw.include?(".")
+          add_parse_error(
+            rule: "OOF-PROF6",
+            message: "profile '#{profile_name}' requires_authority role '#{raw}' must be a " \
+                     "bare role ident (no dots)",
+            token: raw.to_s,
+            line: tok&.line || 0,
+            col: tok&.col || 0
+          )
+        else
+          roles << raw
+        end
+        advance if peek_type?(:comma)
+      end
+      expect_type!(:rbracket)
+      roles
     end
 
     # LANG-PROFILE-ALLOWED-EFFECTS-P35 (PROP-048): parse a profile
