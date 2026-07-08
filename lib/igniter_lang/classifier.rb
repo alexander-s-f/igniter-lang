@@ -745,6 +745,39 @@ module IgniterLang
               )
             end
           end
+
+          # LANG-PROFILE-MAX-STEP-LATENCY-P52 (ch11 §11.3): a profile
+          # `max_step_latency: <dur>` is a CEILING on a bound contract's declared
+          # `max_step_latency <dur>` clause. Durations are normalized to
+          # milliseconds; a bound latency ABOVE the ceiling — or one whose unit
+          # cannot be recognized — fails closed with OOF-PROF8 (declaration
+          # policy, Covenant P10; grants no runtime liveness). Absent ceiling, or
+          # a contract that declares no latency, imposes nothing.
+          ceiling_raw = resolved.fetch("max_step_latency", nil)
+          if ceiling_raw
+            latency_decl = contract.fetch("body").find { |n| n.fetch("kind", "") == "max_step_latency" }
+            if latency_decl
+              ceiling_ms = duration_to_ms(ceiling_raw)
+              budget_raw = latency_decl.fetch("budget", "")
+              budget_ms  = duration_to_ms(budget_raw)
+              if budget_ms.nil?
+                diagnostics << oof(
+                  "OOF-PROF8",
+                  "contract '#{contract.fetch("name")}' declares max_step_latency " \
+                  "'#{budget_raw}' with an unrecognized duration unit; cannot verify it is " \
+                  "within profile '#{via_profile}' ceiling '#{ceiling_raw}' (fail-closed)",
+                  contract.fetch("name")
+                )
+              elsif ceiling_ms && budget_ms > ceiling_ms
+                diagnostics << oof(
+                  "OOF-PROF8",
+                  "contract '#{contract.fetch("name")}' declares max_step_latency " \
+                  "'#{budget_raw}' which exceeds profile '#{via_profile}' ceiling '#{ceiling_raw}'",
+                  contract.fetch("name")
+                )
+              end
+            end
+          end
         else
           # OOF-M8: profile name not declared in module
           diagnostics << oof(
@@ -1018,6 +1051,16 @@ module IgniterLang
 
     def oof(rule, message, node_name)
       { "rule" => rule, "message" => message, "node" => node_name, "line" => nil }
+    end
+
+    # LANG-PROFILE-MAX-STEP-LATENCY-P52: normalize an `<int>.<unit>` duration
+    # string to milliseconds using the parser's known-unit table. Returns nil for
+    # a malformed value or an unrecognized unit (⇒ fail-closed comparison).
+    def duration_to_ms(raw)
+      n, unit = raw.to_s.split(".", 2)
+      mult = IgniterLang::Parser::DURATION_UNITS_MS[unit]
+      return nil unless mult && n.to_s.match?(/\A\d+\z/)
+      n.to_i * mult
     end
   end
 end

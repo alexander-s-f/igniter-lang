@@ -23,8 +23,10 @@ Last updated: 2026-07-08
 >   class), **OOF-PROF4** (retry × idempotency), **OOF-PROF5** (reversibility
 >   ceiling), **OOF-PROF6** (malformed policy field), **OOF-PROF7**
 >   (`heartbeat`/`checkpoint`/`cancellation: required` — a bound contract must
->   declare the service obligation; P51, declaration only — grants no runtime
->   liveness). All hard errors; per-field proofs in §11.4.
+>   declare the service obligation; P51), **OOF-PROF8** (`max_step_latency`
+>   ceiling — a bound service's declared latency exceeds the profile's; P52,
+>   ms-normalized). PROF7/PROF8 are declaration only — grant no runtime liveness.
+>   All hard errors; per-field proofs in §11.4.
 >
 > **Explicitly HELD / target (NOT covered by this acceptance):**
 > - the §11.4 rule-1 **obligation** checks (`evidence: required`, `time:
@@ -32,7 +34,7 @@ Last updated: 2026-07-08
 > - the §11.3 non-service **obligation properties** (`time`/`lifecycle`/`backend`/
 >   `evidence`) — not parsed as profile fields yet. (The service-loop obligations
 >   `heartbeat`/`checkpoint`/`cancellation: required` ARE implemented — OOF-PROF7,
->   P51; `max_step_latency` as a ceiling remains HELD, needs duration ordering.)
+>   P51; `max_step_latency` as a ceiling is also implemented — OOF-PROF8, P52.)
 > - the §11.5 **stdlib profiles** — not shipped;
 > - runtime profile injection / authority resolution — separate HELD host line
 >   (ch12 §12.3, P12–P20);
@@ -120,7 +122,7 @@ contract-decl ::= contract-modifier? "contract" ident type-params?
 | `heartbeat` | `required`, `optional`, `none` | Service loop heartbeat obligation; `required` ⇒ a bound contract must declare a `heartbeat` clause, else OOF-PROF7. **Implemented (PROP-037 annex/P51.)** Declaration only — grants no runtime liveness. |
 | `checkpoint` | `required`, `optional`, `none` | Service loop checkpoint obligation; `required` ⇒ a bound contract must declare a `checkpoint` clause, else OOF-PROF7 (the meaningful case — P50 leaves checkpoint optional). **Implemented (PROP-037 annex/P51.)** |
 | `cancellation` | `required`, `optional`, `none` | Service loop cancellation obligation; `required` ⇒ a bound contract must declare a `cancellation` clause, else OOF-PROF7. **Implemented (PROP-037 annex/P51.)** |
-| `max_step_latency` | duration | Maximum time budget per loop step (ceiling on a bound service's declared latency). **HELD** — needs duration ordering (a follow-on, like `max_reversibility` was its own slice). |
+| `max_step_latency` | `<int>.<unit>` duration | Ceiling on a bound service's declared `max_step_latency`; a larger (or unit-unrecognized) declared latency ⇒ OOF-PROF8. Durations normalized to ms (`ms`/`second`/`minute`/`hour`, singular+plural). **Implemented (PROP-037 annex/P52.)** Declaration only — grants no runtime liveness. |
 | `retry` | `enabled`, `disabled` | Whether the host may replay a bound contract's effect. `enabled` + a bound `idempotency none` contract ⇒ OOF-PROF4. **Implemented (PROP-048/P31).** |
 | `max_reversibility` | reversibility scale value | Ceiling on a bound contract's ch12 `reversibility`; exceeding it ⇒ OOF-PROF5. **Implemented (PROP-048/P32).** |
 
@@ -159,10 +161,13 @@ for PROP-037 progression diagnostics.
 >   LANG-PROFILE-MAX-REVERSIBILITY-P32**), `OOF-PROF6` (malformed profile policy
 >   field value — an unknown `retry`/`max_reversibility`/`loop` value or an
 >   `allowed_effects` entry lacking an `external|internal` scope; fail-closed at
->   parse — **implemented with the fields, P31/P32/P35/P42**), and **`OOF-PROF7`**
+>   parse — **implemented with the fields, P31/P32/P35/P42**), **`OOF-PROF7`**
 >   (a `heartbeat`/`checkpoint`/`cancellation: required` service obligation the
 >   bound contract fails to declare; PROP-037 annex/P51 — declaration only,
->   **grants no runtime liveness**). `OOF-PROF1..7` are declared-consistency
+>   **grants no runtime liveness**), and **`OOF-PROF8`** (a bound service's
+>   declared `max_step_latency` exceeds the profile's ceiling, ms-normalized, or
+>   uses an unrecognized unit — fail-closed; PROP-037 annex/P52 — declaration
+>   only). `OOF-PROF1..8` are declared-consistency
 >   violations between explicit declarations and are **hard errors**, not
 >   warnings. **The ch11 §11.4 restriction set + the required-service-obligation
 >   properties are implemented** (six policy fields + three service obligations):
@@ -173,9 +178,10 @@ for PROP-037 progression diagnostics.
 >   declare a matching ch12 `authority` role; declaration-consistency, **grants
 >   nothing at runtime**), `loop` (live loop-class ceiling, PROP-048/P42), and
 >   `heartbeat`/`checkpoint`/`cancellation: required` (PROP-037 annex/P51 — a
->   bound contract must declare the service obligation). The remaining
->   obligation-side rows (`time`/`lifecycle`/`backend`/`evidence`, and
->   `max_step_latency` as a ceiling) remain Ch13/target prose.
+>   bound contract must declare the service obligation), and `max_step_latency`
+>   (a ms-normalized ceiling on a bound service's declared latency; PROP-037
+>   annex/P52). The remaining obligation-side rows
+>   (`time`/`lifecycle`/`backend`/`evidence`) remain Ch13/target prose.
 
 For each contract with a `via` clause, the compiler checks:
 

@@ -534,6 +534,15 @@ module IgniterLang
     # `cancellation`. `required` obligates a bound contract to declare that
     # obligation clause (OOF-PROF7); `optional`/`none` impose nothing.
     SERVICE_OBLIGATION_MODES = %w[required optional none].freeze
+    # LANG-PROFILE-MAX-STEP-LATENCY-P52: duration unit -> milliseconds, for the
+    # profile `max_step_latency` ceiling (parse validation + classifier
+    # comparison). Singular and plural forms; an unrecognized unit fails closed.
+    DURATION_UNITS_MS = {
+      "ms" => 1, "millisecond" => 1, "milliseconds" => 1,
+      "second" => 1_000, "seconds" => 1_000,
+      "minute" => 60_000, "minutes" => 60_000,
+      "hour" => 3_600_000, "hours" => 3_600_000
+    }.freeze
 
     # PROP-040: profile declarations. PROP-048 adds the `retry`
     # (LANG-PROFILE-IDEMPOTENCY-RETRY-P31) and `max_reversibility`
@@ -549,6 +558,7 @@ module IgniterLang
       requires_authority = nil
       loop_class = nil
       service_obligations = {}
+      max_step_latency = nil
       until peek_type?(:rbrace) || peek_type?(:eof)
         field_name = name_token!(%i[ident keyword])
         expect_type!(:colon)
@@ -562,6 +572,12 @@ module IgniterLang
         # takes a bracketed list of bare role idents.
         if field_name == "requires_authority"
           requires_authority = parse_requires_authority_list(name)
+          next
+        end
+        # LANG-PROFILE-MAX-STEP-LATENCY-P52: `max_step_latency: <int>.<unit>` —
+        # a duration value (not an ident), so it needs its own parse.
+        if field_name == "max_step_latency"
+          max_step_latency = parse_profile_max_step_latency(name)
           next
         end
         val_tok    = peek
@@ -646,7 +662,45 @@ module IgniterLang
       node["requires_authority"] = requires_authority if requires_authority
       node["loop"] = loop_class if loop_class
       node["service_obligations"] = service_obligations unless service_obligations.empty?
+      node["max_step_latency"] = max_step_latency if max_step_latency
       node
+    end
+
+    # LANG-PROFILE-MAX-STEP-LATENCY-P52: parse a profile `max_step_latency`
+    # value as `<int>.<unit>` with a KNOWN duration unit. Returns the raw string
+    # (e.g. "10.seconds") for the classifier to normalize/compare, or fails
+    # closed (OOF-PROF6, not stored) on a malformed / unknown-unit value. Uses
+    # only peek-guarded advances (never raises).
+    def parse_profile_max_step_latency(profile_name)
+      tok = peek
+      raw = nil
+      if peek_type?(:int_lit)
+        n = advance.value
+        if peek_type?(:dot)
+          advance
+          if peek_type?(:ident)
+            unit = advance.value
+            return "#{n}.#{unit}" if DURATION_UNITS_MS.key?(unit)
+            raw = "#{n}.#{unit}"
+          else
+            raw = "#{n}."
+          end
+        else
+          raw = n.to_s
+        end
+      elsif tok
+        raw = tok.value.to_s
+        advance
+      end
+      add_parse_error(
+        rule: "OOF-PROF6",
+        message: "profile '#{profile_name}' declares invalid 'max_step_latency: #{raw}'; " \
+                 "expected <int>.<unit> with unit in #{DURATION_UNITS_MS.keys.join(' | ')}",
+        token: raw.to_s,
+        line: tok&.line || 0,
+        col: tok&.col || 0
+      )
+      nil
     end
 
     # LANG-PROFILE-REQUIRES-AUTHORITY-P41 (PROP-049): parse a profile
