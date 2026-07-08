@@ -17,24 +17,27 @@ Last updated: 2026-07-08
 > - the authority min-modifier floor — **OOF-M7** (modifier below profile
 >   authority) / **OOF-M8** (unknown profile) — dual-proven
 >   (`profile_declarations_proof` 63/63);
-> - the full §11.4 policy-restriction set (PROP-048/049): **OOF-PROF1**
->   (`allowed_effects`), **OOF-PROF2** (`requires_authority`, declaration-
->   consistency — grants nothing at runtime), **OOF-PROF3** (`loop` class),
->   **OOF-PROF4** (retry × idempotency), **OOF-PROF5** (reversibility ceiling),
->   **OOF-PROF6** (malformed policy field). All hard errors; per-field proofs in
->   §11.4.
+> - the full §11.4 policy-restriction set (PROP-048/049 + PROP-037 annex):
+>   **OOF-PROF1** (`allowed_effects`), **OOF-PROF2** (`requires_authority`,
+>   declaration-consistency — grants nothing at runtime), **OOF-PROF3** (`loop`
+>   class), **OOF-PROF4** (retry × idempotency), **OOF-PROF5** (reversibility
+>   ceiling), **OOF-PROF6** (malformed policy field), **OOF-PROF7**
+>   (`heartbeat`/`checkpoint`/`cancellation: required` — a bound contract must
+>   declare the service obligation; P51, declaration only — grants no runtime
+>   liveness). All hard errors; per-field proofs in §11.4.
 >
 > **Explicitly HELD / target (NOT covered by this acceptance):**
 > - the §11.4 rule-1 **obligation** checks (`evidence: required`, `time:
 >   explicit`) — unimplemented;
-> - the §11.3 **obligation properties** (`time`/`lifecycle`/`backend`/`evidence`/
->   `heartbeat`/`checkpoint`/`cancellation`/`max_step_latency`) — not parsed as
->   profile fields yet;
+> - the §11.3 non-service **obligation properties** (`time`/`lifecycle`/`backend`/
+>   `evidence`) — not parsed as profile fields yet. (The service-loop obligations
+>   `heartbeat`/`checkpoint`/`cancellation: required` ARE implemented — OOF-PROF7,
+>   P51; `max_step_latency` as a ceiling remains HELD, needs duration ordering.)
 > - the §11.5 **stdlib profiles** — not shipped;
 > - runtime profile injection / authority resolution — separate HELD host line
 >   (ch12 §12.3, P12–P20);
-> - the aspirational loop vocabulary (`finite_loop`/`convergent`/`service`) and
->   the service-contract rule — Ch13 (Managed Recursion);
+> - the aspirational loop spelling `finite_loop` (use `finite`); `convergent`
+>   (P46) and `service` (P50) are now LIVE loop classes;
 > - **Rust lab-compiler parity** — profiles are Ruby-canon-only (P33 HOLD until
 >   this scoped acceptance is a stable target).
 >
@@ -113,11 +116,11 @@ contract-decl ::= contract-modifier? "contract" ident type-params?
 | `evidence` | `required`, `optional`, `none` | Whether `output ... evidence [...]` is mandatory |
 | `allowed_effects` | list of `<scope>.<system>` refs | Restricts which Effect Surface `affects` targets a bound contract may declare (dot-boundary prefix match). Exceeding ⇒ OOF-PROF1. **Implemented (PROP-048/P35).** |
 | `requires_authority` | list of bare role idents | A bound contract must DECLARE a ch12 `authority` clause whose role is one of the list; missing/other ⇒ OOF-PROF2. Declaration-consistency only — **grants no runtime authority**. **Implemented (PROP-049/P41).** |
-| `loop` | `none`, `finite`, `recursive`, `fuel_bounded`, `budgeted` | Permitted loop class of a bound contract; a different class ⇒ OOF-PROF3. **Implemented (PROP-048/P42; `finite` = the `for` FiniteLoop wired in by P44)** over the LIVE loop vocabulary. ch11's aspirational `finite_loop`/`convergent`/`service` remain Ch13 target prose (unimplemented; a profile naming one fails closed with OOF-PROF6). |
-| `heartbeat` | `required`, `optional`, `none` | Service loop heartbeat obligation |
-| `checkpoint` | `required`, `optional`, `none` | Service loop checkpoint obligation |
-| `cancellation` | `required`, `optional`, `none` | Service loop cancellation handling obligation |
-| `max_step_latency` | duration | Maximum time budget per loop step |
+| `loop` | `none`, `finite`, `recursive`, `fuel_bounded`, `budgeted`, `convergent`, `service` | Permitted loop class of a bound contract; a different class ⇒ OOF-PROF3. **Implemented (PROP-048/P42; `finite` P44, `convergent` P46, `service` P50)** over the LIVE loop vocabulary. The ch11 aspirational spelling `finite_loop` fails closed (OOF-PROF6 — use `finite`). |
+| `heartbeat` | `required`, `optional`, `none` | Service loop heartbeat obligation; `required` ⇒ a bound contract must declare a `heartbeat` clause, else OOF-PROF7. **Implemented (PROP-037 annex/P51.)** Declaration only — grants no runtime liveness. |
+| `checkpoint` | `required`, `optional`, `none` | Service loop checkpoint obligation; `required` ⇒ a bound contract must declare a `checkpoint` clause, else OOF-PROF7 (the meaningful case — P50 leaves checkpoint optional). **Implemented (PROP-037 annex/P51.)** |
+| `cancellation` | `required`, `optional`, `none` | Service loop cancellation obligation; `required` ⇒ a bound contract must declare a `cancellation` clause, else OOF-PROF7. **Implemented (PROP-037 annex/P51.)** |
+| `max_step_latency` | duration | Maximum time budget per loop step (ceiling on a bound service's declared latency). **HELD** — needs duration ordering (a follow-on, like `max_reversibility` was its own slice). |
 | `retry` | `enabled`, `disabled` | Whether the host may replay a bound contract's effect. `enabled` + a bound `idempotency none` contract ⇒ OOF-PROF4. **Implemented (PROP-048/P31).** |
 | `max_reversibility` | reversibility scale value | Ceiling on a bound contract's ch12 `reversibility`; exceeding it ⇒ OOF-PROF5. **Implemented (PROP-048/P32).** |
 
@@ -156,18 +159,23 @@ for PROP-037 progression diagnostics.
 >   LANG-PROFILE-MAX-REVERSIBILITY-P32**), `OOF-PROF6` (malformed profile policy
 >   field value — an unknown `retry`/`max_reversibility`/`loop` value or an
 >   `allowed_effects` entry lacking an `external|internal` scope; fail-closed at
->   parse — **implemented with the fields, P31/P32/P35/P42**).
->   `OOF-PROF1/2/3/4/5/6` are declared-consistency violations between explicit
->   declarations and are **hard errors**, not warnings. **The ch11 §11.4
->   obligations/restrictions set is now fully implemented** (five policy fields):
+>   parse — **implemented with the fields, P31/P32/P35/P42**), and **`OOF-PROF7`**
+>   (a `heartbeat`/`checkpoint`/`cancellation: required` service obligation the
+>   bound contract fails to declare; PROP-037 annex/P51 — declaration only,
+>   **grants no runtime liveness**). `OOF-PROF1..7` are declared-consistency
+>   violations between explicit declarations and are **hard errors**, not
+>   warnings. **The ch11 §11.4 restriction set + the required-service-obligation
+>   properties are implemented** (six policy fields + three service obligations):
 >   `retry` (`enabled | disabled`, PROP-048/P31), `max_reversibility` (ch12 scale
 >   value, PROP-048/P32 — first scale ordering), `allowed_effects`
 >   (`[<scope>.<system>, ...]`, PROP-048/P35 — affects-target allow-list),
 >   `requires_authority` (`[role, ...]`, PROP-049/P41 — a bound contract must
 >   declare a matching ch12 `authority` role; declaration-consistency, **grants
->   nothing at runtime**), and `loop` (live loop-class ceiling, PROP-048/P42).
->   The obligation-side rows (`time`/`lifecycle`/`backend`/`evidence` and the
->   service-loop obligations) remain Ch13/target prose.
+>   nothing at runtime**), `loop` (live loop-class ceiling, PROP-048/P42), and
+>   `heartbeat`/`checkpoint`/`cancellation: required` (PROP-037 annex/P51 — a
+>   bound contract must declare the service obligation). The remaining
+>   obligation-side rows (`time`/`lifecycle`/`backend`/`evidence`, and
+>   `max_step_latency` as a ceiling) remain Ch13/target prose.
 
 For each contract with a `via` clause, the compiler checks:
 

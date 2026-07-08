@@ -720,6 +720,31 @@ module IgniterLang
               )
             end
           end
+
+          # LANG-PROFILE-SERVICE-OBLIGATIONS-P51 (ch11 §11.3): a profile may
+          # REQUIRE a bound contract to declare service-loop obligations.
+          # `<obligation>: required` ⇒ the contract must declare that obligation
+          # clause (heartbeat/checkpoint/cancellation); missing ⇒ OOF-PROF7.
+          # `optional`/`none` impose nothing. Compile-time declaration policy
+          # (Covenant P10) — grants no runtime liveness (the P50 boundary; the
+          # obligation clause itself confers nothing). This makes a
+          # profile-required `checkpoint` meaningful (P50 leaves checkpoint
+          # optional on a bare `service` contract).
+          service_obligations = resolved.fetch("service_obligations", nil)
+          if service_obligations
+            body_kinds = contract.fetch("body").map { |n| n.fetch("kind", "") }
+            service_obligations.each do |obligation, mode|
+              next unless mode == "required"
+              next if body_kinds.include?(obligation)
+              diagnostics << oof(
+                "OOF-PROF7",
+                "contract '#{contract.fetch("name")}' binds profile '#{via_profile}' which " \
+                "requires the '#{obligation}' service obligation, but declares no " \
+                "'#{obligation}' clause",
+                contract.fetch("name")
+              )
+            end
+          end
         else
           # OOF-M8: profile name not declared in module
           diagnostics << oof(

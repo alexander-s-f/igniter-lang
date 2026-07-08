@@ -529,6 +529,11 @@ module IgniterLang
     # `service` values remain Ch13 (Managed Recursion) target prose with no
     # compiler surface — they fail closed (OOF-PROF6) until Ch13 lands.
     LOOP_CLASS_VALUES = %w[none finite recursive fuel_bounded budgeted convergent service].freeze
+    # LANG-PROFILE-SERVICE-OBLIGATIONS-P51 (ch11 §11.3): the three service-loop
+    # obligation modes a profile may declare for `heartbeat`/`checkpoint`/
+    # `cancellation`. `required` obligates a bound contract to declare that
+    # obligation clause (OOF-PROF7); `optional`/`none` impose nothing.
+    SERVICE_OBLIGATION_MODES = %w[required optional none].freeze
 
     # PROP-040: profile declarations. PROP-048 adds the `retry`
     # (LANG-PROFILE-IDEMPOTENCY-RETRY-P31) and `max_reversibility`
@@ -543,6 +548,7 @@ module IgniterLang
       allowed_effects = nil
       requires_authority = nil
       loop_class = nil
+      service_obligations = {}
       until peek_type?(:rbrace) || peek_type?(:eof)
         field_name = name_token!(%i[ident keyword])
         expect_type!(:colon)
@@ -607,7 +613,24 @@ module IgniterLang
               rule: "OOF-PROF6",
               message: "profile '#{name}' declares invalid 'loop: #{field_val}'; " \
                        "allowed live loop classes: #{LOOP_CLASS_VALUES.join(' | ')} " \
-                       "(finite_loop/convergent/service are Ch13 target prose, not yet implemented)",
+                       "(`finite_loop` is a ch11 aspirational spelling — use `finite`)",
+              token: field_val.to_s,
+              line: val_tok&.line || 0,
+              col: val_tok&.col || 0
+            )
+          end
+        when "heartbeat", "checkpoint", "cancellation"
+          # LANG-PROFILE-SERVICE-OBLIGATIONS-P51 (ch11 §11.3): service-loop
+          # obligation. `required` obligates a bound contract to declare the
+          # matching obligation clause (OOF-PROF7); `optional`/`none` impose
+          # nothing. Malformed mode fails closed (OOF-PROF6); field not stored.
+          if SERVICE_OBLIGATION_MODES.include?(field_val)
+            service_obligations[field_name] = field_val
+          else
+            add_parse_error(
+              rule: "OOF-PROF6",
+              message: "profile '#{name}' declares invalid '#{field_name}: #{field_val}'; " \
+                       "allowed: #{SERVICE_OBLIGATION_MODES.join(' | ')}",
               token: field_val.to_s,
               line: val_tok&.line || 0,
               col: val_tok&.col || 0
@@ -622,6 +645,7 @@ module IgniterLang
       node["allowed_effects"] = allowed_effects if allowed_effects
       node["requires_authority"] = requires_authority if requires_authority
       node["loop"] = loop_class if loop_class
+      node["service_obligations"] = service_obligations unless service_obligations.empty?
       node
     end
 
