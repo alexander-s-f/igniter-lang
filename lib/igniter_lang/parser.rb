@@ -511,10 +511,12 @@ module IgniterLang
     RETRY_VALUES = %w[enabled disabled].freeze
 
     # LANG-PROFILE-LOOP-CLASS-P42 (PROP-048): the LIVE loop-class vocabulary a
-    # profile `loop:` may name. ch11's aspirational `finite_loop`/`convergent`/
-    # `service` values are Ch13 (Managed Recursion) target prose with no compiler
-    # surface — they fail closed (OOF-PROF6) until Ch13 lands.
-    LOOP_CLASS_VALUES = %w[none recursive fuel_bounded budgeted].freeze
+    # profile `loop:` may name. `finite` (the `for` FiniteLoop) was wired in by
+    # LANG-PROFILE-LOOP-CLASS-FINITE-P44 — it was live (parse_for_loop) but P42's
+    # first cut omitted it. ch11's aspirational `finite_loop`/`convergent`/
+    # `service` values remain Ch13 (Managed Recursion) target prose with no
+    # compiler surface — they fail closed (OOF-PROF6) until Ch13 lands.
+    LOOP_CLASS_VALUES = %w[none finite recursive fuel_bounded budgeted].freeze
 
     # PROP-040: profile declarations. PROP-048 adds the `retry`
     # (LANG-PROFILE-IDEMPOTENCY-RETRY-P31) and `max_reversibility`

@@ -113,7 +113,7 @@ contract-decl ::= contract-modifier? "contract" ident type-params?
 | `evidence` | `required`, `optional`, `none` | Whether `output ... evidence [...]` is mandatory |
 | `allowed_effects` | list of `<scope>.<system>` refs | Restricts which Effect Surface `affects` targets a bound contract may declare (dot-boundary prefix match). Exceeding ⇒ OOF-PROF1. **Implemented (PROP-048/P35).** |
 | `requires_authority` | list of bare role idents | A bound contract must DECLARE a ch12 `authority` clause whose role is one of the list; missing/other ⇒ OOF-PROF2. Declaration-consistency only — **grants no runtime authority**. **Implemented (PROP-049/P41).** |
-| `loop` | `none`, `recursive`, `fuel_bounded`, `budgeted` | Permitted loop class of a bound contract; a different class ⇒ OOF-PROF3. **Implemented (PROP-048/P42)** over the LIVE loop vocabulary. `finite_loop`/`convergent`/`service` remain Ch13 target prose (unimplemented; a profile naming one fails closed with OOF-PROF6). |
+| `loop` | `none`, `finite`, `recursive`, `fuel_bounded`, `budgeted` | Permitted loop class of a bound contract; a different class ⇒ OOF-PROF3. **Implemented (PROP-048/P42; `finite` = the `for` FiniteLoop wired in by P44)** over the LIVE loop vocabulary. ch11's aspirational `finite_loop`/`convergent`/`service` remain Ch13 target prose (unimplemented; a profile naming one fails closed with OOF-PROF6). |
 | `heartbeat` | `required`, `optional`, `none` | Service loop heartbeat obligation |
 | `checkpoint` | `required`, `optional`, `none` | Service loop checkpoint obligation |
 | `cancellation` | `required`, `optional`, `none` | Service loop cancellation handling obligation |
@@ -200,11 +200,12 @@ For each contract with a `via` clause, the compiler checks:
    OOF-M7 already enforces the modifier floor. See PROP-049.)
 
 4. **Loop class** (**implemented, PROP-048/P42**): if `loop:` is set (one of the
-   LIVE classes `none | recursive | fuel_bounded | budgeted`), a `via`-bound
-   contract whose loop-class differs from the permitted one ⇒ **OOF-PROF3**
-   (hard). A contract's loop-class(es) are live source facts: the `recursive` /
-   `fuel_bounded` modifiers and a `budgeted_loop` (`loop … max_steps …`) body
-   decl; a contract using no loop construct is unrestricted. `loop: none` forbids
+   LIVE classes `none | finite | recursive | fuel_bounded | budgeted`), a
+   `via`-bound contract whose loop-class differs from the permitted one ⇒
+   **OOF-PROF3** (hard). A contract's loop-class(es) are live source facts: the
+   `recursive` / `fuel_bounded` modifiers, a `for` FiniteLoop (`finite`, P44),
+   and a `budgeted_loop` (`loop … max_steps …`) body decl; a contract using no
+   loop construct is unrestricted. `loop: none` forbids
    any loop construct. Absent `loop` ⇒ no constraint. Compile-time policy
    (Covenant P10); grants nothing at runtime.
    > The ch11 aspirational values `finite_loop` / `convergent` / `service` and

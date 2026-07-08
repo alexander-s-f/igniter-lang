@@ -653,6 +653,10 @@ module IgniterLang
             contract_loop_classes << "recursive"    if modifier == "recursive"
             contract_loop_classes << "fuel_bounded"  if modifier == "fuel_bounded"
             contract_loop_classes << "budgeted"      if declarations.any? { |d| d.fetch("kind", "") == "budgeted_loop" }
+            # LANG-PROFILE-LOOP-CLASS-FINITE-P44: the `for` FiniteLoop is a live
+            # loop-class (kind `for_loop`); P42's first cut missed it, so `loop:
+            # none` failed to forbid `for` loops. Now detected.
+            contract_loop_classes << "finite"        if declarations.any? { |d| d.fetch("kind", "") == "for_loop" }
             violating = contract_loop_classes.reject { |c| c == permitted_loop }
             unless violating.empty?
               diagnostics << oof(

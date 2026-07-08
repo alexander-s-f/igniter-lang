@@ -103,6 +103,17 @@ NOLOOP = <<~C
   }
 C
 
+# LANG-PROFILE-LOOP-CLASS-FINITE-P44: the `for` FiniteLoop — a live loop class
+# P42's first cut missed.
+FINITE = <<~C
+  observed contract Act via rp {
+    input items: Collection[Item]
+    for ItemLoop item in items {
+      compute v = item.value
+    }
+  }
+C
+
 def prog(loop_val, contract)
   "module Proof.ProfileLoop\n#{profile(loop_val)}\n#{contract}"
 end
@@ -207,6 +218,26 @@ end
 
 check("PROF6-3: aspirational value NOT stored (no spurious OOF-PROF3)") do
   !parse(prog("service", NOLOOP)).fetch("profiles").first.key?("loop")
+end
+
+# ══════════════════════════════════════════════════════════════════════════════
+section "FiniteLoop (P44) — the `for` class P42 missed is now covered"
+
+check("FINITE-1: loop:none + `for` loop ⇒ OOF-PROF3 (the P42 hole, now closed)") do
+  contract_oofs(classify(prog("none", FINITE)), "Act", "OOF-PROF3").any?
+end
+
+check("FINITE-2: loop:finite + `for` loop ⇒ clean (permitted)") do
+  contract_oofs(classify(prog("finite", FINITE)), "Act", "OOF-PROF3").empty?
+end
+
+check("FINITE-3: loop:finite + recursive (wrong class) ⇒ OOF-PROF3") do
+  contract_oofs(classify(prog("finite", RECURSIVE)), "Act", "OOF-PROF3").any?
+end
+
+check("FINITE-4: `finite` is in the live vocab; `finite_loop` (aspirational) still OOF-PROF6") do
+  parse(prog("finite", FINITE)).fetch("parse_errors").empty? &&
+    parse(prog("finite_loop", NOLOOP)).fetch("parse_errors").any? { |e| e.fetch("rule", e["code"]) == "OOF-PROF6" }
 end
 
 # ══════════════════════════════════════════════════════════════════════════════
