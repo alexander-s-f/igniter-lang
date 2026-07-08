@@ -26,6 +26,14 @@ module IgniterLang
     STRICT_REQUIREMENT_MALFORMED_CODE =
       "compiler_profile_contract_refusal.strict_requirement_malformed"
     STRICT_REQUIREMENT_SOURCES = ["proof_local_gate", "internal_test_seam"].freeze
+    # Covenant CR-004: canon compiles a flat source unit and resolves module/import
+    # names; it does NOT evaluate package policy (exports-sealing / lock / .igpkg).
+    # This advisory is purely additive — it does not alter the verdict, status, or
+    # any diagnostic code. It exists so a successful flat-list compile is not read
+    # as package permission (see LANG-PACKAGE-TOOLING-BOUNDARY-DOC-P2 / FRUT-P11).
+    PACKAGE_POLICY_ADVISORY =
+      "compiled as a flat unit; package policy (exports/lock) NOT checked — " \
+      "use the project toolchain for sealing/lock (Covenant CR-004)"
 
     def initialize(
       classifier: Classifier.new,
@@ -113,7 +121,7 @@ module IgniterLang
       source_path = Pathname.new(parsed.fetch("source_path"))
       return parse_failure(parsed, source_path, out_path) unless parsed.fetch("parse_errors").empty?
 
-      compile_parsed(
+      result = compile_parsed(
         parsed: parsed,
         source_path: source_path,
         out_path: out_path,
@@ -126,6 +134,11 @@ module IgniterLang
         per_module_imports: resolved.fetch("per_module_imports", {}),
         per_contract_module: resolved.fetch("per_contract_module", {})
       )
+      # CR-004 anti-drift: surface ONE non-fatal advisory that a multi-file flat
+      # unit was compiled without package-policy checks. Additive only — verdict,
+      # status, and diagnostics are untouched.
+      result["package_policy_advisory"] = PACKAGE_POLICY_ADVISORY if result.is_a?(Hash)
+      result
     rescue AssemblyRefused => e
       report = CompilationReport.internal_error(
         format_version: FORMAT_VERSION,

@@ -49,6 +49,10 @@ module IgniterLang
       # PROP-045: propagate module-level intent_text
       module_intent = parsed_program.fetch("intent_text", nil)
       result["intent_text"] = module_intent if module_intent
+      # LANG-PLUGIN-SHAPE-CONFORMANCE-P2: pass through contract_shape declarations for
+      # the TypeChecker `implements <Shape>` port conformance check.
+      contract_shapes = parsed_program.fetch("contract_shapes", [])
+      result["contract_shapes"] = contract_shapes unless contract_shapes.empty?
       result
     end
 
@@ -846,6 +850,9 @@ module IgniterLang
       result["contract_ref_declarations"] = contract_ref_declarations unless contract_ref_declarations.empty?
       # PROP-045: propagate contract-level intent_text
       result["intent_text"] = contract_intent_text if contract_intent_text
+      # LANG-PLUGIN-SHAPE-CONFORMANCE-P2: propagate the `implements <Shape>` clause so
+      # the TypeChecker can verify port conformance against the module's contract_shapes.
+      result["implements"] = contract["implements"] if contract["implements"]
       result
     end
 
@@ -887,7 +894,12 @@ module IgniterLang
     end
 
     def contract_id(parsed_program, contract)
-      [parsed_program.fetch("module"), contract.fetch("name")].compact.join(".")
+      # LANG-PACKAGE-CONTRACT-IDENTITY-P2 (FRUT-P08): prefer the contract's ORIGIN
+      # module (tagged by the multifile merge) over the program module, so a
+      # multifile contract keeps its real module-qualified id
+      # (`IgKick.Plugin.Render`) instead of the synthetic universe module.
+      mod = contract["origin_module"] || parsed_program.fetch("module")
+      [mod, contract.fetch("name")].compact.join(".")
     end
 
     def classified_decl(node, fragment, deps, missing)

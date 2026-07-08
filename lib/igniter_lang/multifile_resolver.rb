@@ -33,7 +33,7 @@ module IgniterLang
       cycle = import_cycle(sorted)
       return failure(sorted, [cycle_diagnostic(cycle)]) if cycle
 
-      duplicate_contract = duplicate_declaration(sorted, "contract_names")
+      duplicate_contract = duplicate_declaration(sorted, "contract_names", module_qualified: true)
       return failure(sorted, [declaration_diagnostic("OOF-DECL-DUP-CONTRACT", "contract", duplicate_contract)]) if duplicate_contract
 
       duplicate_type = duplicate_declaration(sorted, "type_names")
@@ -280,7 +280,16 @@ module IgniterLang
         "traits" => units.flat_map { |unit| unit.fetch("parsed").fetch("traits", []) },
         "impls" => units.flat_map { |unit| unit.fetch("parsed").fetch("impls", []) },
         "contract_shapes" => units.flat_map { |unit| unit.fetch("parsed").fetch("contract_shapes", []) },
-        "contracts" => units.flat_map { |unit| unit.fetch("parsed").fetch("contracts", []) },
+        # LANG-PACKAGE-CONTRACT-IDENTITY-P2 (FRUT-P08): the merge collapses all
+        # modules into the synthetic universe, which would lose per-contract module
+        # identity. Tag each contract with its ORIGIN module so `contract_id` stays
+        # module-qualified (`IgKick.Plugin.Render`, not `<universe>.Render`) — this
+        # is what makes two-plugin `Render` distinguishable + qualified call_contract
+        # resolve.
+        "contracts" => units.flat_map { |unit|
+          origin = unit.fetch("parsed").fetch("module", nil)
+          unit.fetch("parsed").fetch("contracts", []).map { |c| c.merge("origin_module" => origin) }
+        },
         "types" => units.flat_map { |unit| unit.fetch("parsed").fetch("types", []) },
         "variants" => units.flat_map { |unit| unit.fetch("parsed").fetch("variants", []) },
         "functions" => units.flat_map { |unit| unit.fetch("parsed").fetch("functions", []) },
@@ -331,10 +340,17 @@ module IgniterLang
       units.group_by { |unit| unit.fetch(key) }.find { |_value, owners| owners.length > 1 }
     end
 
-    def duplicate_declaration(units, key)
+    # LANG-PACKAGE-CONTRACT-IDENTITY-P2 (FRUT-P08): when module_qualified, key the
+    # duplicate check on the module-qualified id (`Module.Name`, the `contract_id`
+    # substrate) so two modules may both declare `Render`; only a true same-module
+    # duplicate trips. Types keep the flat check (follow-up: type identity).
+    def duplicate_declaration(units, key, module_qualified: false)
       owners = Hash.new { |hash, name| hash[name] = [] }
       units.each do |unit|
-        unit.fetch(key).each { |name| owners[name] << unit }
+        unit.fetch(key).each do |name|
+          id = module_qualified ? "#{unit.fetch('module')}.#{name}" : name
+          owners[id] << unit
+        end
       end
       owners.sort.find { |_name, refs| refs.length > 1 }
     end

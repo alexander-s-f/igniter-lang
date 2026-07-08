@@ -598,6 +598,49 @@ binding when PROP-040 is active" — not "runtime authority was granted".
 
 ---
 
+### CR-004 — Package Policy Is Project Tooling, Not Language Semantics
+
+**Adopted:** 2026-07-08 (`LANG-PACKAGE-CANON-BOUNDARY-READINESS-P1` →
+`LANG-PACKAGE-TOOLING-BOUNDARY-DOC-P2`; pressure: igbeat `FRUT-P11`)
+
+**Rule:**
+> Package/project policy — `igniter.toml`, `[dependencies]`, `[exports]`
+> sealing, `igniter.lock`, and `.igpkg` archives — is PROJECT TOOLING, not
+> language semantics. Canon compiles a provided compilation unit and resolves
+> module/import names within it; it does NOT decide package membership,
+> exports-sealing, or lock/provenance. **A canon (flat-list) compile that
+> succeeds is not permission — it is the absence of a package-policy check.**
+> The project toolchain (the Rust project mode in
+> `igniter-compiler/src/project.rs`) is the CI authority for package policy.
+> `OOF-IMP4/6/7/8` are TOOLING diagnostics, not canon OOF codes.
+
+**Rationale:** Module/import RESOLUTION and duplicate-contract detection
+(`OOF-DECL-DUP-CONTRACT`, `OOF-IMP2/IMP3`, module-qualified `contract_id`) are
+already shared canon across both toolchains (Rust `multifile.rs`, Ruby
+`multifile_resolver.rb`). Package POLICY is not: the entire project graph —
+manifest parse, dependency graph, exports-sealing, lock, and archive — lives
+only in the Rust lab project mode, and Ruby/canon is genuinely package-blind
+(`compile_sources` takes a flat list of source paths). The FRUT-P11 pressure
+makes the hazard concrete: the same sealed-import source yields `OOF-IMP7` under
+Rust project mode and `ok / 0` under a Ruby flat-list compile — not because the
+flat-list compile granted package permission, but because it never evaluates
+package policy at all. This rule keeps distribution/build policy out of the
+language (rustc does not own Cargo), lets the package tooling evolve
+(registry, remote deps) without canon churn, and — most importantly — stops
+agents from reading flat-list acceptance as a package-policy verdict.
+`igniter.toml` is a project manifest like `Cargo.toml`: it configures the
+compilation unit and its policy; it is not source the language typechecks.
+
+**Scope:**
+- `igniter.toml`, `[dependencies]`, `[exports]` sealing, `igniter.lock`, `.igpkg`
+- `OOF-IMP4/6/7/8` package-policy diagnostics (project-mode only)
+- Does NOT apply to module/import RESOLUTION or duplicate-contract detection,
+  which remain shared canon (`OOF-DECL-DUP-CONTRACT`, `OOF-IMP2/IMP3`,
+  module-qualified `contract_id`)
+- Does NOT authorize a Ruby project mode or canonize any package semantics
+
+---
+
 | Postulate | Spec chapter | PROP | Spec status | Enforcement status |
 |-----------|-------------|------|-------------|-------------------|
 | 1–2 | ch1 (Identity), ch2 (Grammar) | PROP-001, PROP-014 | ✅ | `enforced` |

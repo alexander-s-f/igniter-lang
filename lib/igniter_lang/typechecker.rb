@@ -263,7 +263,7 @@ module IgniterLang
         "module" => classified_program.fetch("module"),
         "type_env" => @type_shapes,
         "contracts" => typed_contracts,
-        "type_errors" => typed_contracts.flat_map { |contract| contract.fetch("type_errors") } + module_reserved_errors + entrypoint_errors + cycle_errors + function_errors,
+        "type_errors" => typed_contracts.flat_map { |contract| contract.fetch("type_errors") } + module_reserved_errors + entrypoint_errors + cycle_errors + function_errors + shape_conformance_errors(classified_program),
         "semantic_ir_ref" => nil
       }
       result["entrypoint"] = resolved_entrypoint if resolved_entrypoint
@@ -899,23 +899,41 @@ module IgniterLang
     # LAB-RUBY-CALL-CONTRACT-PARITY-P3: registry for call_contract dispatch.
     # Maps contract_name → entry with modifier, input_count, single_output_type/name.
     # Separate from @same_module_registry (which is authoritative for uses_contract).
+    # LANG-PACKAGE-CONTRACT-IDENTITY-P2 (FRUT-P08): the registry resolves a
+    # call_contract callee by module-qualified `contract_id` (always unambiguous)
+    # AND by short `name` when that short name is owned by exactly ONE contract.
+    # A short name owned by >1 contract (now possible across modules) is recorded
+    # as ambiguous ⇒ OOF-DECL-AMBIGUOUS-CONTRACT at the call site.
     def build_call_contract_registry(classified_program)
-      classified_program.fetch("contracts").each_with_object({}) do |contract, reg|
+      contracts   = classified_program.fetch("contracts")
+      name_to_ids = Hash.new { |h, k| h[k] = [] }
+      contracts.each { |c| name_to_ids[c.fetch("name")] << c.fetch("contract_id") }
+
+      entries   = {}
+      ambiguous = {}
+      contracts.each do |contract|
         name    = contract.fetch("name")
+        cid     = contract.fetch("contract_id")
         decls   = contract.fetch("declarations")
         inputs  = decls.select { |d| d.fetch("kind") == "input" }
         outputs = decls.select { |d| d.fetch("kind") == "output" }
-        single_output_type = outputs.size == 1 ? outputs[0].fetch("type_annotation", nil) : nil
-        single_output_name = outputs.size == 1 ? outputs[0].fetch("name") : nil
-        reg[name] = {
+        entry = {
           "modifier"           => contract.fetch("modifier", "pure"),
           "input_count"        => inputs.size,
           "input_names"        => inputs.map { |d| d.fetch("name") },
-          "single_output_type" => single_output_type,
-          "single_output_name" => single_output_name,
-          "contract_name"      => name
+          "single_output_type" => outputs.size == 1 ? outputs[0].fetch("type_annotation", nil) : nil,
+          "single_output_name" => outputs.size == 1 ? outputs[0].fetch("name") : nil,
+          "contract_name"      => name,
+          "contract_id"        => cid
         }
+        entries[cid] = entry                       # qualified id always resolves
+        if name_to_ids[name].size == 1
+          entries[name] = entry                    # unambiguous short name resolves
+        else
+          ambiguous[name] = name_to_ids[name].uniq.sort
+        end
       end
+      { "entries" => entries, "ambiguous" => ambiguous }
     end
 
     # LAB-RUBY-CALL-CONTRACT-PARITY-P3: infer call_contract(...) call.
@@ -946,7 +964,21 @@ module IgniterLang
       if first_raw.fetch("kind", nil) == "literal" && first_raw.fetch("type_tag", nil) == "String"
         callee_name      = first_raw.fetch("value")
         positional_count = args.size - 1
-        entry = @call_contract_registry[callee_name]
+
+        # LANG-PACKAGE-CONTRACT-IDENTITY-P2: an unqualified short name owned by
+        # more than one contract (possible now that two modules may both declare
+        # `Render`) is ambiguous — fail closed and require a qualified name.
+        if @call_contract_registry.fetch("ambiguous").key?(callee_name)
+          cands = @call_contract_registry.fetch("ambiguous").fetch(callee_name)
+          type_errors << oof("OOF-DECL-AMBIGUOUS-CONTRACT",
+            "call_contract('#{callee_name}') is ambiguous — #{cands.size} contracts declare the " \
+            "short name '#{callee_name}' (#{cands.join(', ')}); use a qualified name, " \
+            "e.g. call_contract('#{cands.first}')",
+            node_name)
+          return typed_expr("call", type_ir("Unknown"), [], "fn" => fn, "args" => [])
+        end
+
+        entry = @call_contract_registry.fetch("entries")[callee_name]
 
         if entry.nil?
           type_errors << oof("OOF-TY0",
@@ -2093,6 +2125,108 @@ module IgniterLang
 
     def oof(rule, message, node_name)
       { "rule" => rule, "message" => message, "node" => node_name, "line" => nil }
+    end
+
+    # ── LANG-PLUGIN-SHAPE-CONFORMANCE-P2: `implements <Shape>` port conformance ──
+    #
+    # v0 semantics (see lab-docs/lang/lab-plugin-shape-conformance-p2-v0.md):
+    #   * the named `contract_shape` must exist;
+    #   * contract inputs match shape inputs by count, name, and type;
+    #   * contract outputs match shape outputs by count and type;
+    #   * any mismatch fails closed with OOF-SHAPE1 (no runtime behavior change).
+    #
+    # Scope: concrete (non-generic) shapes only. A generic `implements Shape[T]`
+    # or a `contract_shape` with type_params is skipped in v0 (the specialized
+    # ports would be derived from the shape). Parity with the Rust
+    # `check_shape_conformance` pass.
+    def shape_conformance_errors(classified_program)
+      contracts = classified_program.fetch("contracts")
+      return [] if contracts.none? { |c| c["implements"] }
+
+      shapes = classified_program.fetch("contract_shapes", [])
+      shape_index = shapes.each_with_object({}) { |s, h| h[s.fetch("name")] = s }
+      errors = []
+
+      contracts.each do |contract|
+        impl = contract["implements"]
+        next unless impl
+        # v0: concrete shapes only (generic instantiation is out of scope).
+        next unless (impl.fetch("type_args", []) || []).empty?
+
+        shape_name = impl.fetch("name")
+        shape = shape_index[shape_name]
+        unless shape
+          errors << oof("OOF-SHAPE1",
+                        "Contract '#{contract.fetch("name")}' implements unknown shape '#{shape_name}': no `contract_shape #{shape_name}` is declared in scope",
+                        contract.fetch("name"))
+          next
+        end
+        next unless (shape.fetch("type_params", []) || []).empty?
+
+        shape_inputs  = shape_body_ports(shape.fetch("body", []), "input")
+        shape_outputs = shape_body_ports(shape.fetch("body", []), "output")
+        c_inputs      = classified_contract_ports(contract, "input")
+        c_outputs     = classified_contract_ports(contract, "output")
+
+        mismatches = []
+
+        if c_inputs.length != shape_inputs.length
+          mismatches << "input count mismatch (shape declares #{shape_inputs.length}, contract declares #{c_inputs.length})"
+        else
+          shape_inputs.each_with_index do |(sh_name, sh_ty), i|
+            c_name, c_ty = c_inputs[i]
+            if c_name != sh_name
+              mismatches << "input #{i + 1} name mismatch (shape '#{sh_name}', contract '#{c_name}')"
+            elsif c_ty != sh_ty
+              mismatches << "input '#{sh_name}' type mismatch (shape #{shape_type_to_s(sh_ty)}, contract #{shape_type_to_s(c_ty)})"
+            end
+          end
+        end
+
+        if c_outputs.length != shape_outputs.length
+          mismatches << "output count mismatch (shape declares #{shape_outputs.length}, contract declares #{c_outputs.length})"
+        else
+          shape_outputs.each_with_index do |(_sh_name, sh_ty), i|
+            _c_name, c_ty = c_outputs[i]
+            mismatches << "output #{i + 1} type mismatch (shape #{shape_type_to_s(sh_ty)}, contract #{shape_type_to_s(c_ty)})" if c_ty != sh_ty
+          end
+        end
+
+        unless mismatches.empty?
+          errors << oof("OOF-SHAPE1",
+                        "Contract '#{contract.fetch("name")}' does not conform to shape '#{shape_name}': #{mismatches.join("; ")}",
+                        contract.fetch("name"))
+        end
+      end
+
+      errors
+    end
+
+    # Ordered (name, type_annotation) ports of a contract_shape body for `kind`.
+    def shape_body_ports(body, kind)
+      body.select { |d| d.fetch("kind") == kind }
+          .map { |d| [d.fetch("name"), d["type_annotation"]] }
+    end
+
+    # Ordered (name, type_annotation) input/output ports of a classified contract.
+    # The classifier stores input/output `type_annotation` unchanged, so these
+    # compare directly against `shape_body_ports`.
+    def classified_contract_ports(contract, kind)
+      contract.fetch("declarations", [])
+              .select { |d| d.fetch("kind") == kind }
+              .map { |d| [d.fetch("name"), d["type_annotation"]] }
+    end
+
+    # Render a parsed type annotation (String like "Integer" or Hash like
+    # {"name"=>"Collection","params"=>[...]}) as a readable string for diagnostics.
+    def shape_type_to_s(type)
+      return type.to_s unless type.is_a?(Hash)
+
+      name = type["name"] || type["constructor"] || "?"
+      params = type["params"] || []
+      return name.to_s if params.empty?
+
+      "#{name}[#{params.map { |p| shape_type_to_s(p) }.join(",")}]"
     end
 
     # OOF-L4: detect self-recursion in a def function body (parity with Rust is_recursive()).

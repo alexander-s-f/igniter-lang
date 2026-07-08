@@ -8,6 +8,8 @@ Last updated: 2026-05-10
 > Source of truth for each section is the cited PROP.
 > This document is the readable synthesis — not the decision record.
 
+> Package/project policy (`igniter.toml`, `[dependencies]`, `[exports]` sealing, `igniter.lock`, `.igpkg`) is **project tooling, not language semantics** — see Covenant §CR-004; a flat-list compile that succeeds validates language resolution only, it is not a package-policy verdict.
+
 ---
 
 ## Chapters
