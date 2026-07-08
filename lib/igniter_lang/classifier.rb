@@ -578,6 +578,34 @@ module IgniterLang
               )
             end
           end
+          # LANG-PROFILE-ALLOWED-EFFECTS-P35 (PROP-048): OOF-PROF1 — a bound
+          # contract whose Effect Surface `affects <scope> <target>` names a
+          # system NOT in the profile's `allowed_effects` allow-list. An entry
+          # `<scope>.<prefix>` permits an exact target or a dot-boundary prefix
+          # (`external.payment_gateway` covers `payment_gateway.charge`). Absent
+          # `allowed_effects` ⇒ no restriction; no `affects` clause ⇒ no
+          # violation; empty list ⇒ allow nothing (lock-down). Hard error (P30).
+          allowed = resolved.fetch("allowed_effects", nil)
+          if allowed
+            affects_decl = declarations.find { |d| d.fetch("kind", "") == "affects" }
+            if affects_decl
+              a_scope  = affects_decl.fetch("scope", nil)
+              a_target = affects_decl.fetch("target", nil).to_s
+              permitted = allowed.any? do |e|
+                e.fetch("scope") == a_scope &&
+                  (a_target == e.fetch("target_prefix") ||
+                   a_target.start_with?(e.fetch("target_prefix") + "."))
+              end
+              unless permitted
+                diagnostics << oof(
+                  "OOF-PROF1",
+                  "contract '#{contract.fetch("name")}' affects '#{a_scope} #{a_target}' " \
+                  "which profile '#{via_profile}' does not permit (not in allowed_effects)",
+                  contract.fetch("name")
+                )
+              end
+            end
+          end
         else
           # OOF-M8: profile name not declared in module
           diagnostics << oof(

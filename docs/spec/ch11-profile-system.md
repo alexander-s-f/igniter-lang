@@ -30,7 +30,7 @@ profile audited_billing {
   lifecycle: :audit
   backend: :ledger
   evidence: required
-  allowed_effects: [payment_gateway.charge, ledger.write]
+  allowed_effects: [external.payment_gateway, internal.ledger]
   requires_authority: [billing_operator]
 }
 
@@ -85,7 +85,7 @@ contract-decl ::= contract-modifier? "contract" ident type-params?
 | `lifecycle` | `:session`, `:durable`, `:audit` | Minimum persistence tier for outputs |
 | `backend` | `:memory`, `:ledger`, `:external` | Required storage backend |
 | `evidence` | `required`, `optional`, `none` | Whether `output ... evidence [...]` is mandatory |
-| `allowed_effects` | list of capability symbols | Restricts which `escape` capabilities the body may declare |
+| `allowed_effects` | list of `<scope>.<system>` refs | Restricts which Effect Surface `affects` targets a bound contract may declare (dot-boundary prefix match). Exceeding ⇒ OOF-PROF1. **Implemented (PROP-048/P35).** |
 | `requires_authority` | list of authority symbols | Contract must receive matching authority |
 | `loop` | `none`, `finite_loop`, `fuel_bounded`, `convergent`, `service` | Permitted loop class |
 | `heartbeat` | `required`, `optional`, `none` | Service loop heartbeat obligation |
@@ -113,18 +113,23 @@ for PROP-037 progression diagnostics.
 >   renumbered into `OOF-PROF*`. A future `accepted`-stage decision may add
 >   `OOF-PROF*` *aliases*, but never a silent renumber.
 > - **Policy diagnostics** (the obligations/restrictions below) use the
->   `OOF-PROF*` namespace: `OOF-PROF1`–`OOF-PROF3` (target rows below),
+>   `OOF-PROF*` namespace: `OOF-PROF1` (bound `affects` target not in the
+>   profile's `allowed_effects`; PROP-048 — **implemented Ruby-canon,
+>   LANG-PROFILE-ALLOWED-EFFECTS-P35**), `OOF-PROF2`–`OOF-PROF3` (target rows
+>   below — `requires_authority` is HELD, see the P36 readiness packet),
 >   `OOF-PROF4` (retry-enabled profile bound to an `idempotency none` contract;
 >   PROP-048 — **implemented Ruby-canon, LANG-PROFILE-IDEMPOTENCY-RETRY-P31**),
 >   `OOF-PROF5` (bound contract `reversibility` exceeds the profile's
 >   `max_reversibility`; PROP-048 — **implemented Ruby-canon,
 >   LANG-PROFILE-MAX-REVERSIBILITY-P32**), `OOF-PROF6` (malformed profile policy
->   field value — an unknown `retry`/`max_reversibility` value; fail-closed at
->   parse — **implemented with the fields, P31/P32**). `OOF-PROF4/5/6` are
+>   field value — an unknown `retry`/`max_reversibility` value or an
+>   `allowed_effects` entry lacking an `external|internal` scope; fail-closed at
+>   parse — **implemented with the fields, P31/P32/P35**). `OOF-PROF1/4/5/6` are
 >   declared contradictions between two explicit declarations and are **hard
->   errors**, not warnings. Both PROP-048 policy fields have landed: `retry`
->   (`enabled | disabled`, P31) and `max_reversibility` (ch12 scale value, P32 —
->   which encodes the scale ORDERING for the first time).
+>   errors**, not warnings. Three PROP-048 policy fields have landed: `retry`
+>   (`enabled | disabled`, P31), `max_reversibility` (ch12 scale value, P32 —
+>   which encodes the scale ORDERING for the first time), and `allowed_effects`
+>   (`[<scope>.<system>, ...]`, P35 — affects-target allow-list).
 
 For each contract with a `via` clause, the compiler checks:
 
@@ -132,9 +137,16 @@ For each contract with a `via` clause, the compiler checks:
    carry an `evidence [...]` clause. If `time: explicit`, the contract must declare
    `input as_of: DateTime`.
 
-2. **Restrictions not exceeded**: if `allowed_effects` is set, no `escape`
-   declaration in the body may name a capability outside the list. Violation:
-   OOF-PROF1.
+2. **Restrictions not exceeded** (**implemented, PROP-048/P35**): if
+   `allowed_effects` is set (a list of `<external|internal>.<system>` refs), a
+   bound contract's Effect Surface `affects <scope> <target>` must match some
+   entry — same scope AND `target` equal to the entry's system or beginning with
+   `system + "."` (dot-boundary prefix, so `external.payment_gateway` covers
+   `payment_gateway.charge`). No match ⇒ **OOF-PROF1** (hard). Absent
+   `allowed_effects` ⇒ no restriction; no `affects` clause ⇒ no violation; empty
+   list ⇒ allow nothing. (v0 restricts `affects` targets — the stable
+   cross-contract system identity — not local capability aliases; see the P34
+   readiness packet.)
 
 3. **Authority**: if `requires_authority` is set, the contract modifier must be
    `privileged` or `irreversible`. Violation: OOF-PROF2.

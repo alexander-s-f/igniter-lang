@@ -520,9 +520,16 @@ module IgniterLang
       authority = nil
       retry_val = nil
       max_rev   = nil
+      allowed_effects = nil
       until peek_type?(:rbrace) || peek_type?(:eof)
         field_name = name_token!(%i[ident keyword])
         expect_type!(:colon)
+        # LANG-PROFILE-ALLOWED-EFFECTS-P35: `allowed_effects` takes a bracketed
+        # list value (all other profile fields are scalar `field: ident`).
+        if field_name == "allowed_effects"
+          allowed_effects = parse_allowed_effects_list(name)
+          next
+        end
         val_tok    = peek
         field_val  = name_token!(%i[ident keyword])
         case field_name
@@ -566,7 +573,39 @@ module IgniterLang
       node = { "kind" => "profile", "name" => name, "authority" => authority }
       node["retry"] = retry_val if retry_val
       node["max_reversibility"] = max_rev if max_rev
+      node["allowed_effects"] = allowed_effects if allowed_effects
       node
+    end
+
+    # LANG-PROFILE-ALLOWED-EFFECTS-P35 (PROP-048): parse a profile
+    # `allowed_effects: [<scope>.<system>, ...]` list. Each entry is a
+    # scope-prefixed qualified ref (`external.payment_gateway`); the first
+    # segment is the affects scope, the remainder the allowed target prefix.
+    # A malformed entry (scope not external/internal, or no system) fails closed
+    # at parse with OOF-PROF6 and is dropped. Returns [{scope, target_prefix}].
+    def parse_allowed_effects_list(profile_name)
+      expect_type!(:lbracket)
+      entries = []
+      until peek_type?(:rbracket) || peek_type?(:eof)
+        tok = peek
+        raw = parse_qualified_ref
+        scope, _dot, prefix = raw.partition(".")
+        if %w[external internal].include?(scope) && !prefix.empty?
+          entries << { "scope" => scope, "target_prefix" => prefix }
+        else
+          add_parse_error(
+            rule: "OOF-PROF6",
+            message: "profile '#{profile_name}' allowed_effects entry '#{raw}' must be " \
+                     "'<external|internal>.<system>'",
+            token: raw.to_s,
+            line: tok&.line || 0,
+            col: tok&.col || 0
+          )
+        end
+        advance if peek_type?(:comma)
+      end
+      expect_type!(:rbracket)
+      entries
     end
 
     # PROP-041: size_relation TypeName accessor

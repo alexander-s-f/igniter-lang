@@ -31,10 +31,13 @@ Last updated: 2026-07-07
 > (PROP-048 / LANG-PROFILE-MAX-REVERSIBILITY-P32 — which encodes the ch12
 > reversibility scale ordering for the first time). The target-table OOF-M4/M5
 > codes stay retired prose (they collide with implemented PROP-035 structural
-> codes). Still open: the seven-outcome taxonomy as TYPES (outcomes are proven at
-> the host boundary, not as language types), and profile `allowed_effects`
-> (OOF-PROF1). Escalation of OOF-M17 from warn to error and default-ON stay
-> explicit later decisions. Authority host-policy
+> codes). Profile `allowed_effects` (OOF-PROF1) also landed — it restricts a
+> bound contract's `affects` targets (PROP-048 / LANG-PROFILE-ALLOWED-EFFECTS-P35,
+> Ruby-canon, hard error). Still open: the seven-outcome taxonomy as TYPES
+> (outcomes are proven at the host boundary, not as language types), and profile
+> `requires_authority` (OOF-PROF2 — HELD until a profile-authority PROP is
+> authored; see the P36 readiness packet). Escalation of OOF-M17 from warn to
+> error and default-ON stay explicit later decisions. Authority host-policy
 > resolution exists as proof/loopback machine wiring only — no production
 > runner enforces it (public bind stays human-gated). Chapter status stays
 > `proposed`; it advances to `accepted` when the full surface regression
