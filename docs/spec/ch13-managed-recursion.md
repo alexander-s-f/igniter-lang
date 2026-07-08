@@ -204,6 +204,20 @@ This is an effect statement, not an output declaration. The `evidence` clause is
 mandatory and names the receipts or observations that justify the write. The
 append is `lifecycle: :audit` by default.
 
+> **v0 compile slice implemented (LANG-CH13-WRITE-EVIDENCE-P60, dual-toolchain).**
+> `write <store> <- <value> evidence [refs]` parses (the `<-` append operator) as a
+> body statement; the compiler checks: the mandatory `evidence` clause is present
+> (missing ⇒ **OOF-W1**), every evidence ref resolves to a declared local symbol
+> (unresolved ⇒ **OOF-W2**), and the placement is legal — `write` is a mutation
+> effect, valid only in `effect`/`privileged`/`irreversible`/`service` contracts
+> (`pure`/`observed` ⇒ **OOF-W3**). The value is typed via normal inference.
+> **Declaration only — a passing `write` grants no runtime write**: the actual
+> append to a temporal store and the `lifecycle: :audit` map to the machine
+> runtime (`igniter-machine/src/write.rs`, the P16–P20 write/audit line) and stay
+> **HELD**. Also HELD: store-as-declared-`stream` resolution, `affects`/
+> `allowed_effects` registration of the write target, and the strict "only inside
+> a `clock.every` loop body" placement (needs §13.5).
+
 ---
 
 ## § 13.7 OOF Rules

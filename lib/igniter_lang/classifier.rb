@@ -180,6 +180,16 @@ module IgniterLang
           effect_surface_meta["affects"] << node
           declarations << classified_decl(node.merge("name" => "affects"), "core", [], [])
                             .merge("scope" => node.fetch("scope"), "target" => node.fetch("target"))
+        when "write"
+          # LANG-CH13-WRITE-EVIDENCE-P60 (§13.6): a `write store <- value evidence
+          # [refs]` append statement flows to the typed pass so the value is typed
+          # and the evidence refs are resolved (OOF-W2). Placement (OOF-W3) runs
+          # as a post-loop contract-level check. Declaration only — the append +
+          # lifecycle:audit are runtime (write.rs, HELD).
+          declarations << classified_decl(node.merge("name" => "write"), "core", [], [])
+                            .merge("store"    => node.fetch("store", nil),
+                                   "value"    => node.fetch("value", nil),
+                                   "evidence" => node.fetch("evidence", []))
         when "compensation"
           # LANG-EFFECT-SURFACE-COMPENSATION-P22: Effect Surface metadata — names
           # the compensating contract. Declaration only (no authority, no host
@@ -566,6 +576,20 @@ module IgniterLang
             contract.fetch("name")
           )
         end
+      end
+
+      # LANG-CH13-WRITE-EVIDENCE-P60 (§13.6): OOF-W3 — a `write` statement is a
+      # mutation effect; it may appear only in an effect-family or service body.
+      # In a `pure`/`observed` contract it is a category error (fail-closed).
+      # Declaration only — the append + lifecycle:audit are runtime (write.rs, HELD).
+      if %w[pure observed].include?(modifier) &&
+         contract.fetch("body").any? { |n| n.fetch("kind", "") == "write" }
+        diagnostics << oof(
+          "OOF-W3",
+          "#{modifier} contract '#{contract.fetch("name")}' may not use a 'write' statement " \
+          "(a mutation effect); write is valid only in effect/privileged/irreversible/service contracts",
+          contract.fetch("name")
+        )
       end
 
       # PROP-040: OOF-M7/M8 — profile binding validation (must precede contract_fragment_for)

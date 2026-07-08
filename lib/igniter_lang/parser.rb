@@ -29,7 +29,7 @@ module IgniterLang
   TOKEN_TYPES = %i[
     keyword ident string_lit int_lit float_lit bool_lit nil_lit
     symbol_lit lbrace rbrace lparen rparen lbracket rbracket
-    dot dot_dot comma colon double_colon dot_dot_dot arrow fat_arrow
+    dot dot_dot comma colon double_colon dot_dot_dot arrow fat_arrow left_arrow
     op assign pipe question bang
     newline eof comment
   ].freeze
@@ -155,6 +155,9 @@ module IgniterLang
       when "<" then
         if peek(1) == "="
           advance; advance; Token.new(:op, "<=", l, c)
+        elsif peek(1) == "-"
+          # LANG-CH13-WRITE-EVIDENCE-P60: `write store <- value` append operator.
+          advance; advance; Token.new(:left_arrow, "<-", l, c)
         else
           advance; Token.new(:op, "<", l, c)
         end
@@ -1141,6 +1144,8 @@ module IgniterLang
       when "idempotency" then advance; parse_idempotency_decl
       # LANG-EFFECT-SURFACE-AFFECTS-P5: affects clause
       when "affects"     then advance; parse_affects_decl
+      # LANG-CH13-WRITE-EVIDENCE-P60 (§13.6): `write store <- value evidence [refs]`
+      when "write"       then advance; parse_write_decl
       # LANG-EFFECT-SURFACE-COMPENSATION-P22: compensation clauses
       when "compensation"    then advance; parse_compensation_decl
       when "no_compensation" then advance; { "kind" => "no_compensation" }
@@ -1295,6 +1300,40 @@ module IgniterLang
       end
       expect_type!(:rbracket)
       refs
+    end
+
+    # LANG-CH13-WRITE-EVIDENCE-P60 (§13.6): `write <store> <- <value> evidence [refs]`.
+    # An EFFECT STATEMENT (append to a temporal store), not an output decl. The
+    # `evidence` clause is MANDATORY (missing ⇒ OOF-W1). The store is a bare target
+    # ident (v0; declared-stream resolution is HELD); the value is an expression;
+    # evidence refs resolve to declared local symbols in the TypeChecker (OOF-W2).
+    # Placement (pure/observed refusal ⇒ OOF-W3) + append/lifecycle are downstream.
+    def parse_write_decl
+      store = name_token!(%i[ident keyword])
+      unless peek_type?(:left_arrow)
+        tok = peek
+        add_parse_error(
+          rule: "OOF-W1",
+          message: "write to '#{store}' requires '<- <value> evidence [...]'",
+          token: tok&.value.to_s, line: tok&.line || 0, col: tok&.col || 0
+        )
+        skip_invalid_body_decl
+        return nil
+      end
+      advance # consume `<-`
+      value = parse_expr
+      refs = nil
+      if peek_value?("evidence")
+        refs = parse_evidence_list
+      else
+        tok = peek
+        add_parse_error(
+          rule: "OOF-W1",
+          message: "write to '#{store}' requires a mandatory 'evidence [...]' clause",
+          token: tok&.value.to_s, line: tok&.line || 0, col: tok&.col || 0
+        )
+      end
+      { "kind" => "write", "store" => store, "value" => value, "evidence" => refs || [] }
     end
 
     def parse_compute_decl

@@ -1,8 +1,8 @@
 {
   "kind": "stdlib_inventory",
   "format_version": "v0",
-  "stdlib_surface_digest": "33f272bb4fa68653ff02ada27b358f45efa364da3711fc6da32c9074cd79d326",
-  "note": "Normatively referenced by Ch8. Digest is computed from canonical re-serialization of entries sorted by canonical_name with entry_digest fields stripped — never from raw file bytes. P3 proof verifies determinism. P5 adds stdlib.collection.map + stdlib.collection.filter entries and updates stdlib.collection.count proof_lineage. CONSTRUCT-P1 adds stdlib.decimal.decimal (explicit Decimal constructor) and recomputes the digest. FLATMAP-P5 adds stdlib.collection.flat_map and recomputes the digest. PREDICATE-OPS-P4 adds stdlib.collection.find/any/all and recomputes the digest.",
+  "stdlib_surface_digest": "8463c41d83afcaee8e83eb453ea5fdb91eafbdcee2055cb754faae9847089418",
+  "note": "Normatively referenced by Ch8. Digest is computed from canonical re-serialization of entries sorted by canonical_name with entry_digest fields stripped — never from raw file bytes. P3 proof verifies determinism. P5 adds stdlib.collection.map + stdlib.collection.filter entries and updates stdlib.collection.count proof_lineage. CONSTRUCT-P1 adds stdlib.decimal.decimal (explicit Decimal constructor) and recomputes the digest. FLATMAP-P5 adds stdlib.collection.flat_map and recomputes the digest. PREDICATE-OPS-P4 adds stdlib.collection.find/any/all and recomputes the digest. LANG-STDLIB-NUMERIC-TEXT-CONVERSION-P1 adds stdlib.integer.parse_int/int_to_text/modulo (category numeric) and recomputes the digest.",
   "entries": [
     {
       "canonical_name": "stdlib.text.byte_length",
@@ -1278,6 +1278,149 @@
       ],
       "compatibility_note": "Ruby TC: binary_op >= lowers to call{fn:stdlib.integer.gte, resolved_type:Bool}. Rust TC: (stdlib.integer.gte, Bool) returned; Rust SIR emitter now emits qualified call{fn:stdlib.integer.gte, resolved_type:Bool, args:[left,right]} — SIR qualification gap closed by P4. OOF-TY0 for non-Integer on both sides unless Unknown permissive. Integer/Integer only.",
       "owner_surface": "LANG-STDLIB-NUMERIC-COMPARISON-P2",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.integer.parse_int",
+      "semantic_ir_name": "stdlib.integer.parse_int",
+      "legacy_sir": null,
+      "aliases": [
+        {
+          "kind": "source_alias",
+          "name": "stdlib.numeric.parse_int"
+        },
+        {
+          "kind": "source_alias",
+          "name": "parse_int"
+        }
+      ],
+      "category": "numeric",
+      "lifecycle_status": "lab-implemented",
+      "semantic_stability": "experiment-pass",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "total",
+      "type_params": [],
+      "input_signature": [
+        "Text"
+      ],
+      "output_signature": "Option[Integer]",
+      "diagnostics": [
+        "OOF-TY0"
+      ],
+      "failure_behavior": "total; malformed or overflowing input returns None (runtime Nil) — never a runtime error",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "LANG-STDLIB-NUMERIC-TEXT-CONVERSION-P1 Ruby NUMERIC_STDLIB_FNS dispatch + infer_numeric_call",
+        "LANG-STDLIB-NUMERIC-TEXT-CONVERSION-P1 Rust TC stdlib.integer.parse_int arm + emitter qualification",
+        "LANG-STDLIB-NUMERIC-TEXT-CONVERSION-P1 Rust VM eval_integer_call (bytecode OP_CALL + eval_ast parity)"
+      ],
+      "examples": [
+        "parse_int(\"42\") -> Some(42)",
+        "parse_int(\"-7\") -> Some(-7)",
+        "parse_int(\"\") -> None",
+        "parse_int(\"+1\") -> None"
+      ],
+      "compatibility_note": "Base-10 only. Optional single leading '-' iff followed by >=1 digit; no leading '+', no whitespace, no other base. Overflow is fail-closed None. Runtime nullable-Option convention: None -> Nil, Some(v) -> Integer(v). Recognized source aliases: bare parse_int and stdlib.numeric.parse_int; canonical SIR name stdlib.integer.parse_int (consistent with stdlib.integer.gt/lt/add).",
+      "owner_surface": "LANG-STDLIB-NUMERIC-TEXT-CONVERSION-P1",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.integer.int_to_text",
+      "semantic_ir_name": "stdlib.integer.int_to_text",
+      "legacy_sir": null,
+      "aliases": [
+        {
+          "kind": "source_alias",
+          "name": "stdlib.numeric.int_to_text"
+        },
+        {
+          "kind": "source_alias",
+          "name": "int_to_text"
+        }
+      ],
+      "category": "numeric",
+      "lifecycle_status": "lab-implemented",
+      "semantic_stability": "experiment-pass",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "total",
+      "type_params": [],
+      "input_signature": [
+        "Integer"
+      ],
+      "output_signature": "Text",
+      "diagnostics": [
+        "OOF-TY0"
+      ],
+      "failure_behavior": "none; total over all Integer values",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "LANG-STDLIB-NUMERIC-TEXT-CONVERSION-P1 Ruby NUMERIC_STDLIB_FNS dispatch + infer_numeric_call",
+        "LANG-STDLIB-NUMERIC-TEXT-CONVERSION-P1 Rust TC stdlib.integer.int_to_text arm + emitter qualification",
+        "LANG-STDLIB-NUMERIC-TEXT-CONVERSION-P1 Rust VM eval_integer_call (bytecode OP_CALL + eval_ast parity)"
+      ],
+      "examples": [
+        "int_to_text(0) -> \"0\"",
+        "int_to_text(42) -> \"42\"",
+        "int_to_text(-100003) -> \"-100003\""
+      ],
+      "compatibility_note": "Total; handles 0, positive, negative. No grouping, no locale. Recognized source aliases: bare int_to_text and stdlib.numeric.int_to_text; canonical SIR name stdlib.integer.int_to_text. Distinct from to_text (out of scope for this slice).",
+      "owner_surface": "LANG-STDLIB-NUMERIC-TEXT-CONVERSION-P1",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.integer.modulo",
+      "semantic_ir_name": "stdlib.integer.modulo",
+      "legacy_sir": null,
+      "aliases": [
+        {
+          "kind": "source_alias",
+          "name": "stdlib.numeric.modulo"
+        },
+        {
+          "kind": "source_alias",
+          "name": "modulo"
+        }
+      ],
+      "category": "numeric",
+      "lifecycle_status": "lab-implemented",
+      "semantic_stability": "experiment-pass",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "partial: divisor zero is a fail-closed operational error",
+      "type_params": [],
+      "input_signature": [
+        "Integer",
+        "Integer"
+      ],
+      "output_signature": "Integer",
+      "diagnostics": [
+        "OOF-TY0"
+      ],
+      "failure_behavior": "divisor zero -> operational error (v0 policy), never a panic; i64::MIN modulo -1 overflow -> operational error",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "LANG-STDLIB-NUMERIC-TEXT-CONVERSION-P1 Ruby NUMERIC_STDLIB_FNS dispatch + infer_numeric_call",
+        "LANG-STDLIB-NUMERIC-TEXT-CONVERSION-P1 Rust TC stdlib.integer.modulo arm + emitter qualification",
+        "LANG-STDLIB-NUMERIC-TEXT-CONVERSION-P1 Rust VM eval_integer_call (bytecode OP_CALL + eval_ast parity)"
+      ],
+      "examples": [
+        "modulo(7, 3) -> 1",
+        "modulo(-7, 3) -> -1",
+        "modulo(7, -3) -> 1"
+      ],
+      "compatibility_note": "TRUNCATED remainder (Rust `%`): the result takes the sign of the DIVIDEND. Divisor zero is a fail-closed operational error (v0), not a panic. Integer/Integer only. Distinct from stdlib.math.mod, which is the Euclidean (always-non-negative) remainder; modulo is truncated. Recognized source aliases: bare modulo and stdlib.numeric.modulo; canonical SIR name stdlib.integer.modulo.",
+      "owner_surface": "LANG-STDLIB-NUMERIC-TEXT-CONVERSION-P1",
       "entry_digest": null
     },
     {

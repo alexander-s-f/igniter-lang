@@ -67,6 +67,29 @@ module IgniterLang
       "map_empty"      => { qualified_name: "stdlib.map.empty",      arity: 0 },
     }.freeze
 
+    # LANG-STDLIB-NUMERIC-TEXT-CONVERSION-P1: integer numeric/text conversion registry (v0 — exhaustive,
+    # not user-extensible). Canonical SIR names live under stdlib.integer.* (consistent with the live
+    # stdlib.integer.gt/lt/add ops). Recognized source aliases per fn: the bare name, stdlib.numeric.<name>,
+    # and stdlib.integer.<name> — mirroring the stdlib.numeric.add | add | stdlib.integer.add alias family.
+    # The SemanticIR fn is ALWAYS the qualified_name; a source alias never appears in SIR.
+    #   parse_int(Text) -> Option[Integer]   total; None on malformed/overflow (base-10, optional leading '-').
+    #   int_to_text(Integer) -> Text          total; no grouping/locale.
+    #   modulo(Integer, Integer) -> Integer   divisor 0 = fail-closed operational error at runtime.
+    # Adding an entry requires a PROP amendment + authorization.
+    NUMERIC_STDLIB_FNS = {
+      "parse_int"   => { qualified_name: "stdlib.integer.parse_int",   arg_types: %w[Text],            return_type: "Option[Integer]" },
+      "int_to_text" => { qualified_name: "stdlib.integer.int_to_text", arg_types: %w[Integer],         return_type: "Text" },
+      "modulo"      => { qualified_name: "stdlib.integer.modulo",      arg_types: %w[Integer Integer], return_type: "Integer" },
+    }.freeze
+
+    # Every recognized source spelling → canonical bare key. Three aliases per fn:
+    # bare, stdlib.numeric.<name>, stdlib.integer.<name>.
+    NUMERIC_STDLIB_ALIASES = NUMERIC_STDLIB_FNS.keys.each_with_object({}) do |bare, h|
+      h[bare]                     = bare
+      h["stdlib.numeric.#{bare}"] = bare
+      h["stdlib.integer.#{bare}"] = bare
+    end.freeze
+
     # LANG-STDLIB-OUTCOME-PROP-P3: stdlib.outcome helper registry (v0 — exhaustive, not user-extensible).
     # Source aliases → qualified SemanticIR canonical names. Follows MAP_STDLIB_FNS prefix pattern.
     # All 7 entries: arity 1, input Map[String,String] (or Unknown), pure, authority_surface: none.
@@ -581,6 +604,26 @@ module IgniterLang
           end
           typed_decls << typed_decl(decl, type_ir("Unit"), typed_expr, [])
                            .merge("mode" => mode)
+        when "write"
+          # LANG-CH13-WRITE-EVIDENCE-P60 (§13.6): the value is typed via the normal
+          # inference path; each MANDATORY `evidence` ref must resolve to a declared
+          # local symbol (unresolved ⇒ OOF-W2 — the write cites evidence that does
+          # not exist, a silent lie the compiler catches, fail-closed). The store is
+          # a bare target ident (v0 — external, not resolved). Declaration only: the
+          # append + lifecycle:audit are RUNTIME (write.rs, HELD).
+          value_expr = decl.key?("value") ?
+            infer_expr(decl.fetch("value"), symbol_types, type_errors, type_warnings, "write") : nil
+          decl.fetch("evidence", []).each do |ref|
+            next if symbol_types.key?(ref)
+            type_errors << oof(
+              "OOF-W2",
+              "write to '#{decl.fetch("store", "?")}' cites evidence '#{ref}' which is not a " \
+              "declared symbol in this contract",
+              "write"
+            )
+          end
+          typed_decls << typed_decl(decl, type_ir("Unit"), value_expr, [])
+                           .merge("store" => decl.fetch("store", nil), "evidence" => decl.fetch("evidence", []))
         when "receipt", "failure"
           # LANG-EFFECT-SURFACE-RECEIPT-FAILURE-P1: Effect Surface metadata — the
           # referenced type must resolve (declared record/variant or builtin scalar);
@@ -1409,6 +1452,10 @@ module IgniterLang
       when *TEXT_STDLIB_FNS.keys
         # igniter-string-core-units-and-pure-stdlib-boundary-v0
         infer_text_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
+      when *NUMERIC_STDLIB_ALIASES.keys
+        # LANG-STDLIB-NUMERIC-TEXT-CONVERSION-P1: parse_int / int_to_text / modulo (bare +
+        # stdlib.numeric.* + stdlib.integer.* aliases resolve to the canonical stdlib.integer.* SIR name)
+        infer_numeric_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
       when *MAP_STDLIB_FNS.keys
         # PROP-043: Map[String,V] stdlib — map_get/map_has_key/map_from_pairs/map_empty
         infer_map_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
@@ -2387,6 +2434,54 @@ module IgniterLang
     def text_arg_compatible?(actual, expected)
       return actual == expected unless expected == "Text"
       %w[Text String].include?(actual)
+    end
+
+    # LANG-STDLIB-NUMERIC-TEXT-CONVERSION-P1: parse_int / int_to_text / modulo.
+    # Resolves any recognized source alias (bare / stdlib.numeric.* / stdlib.integer.*) to the
+    # canonical stdlib.integer.* SIR name; arity + arg-type checks emit the OOF-TY0 family (same as
+    # the text ops). Domain errors (divide-by-zero, overflow) are runtime (VM), not typecheck-time.
+    def infer_numeric_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
+      bare      = NUMERIC_STDLIB_ALIASES.fetch(fn)
+      spec      = NUMERIC_STDLIB_FNS.fetch(bare)
+      qualified = spec[:qualified_name]
+      expected  = spec[:arg_types]
+      ret_ir    = numeric_stdlib_return_type(spec[:return_type])
+
+      if args.length != expected.length
+        type_errors << oof(
+          "OOF-TY0",
+          "#{qualified}: expected #{expected.length} argument(s), got #{args.length}",
+          node_name
+        )
+        return typed_expr("call", ret_ir, [], "fn" => qualified, "args" => [])
+      end
+
+      typed_args = args.each_with_index.map do |arg, idx|
+        ta     = infer_expr(arg, symbol_types, type_errors, type_warnings, node_name)
+        actual = type_name(ta.fetch("resolved_type"))
+        want   = expected[idx]
+        unless actual == "Unknown" || text_arg_compatible?(actual, want)
+          type_errors << oof(
+            "OOF-TY0",
+            "#{qualified} arg #{idx + 1}: expected #{want}, got #{actual}",
+            node_name
+          )
+        end
+        ta
+      end
+
+      deps = typed_args.flat_map { |ta| ta.fetch("deps") }.uniq
+      typed_expr("call", ret_ir, deps, "fn" => qualified, "args" => typed_args)
+    end
+
+    # Return-type IR for a numeric stdlib fn. Only "Option[Integer]" (parse_int) needs a
+    # parameterised construction; the rest are simple names handled by type_ir().
+    def numeric_stdlib_return_type(name)
+      if name == "Option[Integer]"
+        { "name" => "Option", "params" => [{ "name" => "Integer", "params" => [] }] }
+      else
+        type_ir(name)
+      end
     end
 
     # ── PROP-039 OOF-R3: syntactic decrease helpers ────────────────────────────
