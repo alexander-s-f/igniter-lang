@@ -624,6 +624,11 @@ module IgniterLang
           end
           typed_decls << typed_decl(decl, type_ir("Unit"), value_expr, [])
                            .merge("store" => decl.fetch("store", nil), "evidence" => decl.fetch("evidence", []))
+        when "invoke"
+          # PROP-050 / LAB-EFFECT-CALL-V0-P3 (S1): effect-contract call —
+          # OOF-EC1/EC2/EC3/EC4-matrix/EC5 + result binding. See typecheck_invoke.
+          typed_decls << typecheck_invoke(decl, contract_modifier, all_decls,
+                                          symbol_types, type_errors, type_warnings)
         when "receipt", "failure"
           # LANG-EFFECT-SURFACE-RECEIPT-FAILURE-P1: Effect Surface metadata — the
           # referenced type must resolve (declared record/variant or builtin scalar);
@@ -926,6 +931,25 @@ module IgniterLang
           "contract_name"      => name,
           "contract_id"        => cid
         }
+        # PROP-050 / LAB-EFFECT-CALL-V0-P3 (S1): callee effect-surface fields
+        # consumed by `invoke ... using` checks (OOF-EC1/EC2/EC3/EC5) and SIR
+        # absorption. ADDITIVE keys only — the call_contract path reads none of
+        # these; its purity gate below stays byte-identical.
+        cap_decls = decls.select { |d| d.fetch("kind") == "capability" }
+        cap_types = cap_decls.to_h { |d| [d.fetch("name"), annotation_type_name(d.fetch("type_annotation", nil))] }
+        entry["capabilities"] = cap_decls.map { |d| { "name" => d.fetch("name"), "type" => cap_types[d.fetch("name")] } }
+        entry["effects"] = decls.select { |d| d.fetch("kind") == "effect_binding" }.map do |d|
+          cap_ref = d.fetch("deps", []).first  # classifier deps = [capability_ref] when declared
+          { "name" => d.fetch("name"), "capability_ref" => cap_ref,
+            "capability_type" => cap_ref ? cap_types[cap_ref] : nil }
+        end
+        entry["affects"]          = decls.select { |d| d.fetch("kind") == "affects" }.filter_map { |d| d.fetch("target", nil) }
+        entry["idempotency_mode"] = decls.find { |d| d.fetch("kind") == "idempotency" }&.fetch("mode", nil)
+        entry["reversibility"]    = decls.find { |d| d.fetch("kind") == "reversibility" }&.fetch("value", nil)
+        entry["authority"]        = decls.find { |d| d.fetch("kind") == "authority" }&.fetch("ref", nil)
+        entry["receipt_type"]     = annotation_type_name(decls.find { |d| d.fetch("kind") == "receipt" }&.fetch("type_annotation", nil))
+        entry["failure_type"]     = annotation_type_name(decls.find { |d| d.fetch("kind") == "failure" }&.fetch("type_annotation", nil))
+        entry["has_invoke"]       = decls.any? { |d| d.fetch("kind") == "invoke" }
         entries[cid] = entry                       # qualified id always resolves
         if name_to_ids[name].size == 1
           entries[name] = entry                    # unambiguous short name resolves
@@ -1019,6 +1043,201 @@ module IgniterLang
         # Tier 2 — dynamic / variable callee: Unknown, no error.
         typed_expr("call", type_ir("Unknown"), typed_name_arg.fetch("deps", []), "fn" => fn, "args" => [typed_name_arg])
       end
+    end
+
+    # PROP-050 (ratified) / LAB-EFFECT-CALL-V0-P3 (S1): typecheck
+    #   invoke <binding> = contract("Callee", args...) using caps
+    # Reuses the call_contract registry (@call_contract_registry) for callee
+    # resolution — the call_contract purity gate itself is UNTOUCHED (invoke is
+    # the designed non-pure call; call_contract stays pure-only permanently).
+    # Rules (OOF-EC namespace, PROP-050 D2; all fail-closed):
+    #   OOF-EC1 — callee unknown; `pure` callee (use call_contract); recursive/
+    #             service/convergent/fuel_bounded callee (held in v0);
+    #             self-invocation (closed by the existing call-cycle rules)
+    #   OOF-EC2 — surface absorption: every callee effect (verb + capability
+    #             TYPE) and every callee affects target must be covered by a
+    #             caller declaration (caller's effective surface = own U invoked)
+    #   OOF-EC3 — attenuation: every callee capability slot matched by exactly
+    #             one `using` name of the same capability TYPE; a `using` name
+    #             matching no slot is an over-grant; every `using` name must be
+    #             a declared caller capability
+    #   OOF-EC4 — escalation matrix, caller side (pure caller already fired in
+    #             the Classifier): observed -> observed only; effect/privileged/
+    #             irreversible -> observed|effect; other caller classes refused
+    #   OOF-EC5 — depth-1: a callee that itself contains an invoke is refused
+    # Arity mismatch mirrors call_contract (OOF-TY0). Result binding takes the
+    # callee's single output type (multi-output => Unknown, the call_contract v0
+    # rule); the binding is an ordinary local (later computes, §13.6 evidence).
+    # Declaration != execution: a passing invoke grants no runtime authority.
+    def typecheck_invoke(decl, caller_modifier, all_decls, symbol_types, type_errors, type_warnings)
+      binding     = decl.fetch("binding", decl.fetch("name"))
+      callee_name = decl.fetch("callee", nil)
+      using_names = decl.fetch("using", [])
+      args        = decl.fetch("args", [])
+
+      # Invoke ARG exprs go through normal inference from day one — an
+      # unresolved ref fails closed with OOF-P1 exactly like a compute expr.
+      typed_args = args.map { |a| infer_expr(a, symbol_types, type_errors, type_warnings, binding) }
+
+      out_type     = type_ir("Unknown")
+      absorbed     = nil
+      effects_flat = []
+
+      if @call_contract_registry.fetch("ambiguous").key?(callee_name)
+        cands = @call_contract_registry.fetch("ambiguous").fetch(callee_name)
+        type_errors << oof("OOF-DECL-AMBIGUOUS-CONTRACT",
+          "invoke contract('#{callee_name}') is ambiguous — #{cands.size} contracts declare the " \
+          "short name '#{callee_name}' (#{cands.join(', ')}); use a qualified name",
+          binding)
+      elsif (entry = @call_contract_registry.fetch("entries")[callee_name]).nil?
+        type_errors << oof("OOF-EC1",
+          "invoke: unknown callee '#{callee_name}' — not found in this compilation unit",
+          binding)
+      elsif entry["contract_name"] == @current_contract_name
+        type_errors << oof("OOF-EC1",
+          "invoke: self-invocation via '#{callee_name}' is closed (existing call-cycle rules, PROP-050)",
+          binding)
+      elsif entry["modifier"] == "pure"
+        type_errors << oof("OOF-EC1",
+          "invoke: callee '#{callee_name}' is pure — use call_contract for pure contracts",
+          binding)
+      elsif !%w[observed effect privileged irreversible].include?(entry["modifier"])
+        type_errors << oof("OOF-EC1",
+          "invoke of a '#{entry["modifier"]}' contract ('#{callee_name}') is held in v0 (PROP-050)",
+          binding)
+      else
+        callee_mod = entry["modifier"]
+
+        # OOF-EC4 escalation matrix (caller side). The pure-caller arm fired in
+        # the Classifier (post-loop gate); caller classes outside the ratified
+        # matrix (recursive/service/convergent/fuel_bounded) are refused —
+        # fail-closed, D4 full compile-side matrix.
+        allowed = case caller_modifier
+                  when "pure"                                 then nil # Classifier owns this arm
+                  when "observed"                             then %w[observed]
+                  when "effect", "privileged", "irreversible" then %w[observed effect]
+                  else []
+                  end
+        if allowed && !allowed.include?(callee_mod)
+          type_errors << oof("OOF-EC4",
+            "#{caller_modifier} contract '#{@current_contract_name}' may not invoke #{callee_mod} " \
+            "contract '#{callee_name}' (escalation matrix: observed->observed; " \
+            "effect/privileged/irreversible->observed|effect)",
+            binding)
+        end
+
+        # OOF-EC5 — depth-1: the callee itself contains an invoke.
+        if entry["has_invoke"]
+          type_errors << oof("OOF-EC5",
+            "invoke: callee '#{callee_name}' itself contains an invoke — depth-1 only in v0 (PROP-050)",
+            binding)
+        end
+
+        # Arity mirrors the call_contract check (same machinery, same code).
+        if args.size != entry["input_count"]
+          type_errors << oof("OOF-TY0",
+            "invoke: callee '#{callee_name}' expects #{entry["input_count"]} input(s), got #{args.size}",
+            binding)
+        end
+
+        # Caller-side declared surface (classified declarations of THIS contract).
+        caller_caps    = {}  # capability name => declared type name
+        caller_effects = []  # { "name", "capability_ref" }
+        caller_affects = []
+        all_decls.each do |d|
+          case d.fetch("kind", "")
+          when "capability"
+            caller_caps[d.fetch("name")] = annotation_type_name(d.fetch("type_annotation", nil))
+          when "effect_binding"
+            caller_effects << { "name" => d.fetch("name"), "capability_ref" => d.fetch("deps", []).first }
+          when "affects"
+            caller_affects << d.fetch("target", nil)
+          end
+        end
+
+        # OOF-EC2 — surface absorption, fail-closed PER missing item: each callee
+        # effect needs a caller effect of the same verb whose capability has the
+        # same declared TYPE; each callee affects target must appear in caller affects.
+        entry.fetch("effects", []).each do |ce|
+          covered = caller_effects.any? do |ee|
+            ee["name"] == ce["name"] && ee["capability_ref"] &&
+              caller_caps[ee["capability_ref"]] == ce["capability_type"]
+          end
+          next if covered
+          type_errors << oof("OOF-EC2",
+            "invoke '#{callee_name}': callee effect '#{ce["name"]}' (capability type " \
+            "#{ce["capability_type"] || "Unknown"}) is not covered by a caller effect declaration",
+            binding)
+        end
+        entry.fetch("affects", []).each do |target|
+          next if caller_affects.include?(target)
+          type_errors << oof("OOF-EC2",
+            "invoke '#{callee_name}': callee affects target '#{target}' is not declared " \
+            "in the caller's affects",
+            binding)
+        end
+
+        # OOF-EC3 — attenuation mapping between `using` names and callee slots.
+        resolved = []
+        using_names.each do |u|
+          if caller_caps.key?(u)
+            resolved << u
+          else
+            type_errors << oof("OOF-EC3",
+              "invoke '#{callee_name}': using '#{u}' is not a declared caller capability",
+              binding)
+          end
+        end
+        available = resolved.dup
+        slot_map  = {}  # callee slot name => matched caller `using` name
+        entry.fetch("capabilities", []).each do |slot|
+          idx = available.index { |u| caller_caps[u] == slot["type"] }
+          if idx
+            slot_map[slot["name"]] = available.delete_at(idx)
+          else
+            type_errors << oof("OOF-EC3",
+              "invoke '#{callee_name}': callee capability slot '#{slot["name"]}: #{slot["type"]}' " \
+              "has no matching 'using' capability of that type",
+              binding)
+          end
+        end
+        available.each do |extra|
+          type_errors << oof("OOF-EC3",
+            "invoke '#{callee_name}': using '#{extra}' matches no callee capability slot " \
+            "(over-granting is refused)",
+            binding)
+        end
+
+        # Result binding: callee's single output type (call_contract v0 rule).
+        out_type = entry["single_output_type"] ? type_ir(entry["single_output_type"]) : type_ir("Unknown")
+
+        # SIR absorption record (packet §5) — carried on the typed decl for the
+        # emitter; absent callee fields stay null.
+        absorbed = {
+          "effects"          => entry.fetch("effects", []).map { |ce| { "name" => ce["name"], "capability_type" => ce["capability_type"] } },
+          "affects"          => entry.fetch("affects", []),
+          "idempotency_mode" => entry["idempotency_mode"],
+          "reversibility"    => entry["reversibility"],
+          "receipt_type"     => entry["receipt_type"],
+          "failure_type"     => entry["failure_type"],
+          "authority"        => entry["authority"]
+        }
+        # Flattened caller-namespace effect entries with via_invoke provenance:
+        # capability_ref speaks the CALLER's vocabulary (the matched `using` name).
+        effects_flat = entry.fetch("effects", []).map do |ce|
+          { "name"           => ce["name"],
+            "capability_ref" => ce["capability_ref"] ? slot_map[ce["capability_ref"]] : nil,
+            "via_invoke"     => entry["contract_name"] }
+        end
+      end
+
+      symbol_types[binding] = out_type
+      td = typed_decl(decl, out_type, nil, [])
+             .merge("binding" => binding, "callee" => callee_name,
+                    "using" => using_names, "args" => typed_args)
+      td["absorbed"]     = absorbed if absorbed
+      td["effects_flat"] = effects_flat unless effects_flat.empty?
+      td
     end
 
     # LANG-TYPED-CONTRACT-REF-PROP-P3: resolve a uses_contract declaration.
@@ -1913,6 +2132,14 @@ module IgniterLang
 
     def typed_expr(kind, type, deps, extra)
       { "kind" => kind }.merge(extra).merge("resolved_type" => type, "deps" => deps.uniq)
+    end
+
+    # PROP-050: bare type-name string of a source type annotation (nil-safe).
+    # Used for capability-TYPE equality (OOF-EC2/EC3) and absorbed metadata —
+    # comparisons run on DECLARED names, fail-closed on any mismatch.
+    def annotation_type_name(annotation)
+      return nil if annotation.nil?
+      annotation.is_a?(Hash) ? annotation.fetch("name", "Unknown") : annotation.to_s
     end
 
     def type_ir(annotation)
@@ -2823,6 +3050,16 @@ module IgniterLang
         when "decreases", "max_steps"
           errors << oof("OOF-L5",
             "'#{b.fetch("kind")}' is not valid inside a loop body (belongs to recursive contracts)",
+            loop_name)
+        when "invoke"
+          # PROP-050 / OOF-EC6: invoke is body-declaration position ONLY — a
+          # loop-body invoke would make the effect count data-dependent; effect
+          # order must stay a static total order (declaration order). Lambda /
+          # branch positions cannot parse by construction; loops reuse the body
+          # grammar, so the position rule is enforced here.
+          errors << oof("OOF-EC6",
+            "invoke '#{b.fetch("binding", "?")}' inside loop body '#{loop_name}' — invoke is " \
+            "valid only at contract-body declaration position (PROP-050)",
             loop_name)
         end
       end

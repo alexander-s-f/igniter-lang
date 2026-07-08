@@ -194,6 +194,22 @@ module IgniterLang
                             .merge("store"    => node.fetch("store", nil),
                                    "value"    => node.fetch("value", nil),
                                    "evidence" => node.fetch("evidence", []))
+        when "invoke"
+          # PROP-050 / LAB-EFFECT-CALL-V0-P3 (S1): effect-contract call. The node
+          # PASSES THROUGH to the typed pass (the P60 write lesson — without this
+          # branch the TypeChecker never sees the declaration), where OOF-EC1/EC2/
+          # EC3/EC5 + the caller-class escalation matrix (OOF-EC4) run against the
+          # call_contract registry. The binding is an ordinary local symbol —
+          # usable in later computes and as a §13.6 `write ... evidence` ref; its
+          # type resolves in the typed pass from the callee's single output.
+          binding = node.fetch("binding")
+          symbol_fragments[binding] = "core"
+          symbol_kinds[binding] = "invoke"
+          declarations << classified_decl(node.merge("name" => binding), "core", [], [])
+                            .merge("binding" => binding,
+                                   "callee"  => node.fetch("callee", nil),
+                                   "args"    => node.fetch("args", []),
+                                   "using"   => node.fetch("using", []))
         when "compensation"
           # LANG-EFFECT-SURFACE-COMPENSATION-P22: Effect Surface metadata — names
           # the compensating contract. Declaration only (no authority, no host
@@ -592,6 +608,22 @@ module IgniterLang
           "OOF-W3",
           "#{modifier} contract '#{contract.fetch("name")}' may not use a 'write' statement " \
           "(a mutation effect); write is valid only in effect/privileged/irreversible/service contracts",
+          contract.fetch("name")
+        )
+      end
+
+      # PROP-050 / LAB-EFFECT-CALL-V0-P3 (S1): OOF-EC4, caller-side placement gate
+      # (same post-loop discipline as OOF-W3): a `pure` contract may not `invoke`
+      # at all — an effect call is an effect. The REST of the escalation matrix
+      # (observed→observed only; effect/privileged/irreversible→observed|effect)
+      # runs in the TypeChecker, where the callee's class resolves via the
+      # contract registry; the rule code is OOF-EC4 in both places.
+      if modifier == "pure" &&
+         contract.fetch("body").any? { |n| n.fetch("kind", "") == "invoke" }
+        diagnostics << oof(
+          "OOF-EC4",
+          "pure contract '#{contract.fetch("name")}' may not invoke an effect contract; " \
+          "invoke is valid only in observed/effect/privileged/irreversible contracts (PROP-050)",
           contract.fetch("name")
         )
       end

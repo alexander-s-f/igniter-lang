@@ -112,6 +112,18 @@ compensation-clause  ::= "compensation" contract-ref | "no_compensation"
 The Effect Surface appears between the return type and the `via` clause in a
 contract declaration.
 
+**Effect call (PROP-050, ratified 2026-07-08; v0 implemented — see § 12.7):**
+
+```
+invoke-decl ::= "invoke" ident "=" "contract" "(" string ("," expr)* ")"
+                "using" ident ("," ident)*
+```
+
+`invoke` is a BODY-LEVEL declaration (effect altitude — ordered with effects in
+declaration order). The `using` clause is mandatory and non-empty. The callee
+is a literal (possibly module-qualified) contract name; dynamic dispatch stays
+closed. `call_contract` remains the pure call — permanently.
+
 ---
 
 ## § 12.3 The Seven Fields
@@ -230,6 +242,12 @@ in a profile that only permits `compensatable` is a compile-time error (OOF-M2).
 
 | Code | Condition | Severity |
 |------|-----------|----------|
+| OOF-EC1 | `invoke` callee unknown; or `pure` (use `call_contract`); or a recursion-class callee (`recursive`/`service`/`convergent`/`fuel_bounded`, held in v0); or self-invocation | error |
+| OOF-EC2 | surface absorption violation — a callee effect (verb + declared capability TYPE) or `affects` target has no covering caller declaration | error |
+| OOF-EC3 | attenuation mismatch — callee capability slot unmatched by a same-TYPE `using` name; a `using` name matching no slot (over-grant); a `using` name not a declared caller capability | error |
+| OOF-EC4 | escalation placement — `pure` caller never invokes; `observed` → `observed` only; `effect`/`privileged`/`irreversible` → `observed`\|`effect`; all other caller classes fail closed | error |
+| OOF-EC5 | depth — the callee itself contains an `invoke` (v0 is depth-1) | error |
+| OOF-EC6 | form/position — malformed `invoke` (incl. missing or empty `using`), or `invoke` in loop-body position | error |
 | OOF-M17 | `effect/privileged/irreversible` missing a required Effect Surface field, under the `required_effect_surface` completeness gate | warn |
 | OOF-M3 | `irreversible` without `compensation` or `no_compensation` | warn |
 | OOF-M4 | `idempotency: none` used in a retry-enabled profile | **implemented as `OOF-PROF4`** (ch11 §11.4; PROP-048/P31, hard error) — this M4 code stays retired prose |
@@ -393,3 +411,44 @@ in a profile that only permits `compensatable` is a compile-time error (OOF-M2).
   `reversibility` maximum enforces OOF-M5.
 - **Ch6 (SemanticIR):** the Effect Surface fields are emitted into the `contract_ir`
   node as a structured `effect_surface` object.
+
+---
+
+## § 12.7 Effect Calls and Surface Absorption (PROP-050, v0)
+
+> Ratified 2026-07-08 (D1–D4); v0 implemented dual-toolchain under
+> `LAB-EFFECT-CALL-V0-P3`. Runtime execution of an invoked callee (attenuated
+> grant threading) is the VM half of the same card; a passing compile confers
+> no runtime authority — grants come from the host at run start, live IO stays
+> human-gated.
+
+`invoke <name> = contract("Callee", args…) using cap[, cap]` composes non-pure
+contracts under three laws:
+
+1. **Absorption (OOF-EC2).** The caller's effective Effect Surface is its own
+   ∪ every invoked callee's. Nothing reachable through `invoke` may be
+   invisible at the caller: each callee effect (verb + declared capability
+   TYPE) and each callee `affects` target must be covered by a caller
+   declaration. In SIR, the caller's `effect_surface.effects` gains the
+   callee's entries flattened with `via_invoke` provenance, and an additive
+   `invokes[]` array carries the full per-callee absorbed record
+   (`effects`/`affects`/`idempotency_mode`/`reversibility`/`receipt_type`/
+   `failure_type`/`authority`; absent fields are null). Policy fields are NOT
+   merged into the caller's own fields — profile rules evaluate the caller
+   AND each absorbed record conservatively (no merge lattice in v0).
+2. **Attenuation (OOF-EC3).** Capabilities are delegated by explicit `using`
+   names only — each callee capability slot must be matched by a caller
+   capability of the same declared TYPE, with no over-granting and no ambient
+   inheritance. Capability-TYPE comparison uses the DECLARED annotation name
+   verbatim.
+3. **Escalation (OOF-EC4) + boundedness (EC1/EC5/EC6).** `pure` never invokes;
+   `observed` → `observed` only; `effect`/`privileged`/`irreversible` →
+   `observed`|`effect`; recursion-class callers and callees are held; depth is
+   1 in v0; an `invoke` is an effect for ordering (declaration order); the
+   invoke binding takes the callee's single output type and is a legal
+   ch13 §13.6 `evidence` ref. Self-invocation and cycles stay closed.
+
+`call_contract` remains the pure call permanently; the static plugin registry
+remains pure-only. Arity errors reuse `OOF-TY0` and ambiguous short names reuse
+`OOF-DECL-AMBIGUOUS-CONTRACT` (the call_contract conventions), so `OOF-EC*`
+stays purely the composition family.

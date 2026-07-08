@@ -1146,6 +1146,8 @@ module IgniterLang
       when "affects"     then advance; parse_affects_decl
       # LANG-CH13-WRITE-EVIDENCE-P60 (§13.6): `write store <- value evidence [refs]`
       when "write"       then advance; parse_write_decl
+      # PROP-050 / LAB-EFFECT-CALL-V0-P3 (S1): `invoke <name> = contract("Callee" [, arg]*) using <cap>[, <cap>]*`
+      when "invoke"      then advance; parse_invoke_decl
       # LANG-EFFECT-SURFACE-COMPENSATION-P22: compensation clauses
       when "compensation"    then advance; parse_compensation_decl
       when "no_compensation" then advance; { "kind" => "no_compensation" }
@@ -1334,6 +1336,90 @@ module IgniterLang
         )
       end
       { "kind" => "write", "store" => store, "value" => value, "evidence" => refs || [] }
+    end
+
+    # PROP-050 (ratified 2026-07-08) / LAB-EFFECT-CALL-V0-P3 (S1):
+    #   invoke <name> = contract("Callee" [, <argExpr>]*) using <cap> [, <cap>]*
+    # Body-level effect-contract call DECLARATION (effect altitude, ordered with
+    # effects) — never an expression. Malformed forms fail closed at parse time
+    # with OOF-EC6: missing '=', missing 'contract', missing callee string
+    # literal, missing or EMPTY `using` (D3: capability delegation must be
+    # visible and non-empty at the call site). POSITIONAL violations in lambda /
+    # branch position cannot parse by construction — `invoke` exists only in the
+    # body-declaration grammar and the expression grammar has no invoke form;
+    # loop-body placement (loops reuse parse_body_decl) is refused downstream
+    # (OOF-EC6, TypeChecker loop-body scope check). Semantic rules OOF-EC1..EC5
+    # run in the Classifier/TypeChecker. Declaration != execution: a parsed
+    # invoke grants no runtime authority (PROP-050 EC-RUNTIME is gated).
+    def parse_invoke_decl
+      tok = peek
+      unless tok && %i[ident keyword].include?(tok.type)
+        add_parse_error(
+          rule: "OOF-EC6",
+          message: "invoke requires a binding name: invoke <name> = contract(\"Callee\") using <cap>",
+          token: tok&.value.to_s, line: tok&.line || 0, col: tok&.col || 0
+        )
+        skip_until_body_boundary
+        return nil
+      end
+      binding = advance.value
+      unless peek_type?(:assign)
+        return invoke_form_error(binding, "requires '=' after the binding name")
+      end
+      advance # consume `=`
+      unless peek_value?("contract")
+        return invoke_form_error(binding, "requires the callee form contract(\"Callee\" ...)")
+      end
+      advance # consume `contract`
+      unless peek_type?(:lparen)
+        return invoke_form_error(binding, "requires '(' after 'contract'")
+      end
+      advance # consume `(`
+      unless peek_type?(:string_lit)
+        return invoke_form_error(binding, "requires a string-literal callee name (dynamic dispatch is closed)")
+      end
+      callee = advance.value
+      args = []
+      while peek_type?(:comma)
+        advance # consume `,`
+        args << parse_expr
+      end
+      unless peek_type?(:rparen)
+        return invoke_form_error(binding, "requires ')' to close the contract(...) argument list")
+      end
+      advance # consume `)`
+      unless peek_kw?("using")
+        return invoke_form_error(binding, "requires a mandatory 'using <cap>[, <cap>]*' clause (PROP-050 D3)")
+      end
+      advance # consume `using`
+      unless peek_type?(:ident)
+        return invoke_form_error(binding, "requires at least one capability name after 'using' (empty using is refused, PROP-050 D3)")
+      end
+      using = [advance.value]
+      while peek_type?(:comma)
+        advance # consume `,`
+        unless peek_type?(:ident)
+          return invoke_form_error(binding, "has a trailing ',' in the using clause without a capability name")
+        end
+        using << advance.value
+      end
+      { "kind" => "invoke", "binding" => binding, "callee" => callee,
+        "args" => args, "using" => using }
+    end
+
+    # PROP-050: shared OOF-EC6 recovery for malformed invoke declarations —
+    # record the parse error, fail closed (nil node), resynchronize without
+    # consuming the contract's closing brace (skip_until_body_boundary stops at
+    # rbrace/eof/next body keyword; skip_invalid_body_decl would advance blindly).
+    def invoke_form_error(binding, detail)
+      tok = peek
+      add_parse_error(
+        rule: "OOF-EC6",
+        message: "invoke '#{binding}' #{detail}",
+        token: tok&.value.to_s, line: tok&.line || 0, col: tok&.col || 0
+      )
+      skip_until_body_boundary
+      nil
     end
 
     def parse_compute_decl

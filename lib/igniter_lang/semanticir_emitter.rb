@@ -546,9 +546,17 @@ module IgniterLang
 
     def io_effect_surface_v1(contract)
       modifier = contract.fetch("modifier", "pure")
-      return nil unless %w[effect privileged irreversible].include?(modifier)
+      decls    = contract.fetch("declarations", [])
+      # PROP-050 / LAB-EFFECT-CALL-V0-P3 (S1): invoke declarations justify an
+      # effect_surface_v1 on an `observed` caller too (the v0 runtime fence is
+      # observed->observed). ADDITIVE: contracts without invokes keep the exact
+      # prior surface (or none) — zero golden churn for existing programs.
+      invoke_decls = decls.select { |d| d.fetch("kind") == "invoke" }
+      unless %w[effect privileged irreversible].include?(modifier) ||
+             (modifier == "observed" && invoke_decls.any?)
+        return nil
+      end
 
-      decls     = contract.fetch("declarations", [])
       cap_decls = decls.select { |d| d.fetch("kind") == "capability" }
       # LANG-EFFECT-SURFACE-RECEIPT-FAILURE-P1: parsed receipt/failure metadata also
       # justifies an effect_surface object even before any capability is declared.
@@ -567,7 +575,7 @@ module IgniterLang
       rev_decl     = decls.find { |d| d.fetch("kind") == "reversibility" }
       if cap_decls.empty? && receipt_decl.nil? && failure_decl.nil? && idem_decl.nil? &&
          affects_decl.nil? && authority_decl.nil? && comp_decl.nil? && no_comp_decl.nil? &&
-         rev_decl.nil?
+         rev_decl.nil? && invoke_decls.empty?
         return nil
       end
 
@@ -582,7 +590,7 @@ module IgniterLang
         }
       end
 
-      {
+      surface = {
         "kind"                 => "effect_surface_v1",
         "capability_bindings"  => bindings,
         # LANG-EFFECT-SURFACE-AFFECTS-P5: parsed affects clause replaces the former
@@ -608,6 +616,39 @@ module IgniterLang
         "receipt_type"         => receipt_decl&.fetch("type", nil),
         "failure_type"         => failure_decl&.fetch("type", nil)
       }
+
+      # PROP-050 / LAB-EFFECT-CALL-V0-P3 (S1): SIR absorption (packet §5) —
+      # ADDITIVE fields, emitted ONLY when the contract has invokes (no golden
+      # churn for existing programs; no existing field is mutated). `invokes[]`
+      # carries the per-callee absorbed record; `effects` is the ONE flattened
+      # list (caller's own effect bindings + each callee's effects tagged with
+      # `via_invoke` provenance) that ch11/ch12 policy and audit read.
+      if invoke_decls.any?
+        surface["invokes"] = invoke_decls.map do |inv|
+          {
+            "binding"  => inv.fetch("binding", inv.fetch("name", nil)),
+            "callee"   => inv.fetch("callee", nil),
+            "using"    => inv.fetch("using", []),
+            "absorbed" => inv.fetch("absorbed",
+              { "effects" => [], "affects" => [], "idempotency_mode" => nil,
+                "reversibility" => nil, "receipt_type" => nil,
+                "failure_type" => nil, "authority" => nil })
+          }
+        end
+        own_effects = bindings.filter_map do |b|
+          next unless b["effect_name"]
+          { "name" => b["effect_name"], "capability_ref" => b["capability_name"] }
+        end
+        via_effects = invoke_decls.flat_map do |inv|
+          inv.fetch("effects_flat", []).map do |fe|
+            { "name" => fe["name"], "capability_ref" => fe["capability_ref"],
+              "via_invoke" => fe["via_invoke"] }
+          end
+        end
+        surface["effects"] = own_effects + via_effects
+      end
+
+      surface
     end
 
     def io_capability_escape_boundaries(contract)

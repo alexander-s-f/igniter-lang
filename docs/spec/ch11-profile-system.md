@@ -133,6 +133,13 @@ contract-decl ::= contract-modifier? "contract" ident type-params?
 Profile-system diagnostics use the `OOF-PROF*` namespace. `OOF-PR*` is reserved
 for PROP-037 progression diagnostics.
 
+> **Absorbed surface (PROP-050, 2026-07-08).** Every policy rule in this
+> section evaluates the contract's ABSORBED Effect Surface (ch12 §12.7): the
+> contract's own fields AND each `invoke`d callee's absorbed record,
+> conservatively. A profile ceiling (`allowed_effects`, `requires_authority`,
+> retry×idempotency, `max_reversibility`) cannot be escaped by pushing an
+> effect down one `invoke` level.
+
 > **Namespace split (LANG-CH11-OOF-NAMESPACE-RECONCILE-P30, 2026-07-08).** The
 > profile system emits two diagnostic families, and they use different code
 > prefixes for compatibility reasons:
