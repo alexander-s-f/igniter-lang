@@ -2424,9 +2424,16 @@ module IgniterLang
           index = index_slice_ahead? ? parse_index_slice_record : parse_expr
           expect_type!(:rbracket)
           expr = { "kind" => "index_access", "object" => expr, "index" => index }
-        elsif peek_type?(:lparen) && expr["kind"] == "ref"
-          # function call: name(args)
-          fn_name = expr["name"]
+        elsif peek_type?(:lparen) && (fn_name = callable_path_name(expr))
+          # function call: bare `name(args)` OR qualified dotted `a.b.c(args)`.
+          # LANG-RUBY-QUALIFIED-CALL-EXPR-PARSER-P2: before this production, a dotted path
+          # (`stdlib.IO.read_text`) parsed as field accesses and the following `(` fell through —
+          # at RHS root the body reader sprayed "Unknown body declaration: (", and nested inside
+          # another call's args the `(` was taken as a GROUPING paren whose first comma hit the
+          # hard expect_type!(:rparen) raise. A pure dotted NAME path followed by `(` is now a
+          # call with the joined dotted `fn` (typecheck decides what the name means — parser
+          # makes no stdlib/IO claim); computed objects (call/index results) keep the old
+          # non-call postfix behavior.
           advance
           args = []
           until peek_type?(:rparen) || peek_type?(:eof)
@@ -2441,6 +2448,19 @@ module IgniterLang
       end
 
       expr
+    end
+
+    # LANG-RUBY-QUALIFIED-CALL-EXPR-PARSER-P2: a callable target is a bare ref or a pure dotted
+    # name path — a field_access chain whose base is a ref and whose links are simple names.
+    # Returns the joined dotted name ("stdlib.IO.read_text") or nil for anything computed.
+    def callable_path_name(expr)
+      case expr["kind"]
+      when "ref"
+        expr["name"]
+      when "field_access"
+        base = callable_path_name(expr["object"])
+        base ? "#{base}.#{expr["field"]}" : nil
+      end
     end
 
     def index_slice_ahead?

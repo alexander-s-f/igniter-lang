@@ -140,6 +140,30 @@ module IgniterLang
       "last"  => { qualified_name: "stdlib.collection.last"  },
     }.freeze
 
+    # LANG-RUBY-IO-TYPECHECK-COMPILE-PARITY-P3: canon COMPILE-parity typing for the lab
+    # `stdlib.IO.*` surface (keys are the QUALIFIED names produced by the P2 qualified-call
+    # parser production — IO names are never bare-imported). Signatures mirror the LIVE
+    # Rust compiler + VM truth (igniter-lab/igniter-stdlib/stdlib/io.ig). Ruby/canon
+    # typechecks and emits these calls; EXECUTION is and stays VM/host authority — the canon
+    # toolchain has no runtime IO path at all, so no per-call "not runnable" diagnostic is
+    # emitted (it would be pure cascade noise on every IO call site).
+    #   arg spec: "S" = String/Text path or text body; "I" = Integer; "B" = Bytes (opaque);
+    #             "J" = JsonValue; "C" = IO.Capability (always last).
+    #   ret spec: the Result ok-type; every fn returns Result[ok, IoError].
+    IO_STDLIB_FNS = {
+      "stdlib.IO.read_text"           => { args: %w[S C],     ret: "String" },
+      "stdlib.IO.write_text"          => { args: %w[S S C],   ret: "WriteReceipt" },
+      "stdlib.IO.append_text"         => { args: %w[S S C],   ret: "AppendReceipt" },
+      "stdlib.IO.replace_text_atomic" => { args: %w[S S C],   ret: "ReplaceReceipt" },
+      "stdlib.IO.exists"              => { args: %w[S C],     ret: "Bool" },
+      "stdlib.IO.read_json"           => { args: %w[S C],     ret: "JsonValue" },
+      "stdlib.IO.write_json"          => { args: %w[S J C],   ret: "WriteReceipt" },
+      "stdlib.IO.list_dir"            => { args: %w[S C],     ret: "Collection[PathEntry]" },
+      "stdlib.IO.file_size"           => { args: %w[S C],     ret: "Integer" },
+      "stdlib.IO.read_at"             => { args: %w[S I I C], ret: "Bytes" },
+      "stdlib.IO.write_at"            => { args: %w[S I B C], ret: "WriteAtReceipt" },
+    }.freeze
+
     # LANG-SUMTYPE-CONSTRUCT-MATCH-P3: sealed built-in sumtypes.
     # Registry shape mirrors the 3-level user variant_shapes (variant→arm→field→type)
     # but is held SEPARATELY from @variant_shapes so it is NOT emitted into the
@@ -1732,6 +1756,9 @@ module IgniterLang
       when *COLLECTION_FIRST_LAST_FNS.keys
         # LANG-STDLIB-COLLECTION-FIRST-LAST-P2: first/last -> Option[T], Rust-parity fallback Option[Unknown].
         infer_collection_first_last_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
+      when *IO_STDLIB_FNS.keys
+        # LANG-RUBY-IO-TYPECHECK-COMPILE-PARITY-P3: stdlib.IO.* -> Result[ok, IoError].
+        infer_io_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
       when "at"
         # LANG-STDLIB-COLLECTION-AT-RUBY-P3 (admitted by -AT-PROP-P1): at(Collection[T], Integer) ->
         # Option[T]. A reader, not a HOF (no lambda). Element type via the first/last path; index
@@ -3652,6 +3679,49 @@ module IgniterLang
     # LANG-STDLIB-COLLECTION-FIRST-LAST-P2: first(Collection[T]) / last(Collection[T]) -> Option[T].
     # Mirrors the current Rust TC behavior: no new arity/non-Collection diagnostics
     # here; malformed or non-inferable input falls back to Option[Unknown].
+    # LANG-RUBY-IO-TYPECHECK-COMPILE-PARITY-P3: type a qualified stdlib.IO.* call against the
+    # IO_STDLIB_FNS table (mirrors live Rust/VM). Diagnostics mirror the Rust codes: OOF-TM1 for
+    # arity, OOF-TY0 for argument-type mismatches (String/Text and Unknown are both accepted for
+    # text args; the trailing capability arg must resolve to the IO.Capability sentinel). Result
+    # is always Result[ok, IoError]. Compile parity ONLY — execution stays VM/host.
+    def infer_io_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
+      spec = IO_STDLIB_FNS.fetch(fn)
+      typed_args = args.map { |arg| infer_expr(arg, symbol_types, type_errors, type_warnings, node_name) }
+      deps = typed_args.flat_map { |arg| arg.fetch("deps", []) }.uniq
+
+      if typed_args.length != spec[:args].length
+        type_errors << oof("OOF-TM1",
+          "#{fn}: expected #{spec[:args].length} arguments, got #{typed_args.length}",
+          node_name)
+      else
+        spec[:args].each_with_index do |kind, i|
+          got = type_name(typed_args[i].fetch("resolved_type"))
+          next if got == "Unknown"
+          ok = case kind
+               when "S" then %w[String Text].include?(got)
+               when "I" then got == "Integer"
+               when "B" then got == "Bytes"
+               when "J" then got == "JsonValue"
+               when "C" then got == "IO.Capability"
+               end
+          next if ok
+          expected = { "S" => "String/Text", "I" => "Integer", "B" => "Bytes",
+                       "J" => "JsonValue", "C" => "IO.Capability" }.fetch(kind)
+          type_errors << oof("OOF-TY0",
+            "#{fn}: argument #{i} must be #{expected}, got #{got}",
+            node_name)
+        end
+      end
+
+      ok_type = if spec[:ret] == "Collection[PathEntry]"
+        { "name" => "Collection", "params" => [type_ir("PathEntry")] }
+      else
+        type_ir(spec[:ret])
+      end
+      result_type = { "name" => "Result", "params" => [ok_type, type_ir("IoError")] }
+      typed_expr("call", result_type, deps, "fn" => fn, "args" => typed_args)
+    end
+
     def infer_collection_first_last_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
       qualified = COLLECTION_FIRST_LAST_FNS.fetch(fn).fetch(:qualified_name)
       typed_args = args.map { |arg| infer_expr(arg, symbol_types, type_errors, type_warnings, node_name) }
@@ -4266,7 +4336,14 @@ module IgniterLang
       default_arg = infer_expr(args[1], symbol_types, type_errors, type_warnings, node_name)
 
       opt_type = opt_arg.fetch("resolved_type")
-      inner_type = if type_name(opt_type) == "Option"
+      inner_type = case type_name(opt_type)
+      when "Option"
+        params = opt_type.fetch("params", [])
+        params.length >= 1 ? params[0] : type_ir("Unknown")
+      when "Result"
+        # LANG-RUBY-IO-TYPECHECK-COMPILE-PARITY-P3: or_else unwraps sealed Result to its ok-type —
+        # LIVE runtime truth on both VM paths (LAB-VM-IO-RESULT-SHAPING-P2: or_else/unwrap_or
+        # already consume `{ok}/{err}` records); typing previously fell to permissive Unknown.
         params = opt_type.fetch("params", [])
         params.length >= 1 ? params[0] : type_ir("Unknown")
       else
