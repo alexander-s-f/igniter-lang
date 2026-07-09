@@ -31,6 +31,9 @@ module IgniterLang
       # decode_delimited is the second parameterised return (Option[Collection[Text]]).
       "encode_delimited" => { arg_types: %w[Collection Text Text],  return_type: "Text" },
       "decode_delimited" => { arg_types: %w[Text Text Text],        return_type: "Option[Collection[Text]]" },
+      # LANG-STDLIB-TEXT-JOIN-P1: join(Collection[Text], Text) -> Text — the inverse of split.
+      # Collection-first arg validated exactly as encode_delimited's first arg.
+      "join"             => { arg_types: %w[Collection Text],       return_type: "Text" },
     }.freeze
 
     # ── PROP-041: T2 structural-size relation registry ─────────────────────────

@@ -1,8 +1,8 @@
 {
   "kind": "stdlib_inventory",
   "format_version": "v0",
-  "stdlib_surface_digest": "36ac6a8b4f4a5bc6efcc1fd638035dd39141c9702ef57ac279b116537d158dc3",
-  "note": "Normatively referenced by Ch8. Digest is computed from canonical re-serialization of entries sorted by canonical_name with entry_digest fields stripped — never from raw file bytes. P3 proof verifies determinism. P5 adds stdlib.collection.map + stdlib.collection.filter entries and updates stdlib.collection.count proof_lineage. CONSTRUCT-P1 adds stdlib.decimal.decimal (explicit Decimal constructor) and recomputes the digest. FLATMAP-P5 adds stdlib.collection.flat_map and recomputes the digest. PREDICATE-OPS-P4 adds stdlib.collection.find/any/all and recomputes the digest. LANG-STDLIB-NUMERIC-TEXT-CONVERSION-P1 adds stdlib.integer.parse_int/int_to_text/modulo (category numeric) and recomputes the digest. LANG-STDLIB-TEXT-ESCAPE-DELIMITED-P2 adds stdlib.text.encode_delimited/decode_delimited (escape-aware delimited row codec; decode -> Option[Collection[Text]]) and recomputes the digest. LANG-STDLIB-COLLECTION-AT-INVENTORY-P5 adds stdlib.collection.at (Collection[T] x Integer -> Option[T], zero-based, total) and recomputes the digest.",
+  "stdlib_surface_digest": "6c08df622d64f5cbe5ef2d50c421f778a4d6117ba1cd9a6eb23b43081ec2cf49",
+  "note": "Normatively referenced by Ch8. Digest is computed from canonical re-serialization of entries sorted by canonical_name with entry_digest fields stripped — never from raw file bytes. P3 proof verifies determinism. P5 adds stdlib.collection.map + stdlib.collection.filter entries and updates stdlib.collection.count proof_lineage. CONSTRUCT-P1 adds stdlib.decimal.decimal (explicit Decimal constructor) and recomputes the digest. FLATMAP-P5 adds stdlib.collection.flat_map and recomputes the digest. PREDICATE-OPS-P4 adds stdlib.collection.find/any/all and recomputes the digest. LANG-STDLIB-NUMERIC-TEXT-CONVERSION-P1 adds stdlib.integer.parse_int/int_to_text/modulo (category numeric) and recomputes the digest. LANG-STDLIB-TEXT-ESCAPE-DELIMITED-P2 adds stdlib.text.encode_delimited/decode_delimited (escape-aware delimited row codec; decode -> Option[Collection[Text]]) and recomputes the digest. LANG-STDLIB-COLLECTION-AT-INVENTORY-P5 adds stdlib.collection.at (Collection[T] x Integer -> Option[T], zero-based, total) and recomputes the digest. LANG-STDLIB-TEXT-JOIN-P1 adds stdlib.text.join (Collection[Text] x Text -> Text, inverse of split) and recomputes the digest.",
   "entries": [
     {
       "canonical_name": "stdlib.text.byte_length",
@@ -483,6 +483,49 @@
         "split(\"a,b,c\", \",\") -> [\"a\", \"b\", \"c\"]"
       ],
       "compatibility_note": null,
+      "owner_surface": "Ch8 §8.5",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.text.join",
+      "semantic_ir_name": "stdlib.text.join",
+      "legacy_sir": null,
+      "aliases": [
+        {
+          "kind": "source_alias",
+          "name": "join"
+        }
+      ],
+      "category": "text",
+      "lifecycle_status": "lab-implemented",
+      "semantic_stability": "experiment-pass",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "total",
+      "type_params": [],
+      "input_signature": [
+        "Collection[Text]",
+        "Text"
+      ],
+      "output_signature": "Text",
+      "diagnostics": [],
+      "failure_behavior": "none; empty collection returns empty Text; empty separator is allowed (unlike split)",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "Ch8 §8.5 text operations",
+        "LANG-STDLIB-TEXT-JOIN-P1 canon Ruby TEXT_STDLIB_FNS (join => Collection Text -> Text)",
+        "LANG-STDLIB-TEXT-JOIN-P1 Rust emitter (TEXT_STDLIB_OPS) + typechecker + VM stdlib.text.join"
+      ],
+      "examples": [
+        "join([\"a\", \"b\", \"c\"], \",\") -> \"a,b,c\"",
+        "join([], \",\") -> \"\"",
+        "join([\"x\"], \",\") -> \"x\"",
+        "join([\"a\", \"b\"], \"\") -> \"ab\""
+      ],
+      "compatibility_note": "Inverse of split. The Collection-first argument is validated exactly like encode_delimited's first arg (arg_types [Collection, Text]); the separator is Text. Empty collection -> empty Text; one item -> the item with no separator; separator inserted between items only; empty separator is permitted (split forbids it). Text-only — no implicit Integer/Float element conversion. Dual-toolchain: canon Ruby and lab Rust both qualify the bare source alias `join` to stdlib.text.join.",
       "owner_surface": "Ch8 §8.5",
       "entry_digest": null
     },
