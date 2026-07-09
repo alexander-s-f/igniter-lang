@@ -2041,15 +2041,7 @@ module IgniterLang
       then_type = then_typed.fetch("resolved_type")
       else_type = else_typed.fetch("resolved_type")
 
-      # OOF-IF3: then/else final value types must exact-match
-      result_type = if !unknown?(then_type) && !unknown?(else_type) && type_name(then_type) != type_name(else_type)
-                      type_errors << oof("OOF-IF3", "if_expr branch types must match: then=#{type_name(then_type)}, else=#{type_name(else_type)}", node_name)
-                      type_ir("Unknown")
-                    elsif unknown?(then_type)
-                      else_type
-                    else
-                      then_type
-                    end
+      result_type = merge_if_branch_types(then_type, else_type, node_name, type_errors)
 
       # Union dependencies: condition + then + else (recursive nested deps included automatically)
       all_deps = (cond_typed.fetch("deps") + then_typed.fetch("deps") + else_typed.fetch("deps")).uniq
@@ -2324,6 +2316,11 @@ module IgniterLang
       type.fetch("name")
     end
 
+    def canonical_scalar_name(type)
+      name = type_name(type)
+      name == "String" ? "Text" : name
+    end
+
     def normalize_type(type)
       type.is_a?(Hash) ? type.fetch("name") : type.to_s
     end
@@ -2358,7 +2355,7 @@ module IgniterLang
     def structurally_assignable?(actual, expected)
       return true  if type_name(expected) == "Unknown"
       return false if type_name(actual)   == "Unknown"
-      return false if type_name(actual)   != type_name(expected)
+      return false if canonical_scalar_name(actual) != canonical_scalar_name(expected)
       actual_params   = actual.fetch("params",   [])
       expected_params = expected.fetch("params", [])
       return false if actual_params.length != expected_params.length
@@ -4562,8 +4559,8 @@ module IgniterLang
                 )
               end
             else
-              unless type_name(actual_type) == type_name(expected_type) ||
-                     type_name(actual_type) == "Unknown"
+              unless type_name(actual_type) == "Unknown" ||
+                     structurally_assignable?(actual_type, expected_type)
                 field_errors << oof(
                   "OOF-TY0",
                   "record literal field '#{fname}': expected #{type_name(expected_type)}, " \
@@ -4919,7 +4916,7 @@ module IgniterLang
       nb = type_name(b)
       return b if na == "Unknown"
       return a if nb == "Unknown"
-      return nil if na != nb
+      return nil if canonical_scalar_name(a) != canonical_scalar_name(b)
       return a if a == b   # identical — preserve all keys, zero change
 
       pa = a.fetch("params", [])
@@ -4933,6 +4930,25 @@ module IgniterLang
         joined_params << jp
       end
       { "name" => na, "params" => joined_params }
+    end
+
+    def merge_if_branch_types(then_type, else_type, node_name, type_errors)
+      return else_type if type_name(then_type) == "Unknown"
+      return then_type if type_name(else_type) == "Unknown"
+
+      joined = join_match_param_types(then_type, else_type)
+      return joined if joined
+
+      if canonical_scalar_name(then_type) != canonical_scalar_name(else_type)
+        type_errors << oof(
+          "OOF-IF3",
+          "if_expr branch types must match: then=#{type_name(then_type)}, else=#{type_name(else_type)}",
+          node_name
+        )
+        return type_ir("Unknown")
+      end
+
+      then_type
     end
 
     # check_map_annotation: validates a single type_annotation for Map constraint violations.
