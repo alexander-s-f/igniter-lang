@@ -27,6 +27,10 @@ module IgniterLang
       "byte_slice"      => { arg_types: %w[Text Integer Integer],   return_type: "Text" },
       "rune_slice"      => { arg_types: %w[Text Integer Integer],   return_type: "Text" },
       "grapheme_slice"  => { arg_types: %w[Text Integer Integer],   return_type: "Text" },
+      # LANG-STDLIB-TEXT-ESCAPE-DELIMITED-P2: escape-aware delimited row codec.
+      # decode_delimited is the second parameterised return (Option[Collection[Text]]).
+      "encode_delimited" => { arg_types: %w[Collection Text Text],  return_type: "Text" },
+      "decode_delimited" => { arg_types: %w[Text Text Text],        return_type: "Option[Collection[Text]]" },
     }.freeze
 
     # ── PROP-041: T2 structural-size relation registry ─────────────────────────
@@ -2784,8 +2788,13 @@ module IgniterLang
     # "Collection[Text]" needs to be constructed as a parameterised type;
     # all other return types are simple names handled by type_ir().
     def text_stdlib_return_type(name)
-      if name == "Collection[Text]"
+      case name
+      when "Collection[Text]"
         { "name" => "Collection", "params" => [{ "name" => "Text", "params" => [] }] }
+      when "Option[Collection[Text]]"
+        # LANG-STDLIB-TEXT-ESCAPE-DELIMITED-P2: decode_delimited return shape.
+        { "name" => "Option",
+          "params" => [{ "name" => "Collection", "params" => [{ "name" => "Text", "params" => [] }] }] }
       else
         type_ir(name)
       end
