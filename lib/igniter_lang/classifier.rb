@@ -874,6 +874,11 @@ module IgniterLang
         "oof_log" => diagnostics
       }
       result["decreases_variant"] = decreases_variant_name if decreases_variant_name
+      # LANG-EMITTER-MAX-STEPS-P1: propagate the declared static budget so the
+      # SemanticIR emitter can carry it into termination (the VM fuel loop reads
+      # termination.max_steps; without this the declared value never left compile).
+      ms_node = contract.fetch("body").find { |n| n.fetch("kind") == "max_steps" }
+      result["max_steps"] = ms_node.fetch("value") if ms_node
       # PROP-033/040: propagate via_profile and resolved profile_authority
       result["via_profile"]       = via_profile       if via_profile
       result["profile_authority"] = profile_authority  if profile_authority

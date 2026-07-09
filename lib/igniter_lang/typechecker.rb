@@ -830,6 +830,9 @@ module IgniterLang
       # PROP-039 OOF-R3: propagate clean (non-dotted) decreases variant for SemanticIR evidence
       clean_variant = @recur_context.fetch(:decreases_variant, nil)
       result["decreases_variant"] = clean_variant if clean_variant
+      # LANG-EMITTER-MAX-STEPS-P1: propagate the declared static budget for SemanticIR
+      max_steps = classified_contract.fetch("max_steps", nil)
+      result["max_steps"] = max_steps if max_steps
       # PROP-045: propagate contract-level intent_text
       intent_text = classified_contract.fetch("intent_text", nil)
       result["intent_text"] = intent_text if intent_text

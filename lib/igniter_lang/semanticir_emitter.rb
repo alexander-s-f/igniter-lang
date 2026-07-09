@@ -249,6 +249,13 @@ module IgniterLang
           "variant_check" => "syntactic_v0"
         }
       end
+      # LANG-EMITTER-MAX-STEPS-P1: the declared static `max_steps` budget reaches
+      # the artifact. Joins the existing termination evidence when present (T1/T2/
+      # T3); else creates a minimal termination object (the recursive+decreases-
+      # fuel and fuel_bounded cases emit no decreases evidence by design). The VM
+      # fuel loop reads termination.max_steps; its default applies otherwise.
+      max_steps = contract.fetch("max_steps", nil)
+      (contract_ir["termination"] ||= {})["max_steps"] = max_steps if max_steps
       contract_ir["contract_ref"] = contract_ref(contract_ir)
       contract_ir
     end
