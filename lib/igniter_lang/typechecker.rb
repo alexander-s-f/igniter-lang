@@ -1729,6 +1729,11 @@ module IgniterLang
       when *COLLECTION_FIRST_LAST_FNS.keys
         # LANG-STDLIB-COLLECTION-FIRST-LAST-P2: first/last -> Option[T], Rust-parity fallback Option[Unknown].
         infer_collection_first_last_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
+      when "at"
+        # LANG-STDLIB-COLLECTION-AT-RUBY-P3 (admitted by -AT-PROP-P1): at(Collection[T], Integer) ->
+        # Option[T]. A reader, not a HOF (no lambda). Element type via the first/last path; index
+        # validated like char_at. Negative/out-of-range/empty are RUNTIME None (P4 VM), not diagnostics.
+        infer_collection_at_call(args, symbol_types, type_errors, type_warnings, node_name)
       when "sum"
         # LANG-STDLIB-SUM-PROP-P3: stdlib.collection.sum two-arg field-projection form
         infer_sum_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
@@ -3654,6 +3659,49 @@ module IgniterLang
         extracted = element_type_from_collection(typed_args[0].fetch("resolved_type"))
         inner_type = extracted if extracted.is_a?(Hash) && !extracted.empty?
       end
+
+      typed_expr("call", option_type_ir(inner_type), deps,
+                 "fn" => qualified, "args" => typed_args)
+    end
+
+    # LANG-STDLIB-COLLECTION-AT-RUBY-P3 (admitted by -AT-PROP-P1): at(Collection[T], Integer) ->
+    # Option[T]. Zero-based, total. Element type extracted from Collection[T] exactly as first/last;
+    # Collection[Unknown] (or non-inferable) first arg -> Option[Unknown], permissive like first/last.
+    # OOF-COL1: arity != 2. OOF-COL2: first arg not Collection (Unknown permissive). OOF-COL10: index
+    # arg not Integer (Unknown permissive). Negative/out-of-range/empty are RUNTIME None (VM P4), never
+    # a diagnostic. No source Some/None syntax introduced; consume via or_else / sealed match.
+    def infer_collection_at_call(args, symbol_types, type_errors, type_warnings, node_name)
+      qualified  = "stdlib.collection.at"
+      typed_args = args.map { |arg| infer_expr(arg, symbol_types, type_errors, type_warnings, node_name) }
+      deps       = typed_args.flat_map { |arg| arg.fetch("deps", []) }.uniq
+
+      unless args.length == 2
+        type_errors << oof("OOF-COL1",
+          "#{qualified}: expected 2 arguments (collection, index), got #{args.length}",
+          node_name)
+        return typed_expr("call", option_type_ir(type_ir("Unknown")), deps,
+                          "fn" => qualified, "args" => typed_args)
+      end
+
+      col_resolved = typed_args[0].fetch("resolved_type", {})
+      col_name     = col_resolved.is_a?(Hash) ? col_resolved.fetch("name", "Unknown") : "Unknown"
+      unless %w[Collection Unknown].include?(col_name)
+        type_errors << oof("OOF-COL2",
+          "#{qualified}: first argument must be Collection[T], got #{col_name}",
+          node_name)
+      end
+
+      idx_resolved = typed_args[1].fetch("resolved_type", {})
+      idx_name     = idx_resolved.is_a?(Hash) ? idx_resolved.fetch("name", "Unknown") : "Unknown"
+      unless %w[Integer Unknown].include?(idx_name)
+        type_errors << oof("OOF-COL10",
+          "#{qualified}: index argument must be Integer, got #{idx_name}",
+          node_name)
+      end
+
+      inner_type = type_ir("Unknown")
+      extracted  = element_type_from_collection(col_resolved)
+      inner_type = extracted if extracted.is_a?(Hash) && !extracted.empty?
 
       typed_expr("call", option_type_ir(inner_type), deps,
                  "fn" => qualified, "args" => typed_args)
