@@ -1,8 +1,8 @@
 {
   "kind": "stdlib_inventory",
   "format_version": "v0",
-  "stdlib_surface_digest": "6c08df622d64f5cbe5ef2d50c421f778a4d6117ba1cd9a6eb23b43081ec2cf49",
-  "note": "Normatively referenced by Ch8. Digest is computed from canonical re-serialization of entries sorted by canonical_name with entry_digest fields stripped — never from raw file bytes. P3 proof verifies determinism. P5 adds stdlib.collection.map + stdlib.collection.filter entries and updates stdlib.collection.count proof_lineage. CONSTRUCT-P1 adds stdlib.decimal.decimal (explicit Decimal constructor) and recomputes the digest. FLATMAP-P5 adds stdlib.collection.flat_map and recomputes the digest. PREDICATE-OPS-P4 adds stdlib.collection.find/any/all and recomputes the digest. LANG-STDLIB-NUMERIC-TEXT-CONVERSION-P1 adds stdlib.integer.parse_int/int_to_text/modulo (category numeric) and recomputes the digest. LANG-STDLIB-TEXT-ESCAPE-DELIMITED-P2 adds stdlib.text.encode_delimited/decode_delimited (escape-aware delimited row codec; decode -> Option[Collection[Text]]) and recomputes the digest. LANG-STDLIB-COLLECTION-AT-INVENTORY-P5 adds stdlib.collection.at (Collection[T] x Integer -> Option[T], zero-based, total) and recomputes the digest. LANG-STDLIB-TEXT-JOIN-P1 adds stdlib.text.join (Collection[Text] x Text -> Text, inverse of split) and recomputes the digest.",
+  "stdlib_surface_digest": "5bcd45a578845e7b952286c74289bfe3d31e635c94067e631cc0a6f71adc544d",
+  "note": "Normatively referenced by Ch8. Digest is computed from canonical re-serialization of entries sorted by canonical_name with entry_digest fields stripped — never from raw file bytes. P3 proof verifies determinism. P5 adds stdlib.collection.map + stdlib.collection.filter entries and updates stdlib.collection.count proof_lineage. CONSTRUCT-P1 adds stdlib.decimal.decimal (explicit Decimal constructor) and recomputes the digest. FLATMAP-P5 adds stdlib.collection.flat_map and recomputes the digest. PREDICATE-OPS-P4 adds stdlib.collection.find/any/all and recomputes the digest. LANG-STDLIB-NUMERIC-TEXT-CONVERSION-P1 adds stdlib.integer.parse_int/int_to_text/modulo (category numeric) and recomputes the digest. LANG-STDLIB-TEXT-ESCAPE-DELIMITED-P2 adds stdlib.text.encode_delimited/decode_delimited (escape-aware delimited row codec; decode -> Option[Collection[Text]]) and recomputes the digest. LANG-STDLIB-COLLECTION-AT-INVENTORY-P5 adds stdlib.collection.at (Collection[T] x Integer -> Option[T], zero-based, total) and recomputes the digest. LANG-STDLIB-TEXT-JOIN-P1 adds stdlib.text.join (Collection[Text] x Text -> Text, inverse of split) and recomputes the digest. LANG-STDLIB-WIRE-FRAME-CODEC-P2 adds stdlib.text.encode_frame (Text -> Text) and stdlib.text.decode_frame (Text -> Option[FrameDecode], length-prefixed netstring frame codec) and recomputes the digest.",
   "entries": [
     {
       "canonical_name": "stdlib.text.byte_length",
@@ -2357,6 +2357,85 @@
       ],
       "compatibility_note": null,
       "owner_surface": "LANG-STDLIB-TEXT-ESCAPE-DELIMITED-P2",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.text.encode_frame",
+      "semantic_ir_name": "stdlib.text.encode_frame",
+      "legacy_sir": null,
+      "aliases": [
+        {
+          "kind": "source_alias",
+          "name": "encode_frame"
+        }
+      ],
+      "category": "text",
+      "lifecycle_status": "lab-implemented",
+      "semantic_stability": "experiment-pass",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "total",
+      "type_params": [],
+      "input_signature": [
+        "Text"
+      ],
+      "output_signature": "Text",
+      "diagnostics": [],
+      "failure_behavior": "none (total); prefixes the payload's rune count and a ':' separator, payload copied verbatim with no escaping",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "LANG-STDLIB-WIRE-FRAME-CODEC-P2 canon Ruby TEXT_STDLIB_FNS (encode_frame => Text -> Text)",
+        "LANG-STDLIB-WIRE-FRAME-CODEC-P2 Rust emitter (TEXT_STDLIB_OPS) + typechecker + VM eval_text_call"
+      ],
+      "examples": [
+        "encode_frame(\"beta|;#~%mid\") -> \"12:beta|;#~%mid\"",
+        "encode_frame(\"\") -> \"0:\""
+      ],
+      "compatibility_note": "Length-prefixed Text frame codec (netstring-shaped `<rune_count>:<payload>`). Additive — does NOT change encode_delimited/decode_delimited. Payload is copied verbatim (any runes, including every delimiter and the escape char, no escaping), so nesting cost is additive not the multiplicative escape inflation of nested encode_delimited. Dual-toolchain: canon Ruby and lab Rust both qualify the bare source alias `encode_frame` to stdlib.text.encode_frame.",
+      "owner_surface": "LANG-STDLIB-WIRE-FRAME-CODEC-P2",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.text.decode_frame",
+      "semantic_ir_name": "stdlib.text.decode_frame",
+      "legacy_sir": null,
+      "aliases": [
+        {
+          "kind": "source_alias",
+          "name": "decode_frame"
+        }
+      ],
+      "category": "text",
+      "lifecycle_status": "lab-implemented",
+      "semantic_stability": "experiment-pass",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "total-option",
+      "type_params": [],
+      "input_signature": [
+        "Text"
+      ],
+      "output_signature": "Option[FrameDecode]",
+      "diagnostics": [],
+      "failure_behavior": "None on missing/empty/non-numeric/negative/overflowing/short header; trailing runes are returned in rest (not an error); count 0 (empty payload) is valid",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "LANG-STDLIB-WIRE-FRAME-CODEC-P2 canon Ruby TEXT_STDLIB_FNS (decode_frame => Text -> Option[FrameDecode])",
+        "LANG-STDLIB-WIRE-FRAME-CODEC-P2 Rust emitter (TEXT_STDLIB_OPS) + typechecker + VM eval_text_call"
+      ],
+      "examples": [
+        "decode_frame(\"12:beta|;#~%mid\") -> Some({payload: \"beta|;#~%mid\", rest: \"\"})",
+        "decode_frame(\"3:abc4:wxyz\") -> Some({payload: \"abc\", rest: \"4:wxyz\"})  # frame stream via rest",
+        "decode_frame(\"9:hi\") -> None  # short header (claims 9 runes, 2 present)"
+      ],
+      "compatibility_note": "FrameDecode is a synthetic record { payload: Text, rest: Text } (like Pair from zip — no type_shapes entry, resolved via a field-access special-case). `rest` enables decoding a stream of concatenated frames by re-decoding it. Additive; does NOT change decode_delimited.",
+      "owner_surface": "LANG-STDLIB-WIRE-FRAME-CODEC-P2",
       "entry_digest": null
     }
   ]

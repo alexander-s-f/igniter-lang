@@ -31,6 +31,11 @@ module IgniterLang
       # decode_delimited is the second parameterised return (Option[Collection[Text]]).
       "encode_delimited" => { arg_types: %w[Collection Text Text],  return_type: "Text" },
       "decode_delimited" => { arg_types: %w[Text Text Text],        return_type: "Option[Collection[Text]]" },
+      # LANG-STDLIB-WIRE-FRAME-CODEC-P2: length-prefixed Text frame codec. encode_frame is total Text;
+      # decode_frame returns Option[FrameDecode] (FrameDecode { payload: Text, rest: Text }) — a synthetic
+      # record shape like Pair, resolved via the field-access special-case below.
+      "encode_frame"     => { arg_types: %w[Text],                  return_type: "Text" },
+      "decode_frame"     => { arg_types: %w[Text],                  return_type: "Option[FrameDecode]" },
       # LANG-STDLIB-TEXT-JOIN-P1: join(Collection[Text], Text) -> Text — the inverse of split.
       # Collection-first arg validated exactly as encode_delimited's first arg.
       "join"             => { arg_types: %w[Collection Text],       return_type: "Text" },
@@ -1575,6 +1580,13 @@ module IgniterLang
           return typed_expr("field_access", pair_field, object.fetch("deps"),
                             "object" => object, "field" => expr.fetch("field"))
         end
+        # LANG-STDLIB-WIRE-FRAME-CODEC-P2: FrameDecode is the synthetic record decode_frame produces
+        # (no @type_shapes entry, like Pair). Both accessors are Text: `.payload` (framed content) and
+        # `.rest` (unconsumed suffix — enables decoding a frame stream by re-decoding rest).
+        if object_type == "FrameDecode" && %w[payload rest].include?(expr.fetch("field"))
+          return typed_expr("field_access", type_ir("Text"), object.fetch("deps"),
+                            "object" => object, "field" => expr.fetch("field"))
+        end
         field_type = @type_shapes.fetch(object_type, {})[expr.fetch("field")] || type_ir("Unknown")
         if type_name(field_type) == "Unknown"
           type_errors << oof("OOF-P1", "Unresolved field: #{object_type}.#{expr.fetch("field")}", node_name)
@@ -2827,6 +2839,10 @@ module IgniterLang
         # LANG-STDLIB-TEXT-ESCAPE-DELIMITED-P2: decode_delimited return shape.
         { "name" => "Option",
           "params" => [{ "name" => "Collection", "params" => [{ "name" => "Text", "params" => [] }] }] }
+      when "Option[FrameDecode]"
+        # LANG-STDLIB-WIRE-FRAME-CODEC-P2: decode_frame return shape. FrameDecode is a synthetic
+        # record ({ payload: Text, rest: Text }) resolved via the field-access special-case (like Pair).
+        { "name" => "Option", "params" => [{ "name" => "FrameDecode", "params" => [] }] }
       else
         type_ir(name)
       end
