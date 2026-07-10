@@ -1523,11 +1523,310 @@ module IgniterLang
     end
 
     # PROP-035: capability <name>: <CapType>
+    # LANG-NETWORK-CAPABILITY-GRAMMAR-P2: an IO.NetworkCapability declaration may
+    # carry a structured `{ ... }` attribute block. DECLARED POLICY METADATA ONLY —
+    # parsing it grants no authority, opens no socket, binds no executor
+    # (enforcement stays host-side). Every static rule fails closed (OOF-NET*).
     def parse_capability_decl
       name = name_token!(%i[ident])
       expect_type!(:colon)
       type_ref = parse_type_ref
-      { "kind" => "capability", "name" => name, "type_annotation" => type_ref }
+      decl = { "kind" => "capability", "name" => name, "type_annotation" => type_ref }
+      if peek_type?(:lbrace)
+        attrs = parse_network_capability_attrs(type_ref)
+        decl["network_attributes"] = attrs if attrs
+      end
+      decl
+    end
+
+    # LANG-NETWORK-CAPABILITY-GRAMMAR-P2 static rules (bounded OOF-NET* family;
+    # rules and messages are byte-identical with the Rust lab compiler):
+    #   OOF-NET1  attribute block on a non-IO.NetworkCapability capability type
+    #   OOF-NET2  unknown attribute field
+    #   OOF-NET3  duplicate attribute field
+    #   OOF-NET4  missing required attribute field
+    #   OOF-NET5  wrong-typed / non-literal attribute value
+    #   OOF-NET6  port outside 1..65535 or port_lo > port_hi
+    #   OOF-NET7  dead grant: connect_allowed:false AND listen_allowed:false
+    #   OOF-NET8  loopback_only:true weakened by "*" or a non-loopback host
+    #   OOF-NET9  protocol vocabulary violation (v0: "tcp" only; "http" is an
+    #             application operation over tcp — machine terminology tie-breaker)
+    #   OOF-NET10 allowed_hosts entry is not a bare host literal
+    # Returns the normalized attrs hash only when the whole block is valid; nil otherwise.
+    NETWORK_CAPABILITY_FIELDS = {
+      "protocol"        => "string",
+      "allowed_hosts"   => "list of string literals",
+      "port_lo"         => "integer",
+      "port_hi"         => "integer",
+      "loopback_only"   => "bool",
+      "connect_allowed" => "bool",
+      "listen_allowed"  => "bool",
+      "tls_required"    => "bool"
+    }.freeze
+
+    def parse_network_capability_attrs(type_ref)
+      lbrace = expect_type!(:lbrace)
+      blk_line = lbrace.line
+      blk_col  = lbrace.col
+      type_name = type_ref.is_a?(Hash) ? (type_ref["name"] || "") : type_ref.to_s
+      ok = true
+      unless type_name == "IO.NetworkCapability"
+        add_parse_error(
+          rule: "OOF-NET1",
+          message: "network capability attributes are only allowed on IO.NetworkCapability (got '#{type_name}')",
+          token: "{",
+          line: blk_line,
+          col: blk_col
+        )
+        ok = false
+      end
+
+      seen = {}
+      declared = []
+      loop do
+        tok = peek
+        if tok.nil? || tok.type == :eof
+          add_parse_error(
+            rule: "OOF-NET5",
+            message: "malformed network capability attribute block: unexpected end of input",
+            token: "EOF",
+            line: blk_line,
+            col: blk_col
+          )
+          return nil
+        elsif tok.type == :rbrace
+          advance
+          break
+        elsif %i[ident keyword].include?(tok.type)
+          field_tok = tok
+          field = advance.value
+          unless peek_type?(:colon)
+            add_parse_error(
+              rule: "OOF-NET5",
+              message: "network capability attribute '#{field}' must be followed by ':'",
+              token: field,
+              line: field_tok.line,
+              col: field_tok.col
+            )
+            skip_network_attr_value
+            ok = false
+            next
+          end
+          advance # consume ':'
+          expected = NETWORK_CAPABILITY_FIELDS[field]
+          if expected.nil?
+            add_parse_error(
+              rule: "OOF-NET2",
+              message: "unknown network capability attribute '#{field}'",
+              token: field,
+              line: field_tok.line,
+              col: field_tok.col
+            )
+            ok = false
+          elsif declared.include?(field)
+            add_parse_error(
+              rule: "OOF-NET3",
+              message: "duplicate network capability attribute '#{field}'",
+              token: field,
+              line: field_tok.line,
+              col: field_tok.col
+            )
+            ok = false
+          else
+            declared << field
+          end
+          # Parse the literal value (even for unknown/dup fields — recovery).
+          val, val_kind = parse_network_attr_literal
+          if expected
+            if val_kind == expected
+              seen[field] = val unless seen.key?(field)
+            else
+              add_parse_error(
+                rule: "OOF-NET5",
+                message: "network capability attribute '#{field}' must be a literal #{expected}",
+                token: field,
+                line: field_tok.line,
+                col: field_tok.col
+              )
+              ok = false
+            end
+          end
+          advance if peek_type?(:comma)
+        else
+          add_parse_error(
+            rule: "OOF-NET5",
+            message: "malformed network capability attribute block: unexpected '#{tok.value}'",
+            token: tok.value.to_s,
+            line: tok.line,
+            col: tok.col
+          )
+          advance
+          ok = false
+        end
+      end
+
+      # OOF-NET4 — all eight fields are required in v0 (no live precedent
+      # establishes a safe default; fail closed).
+      NETWORK_CAPABILITY_FIELDS.each_key do |field|
+        next if declared.include?(field)
+
+        add_parse_error(
+          rule: "OOF-NET4",
+          message: "missing required network capability attribute '#{field}'",
+          token: field,
+          line: blk_line,
+          col: blk_col
+        )
+        ok = false
+      end
+      return nil unless ok
+
+      protocol        = seen["protocol"]
+      allowed_hosts   = seen["allowed_hosts"]
+      port_lo         = seen["port_lo"]
+      port_hi         = seen["port_hi"]
+      loopback_only   = seen["loopback_only"]
+      connect_allowed = seen["connect_allowed"]
+      listen_allowed  = seen["listen_allowed"]
+      tls_required    = seen["tls_required"]
+
+      # OOF-NET9: protocol vocabulary. Decision (machine terminology tie-breaker,
+      # igniter-machine/src/http.rs): HTTP is an APPLICATION OPERATION executed
+      # over a TCP transport; v0 transport vocabulary is "tcp" only, and "http"
+      # is refused explicitly rather than aliased silently.
+      if protocol == "http"
+        add_parse_error(
+          rule: "OOF-NET9",
+          message: "protocol \"http\" is an application operation over tcp; declare protocol: \"tcp\" (transport vocabulary per igniter-machine HttpCapabilityExecutor)",
+          token: "http",
+          line: blk_line,
+          col: blk_col
+        )
+        ok = false
+      elsif protocol != "tcp"
+        add_parse_error(
+          rule: "OOF-NET9",
+          message: "unsupported network capability protocol '#{protocol}' (v0 supports \"tcp\" only; UDP is not implied)",
+          token: protocol.to_s,
+          line: blk_line,
+          col: blk_col
+        )
+        ok = false
+      end
+      # OOF-NET6: port bounds.
+      unless (1..65_535).cover?(port_lo) && (1..65_535).cover?(port_hi) && port_lo <= port_hi
+        add_parse_error(
+          rule: "OOF-NET6",
+          message: "network capability port range invalid: port_lo and port_hi must be within 1..65535 and port_lo <= port_hi",
+          token: "port_lo",
+          line: blk_line,
+          col: blk_col
+        )
+        ok = false
+      end
+      # OOF-NET7: dead grant — fail closed as an ERROR (live proof precedent has
+      # no warning channel; a grant that can neither connect nor listen is
+      # contradictory declared policy).
+      if connect_allowed == false && listen_allowed == false
+        add_parse_error(
+          rule: "OOF-NET7",
+          message: "dead network capability grant: connect_allowed and listen_allowed are both false",
+          token: "connect_allowed",
+          line: blk_line,
+          col: blk_col
+        )
+        ok = false
+      end
+      # OOF-NET10 + OOF-NET8: host entry hygiene, then loopback containment.
+      allowed_hosts.each do |host|
+        if host.strip.empty? || host.include?("://") || host.include?("@") ||
+           host.include?("{{") || host =~ /\s/
+          add_parse_error(
+            rule: "OOF-NET10",
+            message: "network capability allowed_hosts entry '#{host}' must be a bare host literal (no scheme, userinfo, secrets, or whitespace)",
+            token: host,
+            line: blk_line,
+            col: blk_col
+          )
+          ok = false
+        elsif loopback_only && !literal_loopback_host?(host)
+          add_parse_error(
+            rule: "OOF-NET8",
+            message: "loopback_only:true cannot be weakened by non-loopback allowed_hosts entry '#{host}'",
+            token: host,
+            line: blk_line,
+            col: blk_col
+          )
+          ok = false
+        end
+      end
+      return nil unless ok
+
+      {
+        "protocol"        => protocol,
+        "allowed_hosts"   => allowed_hosts,
+        "port_lo"         => port_lo,
+        "port_hi"         => port_hi,
+        "loopback_only"   => loopback_only,
+        "connect_allowed" => connect_allowed,
+        "listen_allowed"  => listen_allowed,
+        "tls_required"    => tls_required
+      }
+    end
+
+    def literal_loopback_host?(host)
+      return true if host == "localhost" || host == "::1"
+
+      octets = host.split(".", -1)
+      octets.length == 4 && octets.first == "127" &&
+        octets.all? { |octet| octet.match?(/\A\d+\z/) && (0..255).cover?(octet.to_i) }
+    end
+
+    # One attribute literal → [value, kind] where kind matches the
+    # NETWORK_CAPABILITY_FIELDS vocabulary; [nil, nil] for anything non-literal.
+    def parse_network_attr_literal
+      tok = peek
+      case tok&.type
+      when :string_lit then [advance.value, "string"]
+      when :int_lit    then [advance.value, "integer"]
+      when :bool_lit   then [advance.value == "true", "bool"]
+      when :lbracket
+        advance
+        items = []
+        list_ok = true
+        loop do
+          t = peek
+          if t.nil? || t.type == :eof
+            list_ok = false
+            break
+          elsif t.type == :rbracket
+            advance
+            break
+          elsif t.type == :string_lit
+            items << advance.value
+            advance if peek_type?(:comma)
+          else
+            list_ok = false
+            advance
+          end
+        end
+        list_ok ? [items, "list of string literals"] : [nil, nil]
+      else
+        advance unless tok.nil? || tok.type == :eof
+        [nil, nil]
+      end
+    end
+
+    # Recovery helper: skip tokens until the next comma or closing brace of the
+    # network attribute block (does not consume the rbrace).
+    def skip_network_attr_value
+      loop do
+        t = peek
+        break if t.nil? || %i[eof rbrace comma].include?(t.type)
+
+        advance
+      end
+      advance if peek_type?(:comma)
     end
 
     # PROP-035: effect <name> using <cap_ref>

@@ -590,11 +590,32 @@ module IgniterLang
       bindings  = cap_decls.map do |cap|
         cap_name = cap.fetch("name")
         eff      = eff_decls.find { |e| e.fetch("deps", []).include?(cap_name) }
-        {
+        binding = {
           "capability_name" => cap_name,
           "capability_type" => cap.fetch("type", {}).fetch("name", "IO.Capability"),
           "effect_name"     => eff&.fetch("name")
         }
+        # LANG-NETWORK-CAPABILITY-GRAMMAR-P2: the normalized policy object under
+        # the declared capability slot. DECLARED intent for a future host binding
+        # — `enforcement: "host_required"` is the explicit authority marker
+        # (declaration ≠ enforcement; passport authority is unchanged). Key added
+        # ONLY for structured IO.NetworkCapability declarations, so every
+        # existing program keeps a byte-identical effect_surface.
+        if (na = cap["network_attributes"])
+          binding["network_capability"] = {
+            "kind"            => "network_capability_v1",
+            "protocol"        => na.fetch("protocol"),
+            "allowed_hosts"   => na.fetch("allowed_hosts"),
+            "port_lo"         => na.fetch("port_lo"),
+            "port_hi"         => na.fetch("port_hi"),
+            "loopback_only"   => na.fetch("loopback_only"),
+            "connect_allowed" => na.fetch("connect_allowed"),
+            "listen_allowed"  => na.fetch("listen_allowed"),
+            "tls_required"    => na.fetch("tls_required"),
+            "enforcement"     => "host_required"
+          }
+        end
+        binding
       end
 
       surface = {

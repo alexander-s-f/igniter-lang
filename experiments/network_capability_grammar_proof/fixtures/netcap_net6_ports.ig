@@ -1,0 +1,15 @@
+module Proof.NetworkCapability.Grammar
+
+effect contract SendPing {
+  capability net_out: IO.NetworkCapability {
+    protocol: "tcp",
+    allowed_hosts: ["127.0.0.1"],
+    port_lo: 9000,
+    port_hi: 80,
+    loopback_only: true,
+    connect_allowed: true,
+    listen_allowed: false,
+    tls_required: false
+  }
+  effect send using net_out
+}

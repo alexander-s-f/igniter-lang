@@ -588,7 +588,12 @@ module IgniterLang
           type_name_str = raw_type.is_a?(Hash) ? (raw_type["name"] || "IO.Capability") : raw_type.to_s
           resolved_type = type_name_str.start_with?("IO.") ? type_ir("IO.Capability") : type_ir(type_name_str)
           symbol_types[decl.fetch("name")] = resolved_type
-          typed_decls << typed_decl(decl, resolved_type, nil, [])
+          cap_typed = typed_decl(decl, resolved_type, nil, [])
+          # LANG-NETWORK-CAPABILITY-GRAMMAR-P2: declared network policy metadata
+          # passes through verbatim (no typing, no enforcement — the values were
+          # validated as literals at parse time, OOF-NET*).
+          cap_typed["network_attributes"] = decl.fetch("network_attributes") if decl.key?("network_attributes")
+          typed_decls << cap_typed
         when "effect_binding"
           # PROP-035: effect surface binding — structurally typed as Unit
           type = type_ir("Unit")

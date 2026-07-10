@@ -141,7 +141,12 @@ module IgniterLang
           symbol_fragments[node.fetch("name")] = "escape"
           symbol_kinds[node.fetch("name")] = "capability"
           capability_declarations[node.fetch("name")] = node
-          declarations << classified_decl(node, "escape", [], [])
+          decl = classified_decl(node, "escape", [], [])
+          # LANG-NETWORK-CAPABILITY-GRAMMAR-P2: validated structured attributes
+          # pass through verbatim (declared policy metadata only). Bare
+          # capabilities carry no key — classified output stays byte-identical.
+          decl["network_attributes"] = node.fetch("network_attributes") if node.key?("network_attributes")
+          declarations << decl
         when "effect_binding"
           # PROP-035: effect <name> using <cap_ref>
           cap_ref = node.fetch("capability_ref")
