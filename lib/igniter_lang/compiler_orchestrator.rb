@@ -4,9 +4,11 @@ require "fileutils"
 require "json"
 require "pathname"
 
+require "set"
 require_relative "assembler"
 require_relative "classifier"
 require_relative "compilation_report"
+require_relative "contract_call_sugar"
 require_relative "compiler_profile_contract_validator"
 require_relative "compiler_result"
 require_relative "multifile_resolver"
@@ -173,6 +175,10 @@ module IgniterLang
       per_contract_module: {}
     )
       resolved_sample_input = sample_input || resolve_sample_input(parsed, sample_input_resolver)
+      # LANG-CONTRACT-CALL-SUGAR-P6: desugar a bare visible-contract call `Name(args)` into the
+      # static contract-call form BEFORE classify (logic + rewrite live in ContractCallSugar; parity
+      # with the Rust call_sugar pass). Orchestrator stays surface-clean per SURFACE-05.
+      ContractCallSugar.lower!(parsed)
       classified = @classifier.classify(parsed, sample_input: resolved_sample_input)
       typed = @typechecker.typecheck(classified,
         cross_module_registry: cross_module_registry,
