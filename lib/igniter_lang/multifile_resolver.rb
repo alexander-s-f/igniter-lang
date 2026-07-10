@@ -108,6 +108,9 @@ module IgniterLang
         "imports" => parsed.fetch("imports", []),
         "type_names" => parsed.fetch("types", []).map { |type| type.fetch("name") },
         "contract_names" => parsed.fetch("contracts", []).map { |contract| contract.fetch("name") },
+        # LANG-MULTIFILE-VARIANT-IMPORTABLE-NAMES-P1: variant declaration names are importable
+        # items (like type names). Separate key so dup-type checks and evidence stay unchanged.
+        "variant_names" => parsed.fetch("variants", []).map { |variant| variant.fetch("name") },
         "entrypoint" => parsed.fetch("entrypoint", nil)
       }
     end
@@ -177,7 +180,7 @@ module IgniterLang
           names = import.fetch("names", nil)
           next [] unless names
 
-          exported = target.fetch("type_names") + target.fetch("contract_names")
+          exported = target.fetch("type_names") + target.fetch("contract_names") + target.fetch("variant_names", [])
           names.reject { |name| exported.include?(name) }.map do |name|
             diagnostic(
               "OOF-IMP3",

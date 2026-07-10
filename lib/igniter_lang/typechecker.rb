@@ -3996,7 +3996,14 @@ module IgniterLang
 
       body_name = type_name(body_type)
       acc_name  = type_name(acc_type)
-      unless body_name == acc_name || body_name == "Unknown" || acc_name == "Unknown"
+      # LANG-STRING-TEXT-FOLD-ACCUMULATOR-PARITY-P1: extend the ratified String≡Text
+      # alias-compatibility (LANG-STRING-TEXT-CANONICALIZE-RUBY-P2 line) to the fold
+      # accumulator join — a String seed ("" literal) with a Text-returning lambda
+      # (concat/int_to_text/...) is the same runtime text value; Rust is already
+      # permissive here. Non-text types keep the exact-match rule.
+      text_names = %w[Text String].freeze
+      text_compatible = text_names.include?(body_name) && text_names.include?(acc_name)
+      unless body_name == acc_name || text_compatible || body_name == "Unknown" || acc_name == "Unknown"
         type_errors << oof("OOF-COL4",
           "#{qualified}: lambda return type #{body_name} does not match accumulator type #{acc_name}",
           node_name)
