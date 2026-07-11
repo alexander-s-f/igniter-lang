@@ -33,7 +33,7 @@ ModuleDecl    := "module" ModPath
 ImportDecl    := "import" ModPath ("." "{" Name ("," Name)* "}")?
 ModPath       := Name ("." Name)*
 
-TopDecl       := AssumptionsDecl | ContractDecl | TypeDecl | FunctionDecl | ExternalDecl
+TopDecl       := AssumptionsDecl | ContractDecl | TypeDecl | ConstDecl | FunctionDecl | ExternalDecl
 
 AssumptionsDecl := "assumptions" "{" AssumptionDecl* "}"
 AssumptionDecl  := "assumption" Name "{" AssumptionField* "}"
@@ -62,6 +62,13 @@ LifecycleClass:= ":local"|":session"|":window"|":durable"|":audit"
 
 TypeDecl      := "type" Name "{" FieldDecl* "}"
 FieldDecl     := Name ":" TypeRef "?"?
+
+ConstDecl     := "const" Name ":" TypeRef "=" ConstExpr
+ConstExpr     := ScalarLiteral | ConstRef | ConstArray | ConstRecord
+ConstRef      := Name
+ConstArray    := "[" (ConstExpr ("," ConstExpr)*)? "]"
+ConstRecord   := "{" (Name ":" ConstExpr ("," Name ":" ConstExpr)*)? "}"
+ScalarLiteral:= IntLit | FloatLit | StrLiteral | BoolLit
 
 FunctionDecl  := "def" Name "(" Params? ")" "->" TypeRef "{" Body "}"
 Params        := Param ("," Param)*
@@ -355,6 +362,13 @@ type ProductRef {
 - Structural (not nominal): two types with identical fields are compatible
 - Optional fields (`?`) map to `Option[T]` in TypeEnv
 - TypeDecl produces a named entry in the program's TypeEnv
+- `const` is a compile-time name for a scalar, record, or collection literal.
+  Its annotation is mandatory and is checked with the existing type/record/
+  collection rules. References may target other consts but must be acyclic.
+- Const references are fully folded and inlined before SemanticIR emission.
+  A const declaration emits no runtime node, storage segment, or VM opcode.
+  Calls, lambdas, conditionals, operators, IO, and variant constructors are not
+  part of `ConstExpr`.
 
 ---
 
@@ -368,6 +382,9 @@ import Lang.Stdlib.{ fold, map, filter }
 **Resolution rules**:
 - Module path = dotted name, no filesystem path inference
 - Import resolution is compile-time only
+- Const names are named importable items. Project `[exports]` policy gates the
+  containing module exactly as it gates types, variants, and contracts; v0 has
+  no item-level export policy.
 - Circular imports are OOF-M1
 - Unknown import is OOF-M2
 
@@ -382,6 +399,9 @@ OOF-G3  Malformed lifecycle class (not in LifecycleClass set)
 OOF-F1  Recursive def (self-reference)
 OOF-M1  Circular import
 OOF-M2  Unknown import path
+OOF-CONST-CYCLE    Direct or indirect const-reference cycle
+OOF-CONST-UNKNOWN  Const RHS references an unknown const
+OOF-CONST-LITERAL  Const RHS leaves the literal-only subgrammar
 ```
 
 **Implementation gap**: The current parser (experiments/parser/) does not

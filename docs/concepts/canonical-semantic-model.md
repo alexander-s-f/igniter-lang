@@ -59,6 +59,15 @@ Source: S3-R29-C2-P (R28 meta-card) + S3-R29-C5-P (R29 bootstrap) + S3-R34-C3-S 
 | `History[T]` type annotation | experiment-pass | Parser | `temporal` (node-level) | `temporal_semanticir_access_node/golden/history_valid.semantic_ir.json` | PROP-022, PROP-028 | P3 |
 | `BiHistory[T]` type annotation | experiment-pass | Parser | `temporal` (node-level) | `temporal_semanticir_access_node/golden/bihistory_valid.semantic_ir.json` | PROP-022, PROP-028 | P3 |
 
+### Module Constant
+
+| entity | status | pipeline_entry_point | classifier_fragment | golden_anchor | PROP | Covenant |
+|--------|--------|---------------------|---------------------|---------------|------|----------|
+| Module `const` declaration and compile-time reference | experiment-pass | Parser → ConstResolver | `core` after literal substitution | `module_const_proof/golden/module_const_inlining.json` | LANG-MODULE-CONST-PROP-P3 | P2, P11 |
+
+`const` has no SemanticIR entity of its own: the resolver replaces every use
+with existing scalar/record/array literal nodes before classification.
+
 ### Receipt
 
 | entity | status | pipeline_entry_point | classifier_fragment | golden_anchor | PROP | Covenant |

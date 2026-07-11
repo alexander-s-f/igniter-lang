@@ -40,7 +40,7 @@ module IgniterLang
   # Lexer
   # ---------------------------------------------------------------------------
   KEYWORDS = %w[
-    module import contract contract_shape type def trait impl
+    module import const contract contract_shape type def trait impl
     input output compute read snapshot window escape
     stream fold_stream
     assumptions assumption uses
@@ -285,7 +285,7 @@ module IgniterLang
       program = { "kind" => "source_file", "module" => nil, "imports" => [],
                   "traits" => [], "impls" => [], "contract_shapes" => [],
                   "contracts" => [], "types" => [], "variants" => [],  # PROP-044-P3
-                  "functions" => [],
+                  "functions" => [], "consts" => [],
                   "pipelines" => [], "olap_points" => [], "assumptions" => [],
                   "entrypoint" => nil, # PROP-ENTRYPOINT-P3
                   "profiles" => [],        # PROP-040
@@ -324,6 +324,7 @@ module IgniterLang
         when "contract_shape" then program["contract_shapes"] << decl
         when "contract"       then program["contracts"]       << decl
         when "type"           then program["types"]           << decl
+        when "const"          then program["consts"]          << decl
         when "variant"        then program["variants"]        << decl  # PROP-044-P3
         when "function"       then program["functions"]       << decl
         when "pipeline"       then program["pipelines"]       << decl
@@ -459,6 +460,7 @@ module IgniterLang
           nil
         end
       when "type"           then advance; parse_type_decl
+      when "const"          then advance; parse_const_decl
       when "variant"        then advance; parse_variant_decl    # PROP-044-P3
       when "def"            then advance; parse_function_decl
       when "pipeline"       then advance; parse_pipeline_decl
@@ -471,6 +473,65 @@ module IgniterLang
         @errors << { "message" => "Unexpected token: #{tok.value}", "line" => tok.line }
         advance
         nil
+      end
+    end
+
+    # LANG-MODULE-CONST-PROP-P3: deliberately strict literal-only subgrammar.
+    def parse_const_decl
+      name = name_token!(%i[ident])
+      expect_type!(:colon)
+      type_annotation = parse_type_ref
+      expect_type!(:assign)
+      { "kind" => "const", "name" => name, "type_annotation" => type_annotation,
+        "expr" => parse_const_expr }
+    rescue ParseError => e
+      @errors << { "rule" => "OOF-CONST-LITERAL", "severity" => "error",
+                   "message" => e.message, "line" => e.line, "col" => e.col }
+      { "kind" => "const", "name" => (name || "<invalid>"),
+        "type_annotation" => type_annotation, "expr" => { "kind" => "error" } }
+    end
+
+    def parse_const_expr
+      tok = peek
+      case tok.type
+      when :int_lit
+        advance; { "kind" => "literal", "value" => tok.value, "type_tag" => "Integer" }
+      when :float_lit
+        advance; { "kind" => "literal", "value" => tok.value, "type_tag" => "Float" }
+      when :string_lit
+        advance; { "kind" => "literal", "value" => tok.value, "type_tag" => "String" }
+      when :bool_lit
+        advance; { "kind" => "literal", "value" => tok.value == "true", "type_tag" => "Bool" }
+      when :ident
+        advance
+        if peek_type?(:lparen) || peek_type?(:lbrace)
+          raise ParseError.new("const RHS reference cannot be called or constructed", tok.line, tok.col)
+        end
+        { "kind" => "ref", "name" => tok.value }
+      when :lbracket
+        advance
+        items = []
+        until peek_type?(:rbracket) || peek_type?(:eof)
+          items << parse_const_expr
+          break unless peek_type?(:comma)
+          advance
+        end
+        expect_type!(:rbracket)
+        { "kind" => "array_literal", "items" => items }
+      when :lbrace
+        advance
+        fields = {}
+        until peek_type?(:rbrace) || peek_type?(:eof)
+          key = name_token!(%i[ident keyword])
+          expect_type!(:colon)
+          fields[key] = parse_const_expr
+          break unless peek_type?(:comma)
+          advance
+        end
+        expect_type!(:rbrace)
+        { "kind" => "record_literal", "fields" => fields }
+      else
+        raise ParseError.new("const RHS must be a scalar, record, array, or const reference", tok.line, tok.col)
       end
     end
 
@@ -3236,6 +3297,7 @@ module IgniterLang
         "types"           => @ast["types"],
         "variants"        => @ast.fetch("variants", []),         # PROP-044-P3
         "functions"       => @ast["functions"],
+        "consts"          => @ast.fetch("consts", []),
         "pipelines"       => @ast.fetch("pipelines", []),
         "olap_points"     => @ast.fetch("olap_points", []),
         "assumptions"     => @ast.fetch("assumptions", []),

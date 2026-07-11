@@ -1,0 +1,17 @@
+{
+  "source": "const song : Collection[Track] = [kick]",
+  "use": "compute tracks : Collection[Track] = song",
+  "resolved_expr": {
+    "kind": "array_literal",
+    "items": [
+      {
+        "kind": "record_literal",
+        "fields": {
+          "gain": { "kind": "literal", "value": 100, "type_tag": "Integer" },
+          "instrument": { "kind": "literal", "value": "kick", "type_tag": "String" }
+        }
+      }
+    ]
+  },
+  "runtime_const_nodes": 0
+}

@@ -9,6 +9,7 @@ require_relative "assembler"
 require_relative "classifier"
 require_relative "compilation_report"
 require_relative "contract_call_sugar"
+require_relative "const_resolver"
 require_relative "compiler_profile_contract_validator"
 require_relative "compiler_result"
 require_relative "multifile_resolver"
@@ -64,6 +65,7 @@ module IgniterLang
       source_path = Pathname.new(source_path)
       out_path = Pathname.new(out_path)
       parsed = ParsedProgram.parse(File.read(source_path, encoding: "utf-8"), source_path: source_path.to_s).to_h
+      parsed["parse_errors"].concat(ConstResolver.resolve_single!(parsed)) if parsed.fetch("parse_errors").empty?
       return parse_failure(parsed, source_path, out_path) unless parsed.fetch("parse_errors").empty?
 
       # LANG-STDLIB-IMPORT-VALIDATION-FLAT-PARITY-P1 (FRUT-P07 / IGDB-P08 residual):

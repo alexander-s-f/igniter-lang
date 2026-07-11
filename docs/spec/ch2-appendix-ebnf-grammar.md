@@ -26,6 +26,7 @@ ModPath         ::= Name ("." Name)*
 TopDecl         ::= AssumptionsDecl
                   | ContractDecl
                   | TypeDecl
+                  | ConstDecl
                   | FunctionDecl
                   | ExternalDecl
                   | TraitDecl
@@ -38,6 +39,19 @@ TopDecl         ::= AssumptionsDecl
 ---
 
 ## 3. Top-Level Declarations
+
+### 3.0 Module Constants
+```ebnf
+ConstDecl        ::= "const" Name ":" TypeRef "=" ConstExpr
+ConstExpr        ::= ScalarLiteral | Name | ConstArray | ConstRecord
+ConstArray       ::= "[" (ConstExpr ("," ConstExpr)*)? "]"
+ConstRecord      ::= "{" (Name ":" ConstExpr ("," Name ":" ConstExpr)*)? "}"
+ScalarLiteral   ::= IntLit | FloatLit | StrLiteral | BoolLit
+```
+
+Const `Name` references resolve only to module-local or explicitly imported
+const declarations and must form a DAG. Resolution substitutes fully folded
+literal trees before SemanticIR emission; there is no const runtime node.
 
 ### 3.1 Traits & Polymorphism
 ```ebnf

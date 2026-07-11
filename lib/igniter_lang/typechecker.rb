@@ -237,6 +237,7 @@ module IgniterLang
       typed_contracts = classified_program.fetch("contracts").map do |contract|
         typecheck_contract(contract)
       end
+      const_errors, const_warnings = typecheck_consts(classified_program.fetch("const_declarations", []))
       cycle_errors = detect_uses_cycles(typed_contracts)
       entrypoint_errors, resolved_entrypoint = validate_entrypoint(classified_program)
 
@@ -299,14 +300,14 @@ module IgniterLang
         "module" => classified_program.fetch("module"),
         "type_env" => @type_shapes,
         "contracts" => typed_contracts,
-        "type_errors" => typed_contracts.flat_map { |contract| contract.fetch("type_errors") } + module_reserved_errors + entrypoint_errors + cycle_errors + function_errors + shape_conformance_errors(classified_program),
+        "type_errors" => typed_contracts.flat_map { |contract| contract.fetch("type_errors") } + const_errors + module_reserved_errors + entrypoint_errors + cycle_errors + function_errors + shape_conformance_errors(classified_program),
         "semantic_ir_ref" => nil
       }
       result["entrypoint"] = resolved_entrypoint if resolved_entrypoint
       result["assumption_registry"] = @assumption_registry unless @assumption_registry.empty?
       result["variant_env"] = @variant_shapes unless @variant_shapes.empty?  # PROP-044 P5
       result["olap_points"] = @olap_env.values.map { |decl| decl.fetch("semantic_node") } unless @olap_env.empty?
-      type_warnings = typed_contracts.flat_map { |contract| contract.fetch("type_warnings", []) }
+      type_warnings = typed_contracts.flat_map { |contract| contract.fetch("type_warnings", []) } + const_warnings
       result["type_warnings"] = type_warnings unless type_warnings.empty?
       # PROP-045: propagate module-level intent_text
       module_intent = classified_program.fetch("intent_text", nil)
@@ -315,6 +316,46 @@ module IgniterLang
     end
 
     private
+
+    def typecheck_consts(consts)
+      errors = []
+      warnings = []
+      consts.each do |decl|
+        name = decl.fetch("name")
+        expected = type_ir(decl.fetch("type_annotation"))
+        validate_const_literal_shape(
+          decl.fetch("resolved_expr", decl.fetch("expr")), expected, errors, name
+        )
+      end
+      [errors, warnings]
+    end
+
+    def validate_const_literal_shape(expr, expected, errors, node_name)
+      case expr.fetch("kind", nil)
+      when "literal"
+        actual = type_ir(expr.fetch("type_tag"))
+        return if structurally_assignable?(actual, expected) ||
+                  (type_name(expected) == "Decimal" && type_name(actual) == "Float")
+      when "array_literal"
+        if type_name(expected) == "Collection" && expected.fetch("params", []).length == 1
+          element_type = expected.fetch("params").first
+          expr.fetch("items").each do |item|
+            validate_const_literal_shape(item, element_type, errors, node_name)
+          end
+          return
+        end
+      when "record_literal"
+        shape = @type_shapes[type_name(expected)]
+        fields = expr.fetch("fields")
+        if shape && fields.keys.sort == shape.keys.sort
+          fields.each do |field_name, value|
+            validate_const_literal_shape(value, shape.fetch(field_name), errors, node_name)
+          end
+          return
+        end
+      end
+      errors << oof("OOF-TY0", "const '#{node_name}' does not match its declared type", node_name)
+    end
 
     def program_id(classified_program)
       seed = [

@@ -6,6 +6,7 @@ require "pathname"
 require "set"
 
 require_relative "parser"
+require_relative "const_resolver"
 
 module IgniterLang
   class MultifileResolver
@@ -29,6 +30,9 @@ module IgniterLang
       by_module = sorted.to_h { |unit| [unit.fetch("module"), unit] }
       import_diagnostics = validate_imports(sorted, by_module)
       return failure(sorted, import_diagnostics) unless import_diagnostics.empty?
+
+      const_diagnostics = ConstResolver.resolve_programs!(sorted.map { |unit| unit.fetch("parsed") })
+      return failure(sorted, const_diagnostics) unless const_diagnostics.empty?
 
       cycle = import_cycle(sorted)
       return failure(sorted, [cycle_diagnostic(cycle)]) if cycle
@@ -128,6 +132,7 @@ module IgniterLang
         "imports" => parsed.fetch("imports", []),
         "type_names" => parsed.fetch("types", []).map { |type| type.fetch("name") },
         "contract_names" => parsed.fetch("contracts", []).map { |contract| contract.fetch("name") },
+        "const_names" => parsed.fetch("consts", []).map { |decl| decl.fetch("name") },
         # LANG-MULTIFILE-VARIANT-IMPORTABLE-NAMES-P1: variant declaration names are importable
         # items (like type names). Separate key so dup-type checks and evidence stay unchanged.
         "variant_names" => parsed.fetch("variants", []).map { |variant| variant.fetch("name") },
@@ -184,7 +189,7 @@ module IgniterLang
           names = import.fetch("names", nil)
           next [] unless names
 
-          exported = target.fetch("type_names") + target.fetch("contract_names") + target.fetch("variant_names", [])
+          exported = target.fetch("type_names") + target.fetch("contract_names") + target.fetch("variant_names", []) + target.fetch("const_names", [])
           names.reject { |name| exported.include?(name) }.map do |name|
             diagnostic(
               "OOF-IMP3",
@@ -333,6 +338,7 @@ module IgniterLang
         "types" => units.flat_map { |unit| unit.fetch("parsed").fetch("types", []) },
         "variants" => units.flat_map { |unit| unit.fetch("parsed").fetch("variants", []) },
         "functions" => units.flat_map { |unit| unit.fetch("parsed").fetch("functions", []) },
+        "consts" => units.flat_map { |unit| unit.fetch("parsed").fetch("consts", []) },
         "pipelines" => units.flat_map { |unit| unit.fetch("parsed").fetch("pipelines", []) },
         "olap_points" => units.flat_map { |unit| unit.fetch("parsed").fetch("olap_points", []) },
         "assumptions" => units.flat_map { |unit| unit.fetch("parsed").fetch("assumptions", []) },

@@ -46,6 +46,8 @@ module IgniterLang
       # OOF-L4: pass def functions through for typechecker recursion check
       functions = parsed_program.fetch("functions", [])
       result["functions"] = functions unless functions.empty?
+      consts = parsed_program.fetch("consts", [])
+      result["const_declarations"] = consts unless consts.empty?
       # PROP-045: propagate module-level intent_text
       module_intent = parsed_program.fetch("intent_text", nil)
       result["intent_text"] = module_intent if module_intent
