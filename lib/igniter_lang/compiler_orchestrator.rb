@@ -66,6 +66,16 @@ module IgniterLang
       parsed = ParsedProgram.parse(File.read(source_path, encoding: "utf-8"), source_path: source_path.to_s).to_h
       return parse_failure(parsed, source_path, out_path) unless parsed.fetch("parse_errors").empty?
 
+      # LANG-STDLIB-IMPORT-VALIDATION-FLAT-PARITY-P1 (FRUT-P07 / IGDB-P08 residual):
+      # flat single-file compiles used to accept bogus stdlib imports silently while
+      # the multifile path failed closed (OOF-IMP2/OOF-IMP3). Validate stdlib.*
+      # imports here with the SAME inventory-derived table as the multifile path.
+      stdlib_import_diags = MultifileResolver.new.flat_stdlib_import_diagnostics(parsed)
+      unless stdlib_import_diags.empty?
+        report = flat_import_validation_failure_report(parsed, stdlib_import_diags)
+        return refusal(report, source_path, out_path, status: "oof")
+      end
+
       compile_parsed(
         parsed: parsed,
         source_path: source_path,
@@ -288,6 +298,37 @@ module IgniterLang
         },
         "diagnostics" => Diagnostics.enrich(
           resolved.fetch("diagnostics"),
+          category: Diagnostics::CATEGORIES.fetch(:classified)
+        ),
+        "semantic_ir_ref" => nil
+      }
+    end
+
+    # LANG-STDLIB-IMPORT-VALIDATION-FLAT-PARITY-P1: OOF report for a flat single-file
+    # compile whose stdlib.* imports failed inventory validation. Shape mirrors the
+    # Rust flat path (stages.import_validation = "oof") and the multifile failure
+    # report (pass_result "oof", enriched diagnostics, emission skipped).
+    def flat_import_validation_failure_report(parsed, diagnostics)
+      source_hash = parsed.fetch("source_hash", nil) ||
+                    "sha256:#{Digest::SHA256.hexdigest(parsed.fetch("source", "").to_s)}"
+      digest = source_hash.delete_prefix("sha256:")[0, 16]
+      {
+        "kind" => "compilation_report",
+        "format_version" => FORMAT_VERSION,
+        "program_id" => "compilation_report/import_validation/#{digest}",
+        "grammar_version" => parsed.fetch("grammar_version", "igniter-v0"),
+        "source_hash" => source_hash,
+        "source_path" => parsed.fetch("source_path", nil),
+        "pass_result" => "oof",
+        "stages" => {
+          "parse" => "ok",
+          "import_validation" => "oof",
+          "classify" => "skipped",
+          "typecheck" => "skipped",
+          "emit" => "skipped"
+        },
+        "diagnostics" => Diagnostics.enrich(
+          diagnostics,
           category: Diagnostics::CATEGORIES.fetch(:classified)
         ),
         "semantic_ir_ref" => nil

@@ -56,6 +56,26 @@ module IgniterLang
       }
     end
 
+    # LANG-STDLIB-IMPORT-VALIDATION-FLAT-PARITY-P1 (FRUT-P07 / IGDB-P08 residual):
+    # flat single-file compiles used to accept bogus stdlib imports silently while
+    # the multifile path failed closed. This is the flat-path hook (used by
+    # CompilerOrchestrator#compile): validate a parsed unit's `stdlib.*` imports
+    # against the SAME inventory-derived table as the multifile path — unknown
+    # namespace -> OOF-IMP2, unknown item in a known namespace -> OOF-IMP3.
+    # Non-stdlib imports are intentionally untouched (flat mode has no module
+    # universe to resolve them against; that boundary is unchanged by this card).
+    def flat_stdlib_import_diagnostics(parsed)
+      module_path = parsed.fetch("module", nil).to_s
+      source_path = parsed.fetch("source_path", nil)
+      parsed
+        .fetch("imports", [])
+        .select { |import| stdlib_path?(import.fetch("module_path")) }
+        .sort_by { |import| import.fetch("module_path") }
+        .flat_map do |import|
+          stdlib_import_diagnostics(import, module_path: module_path, source_path: source_path)
+        end
+    end
+
     private
 
     # LANG-TYPED-CONTRACT-REF-PROP-P5: build per-module contract signature registry.
@@ -141,29 +161,13 @@ module IgniterLang
         unit.fetch("imports").flat_map do |import|
           import_path = import.fetch("module_path")
           if stdlib_path?(import_path)
-            unless stdlib_module_known?(import_path)
-              next [diagnostic(
-                "OOF-IMP2",
-                "unknown stdlib module path '#{import_path}' from module '#{unit.fetch("module")}'",
-                "import:#{import_path}",
-                source_path: unit.fetch("source_path"),
-                module_path: unit.fetch("module"),
-                import_path: import_path
-              )]
-            end
-            names = import.fetch("names", nil)
-            next [] unless names
-            next names.reject { |name| stdlib_name_known?(import_path, name) }.map do |name|
-              diagnostic(
-                "OOF-IMP3",
-                "unknown name '#{name}' in stdlib module '#{import_path}'",
-                "import:#{import_path}.{#{name}}",
-                source_path: unit.fetch("source_path"),
-                module_path: unit.fetch("module"),
-                import_path: import_path,
-                missing_name: name
-              )
-            end
+            # LANG-STDLIB-IMPORT-VALIDATION-FLAT-PARITY-P1: shared per-import stdlib
+            # validation (same helper serves the flat single-file path).
+            next stdlib_import_diagnostics(
+              import,
+              module_path: unit.fetch("module"),
+              source_path: unit.fetch("source_path")
+            )
           end
           target = by_module[import_path]
           unless target
@@ -198,6 +202,39 @@ module IgniterLang
 
     def stdlib_path?(import_path)
       import_path.start_with?("stdlib.")
+    end
+
+    # LANG-STDLIB-IMPORT-VALIDATION-FLAT-PARITY-P1: stdlib import validation for ONE
+    # import, shared by the multifile path (validate_imports) and the flat path
+    # (flat_stdlib_import_diagnostics). One source of truth: the allowlist is DERIVED
+    # from the canon inventory (stdlib_module_table). Aliases (`source_alias` names
+    # like `stdlib.numeric.*`) stay callable, not importable.
+    def stdlib_import_diagnostics(import, module_path:, source_path:)
+      import_path = import.fetch("module_path")
+      unless stdlib_module_known?(import_path)
+        return [diagnostic(
+          "OOF-IMP2",
+          "unknown stdlib module path '#{import_path}' from module '#{module_path}'",
+          "import:#{import_path}",
+          source_path: source_path,
+          module_path: module_path,
+          import_path: import_path
+        )]
+      end
+      names = import.fetch("names", nil)
+      return [] unless names
+
+      names.reject { |name| stdlib_name_known?(import_path, name) }.sort.map do |name|
+        diagnostic(
+          "OOF-IMP3",
+          "unknown name '#{name}' in stdlib module '#{import_path}'",
+          "import:#{import_path}.{#{name}}",
+          source_path: source_path,
+          module_path: module_path,
+          import_path: import_path,
+          missing_name: name
+        )
+      end
     end
 
     def stdlib_module_known?(import_path)
