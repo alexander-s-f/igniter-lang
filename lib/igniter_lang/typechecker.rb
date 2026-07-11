@@ -1776,6 +1776,11 @@ module IgniterLang
       when *IO_STDLIB_FNS.keys
         # LANG-RUBY-IO-TYPECHECK-COMPILE-PARITY-P3: stdlib.IO.* -> Result[ok, IoError].
         infer_io_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
+      when "stdlib.net.request"
+        # LAB-STDLIB-NET-REQUEST-RESPONSE-SEAM-P5: stdlib.net.request(NetRequest, IO.NetworkCapability)
+        # -> Result[NetResponse, NetError]. NetRequest/NetResponse/NetError are app-declared types
+        # named by the signature (the same stringly convention IO uses for WriteReceipt/IoError).
+        infer_net_request_call(args, symbol_types, type_errors, type_warnings, node_name)
       when "at"
         # LANG-STDLIB-COLLECTION-AT-RUBY-P3 (admitted by -AT-PROP-P1): at(Collection[T], Integer) ->
         # Option[T]. A reader, not a HOF (no lambda). Element type via the first/last path; index
@@ -3702,6 +3707,27 @@ module IgniterLang
     # arity, OOF-TY0 for argument-type mismatches (String/Text and Unknown are both accepted for
     # text args; the trailing capability arg must resolve to the IO.Capability sentinel). Result
     # is always Result[ok, IoError]. Compile parity ONLY — execution stays VM/host.
+    # LAB-STDLIB-NET-REQUEST-RESPONSE-SEAM-P5: the first `.ig`-callable network sink.
+    #   stdlib.net.request(NetRequest, IO.NetworkCapability) -> Result[NetResponse, NetError]
+    # arg0 must be a NetRequest; arg1 is the capability slot (unchecked, like the IO cap arg). The
+    # unknown-preserving NetError variants + runtime enforcement live on the VM.
+    def infer_net_request_call(args, symbol_types, type_errors, type_warnings, node_name)
+      typed_args = args.map { |arg| infer_expr(arg, symbol_types, type_errors, type_warnings, node_name) }
+      deps = typed_args.flat_map { |arg| arg.fetch("deps", []) }.uniq
+      if typed_args.length != 2
+        type_errors << oof("OOF-TM1",
+          "stdlib.net.request: expected 2 arguments (request, capability), got #{typed_args.length}",
+          node_name)
+      else
+        got = type_name(typed_args[0].fetch("resolved_type"))
+        unless got == "Unknown" || got == "NetRequest"
+          type_errors << oof("OOF-TY0", "stdlib.net.request arg 0: expected NetRequest, got #{got}", node_name)
+        end
+      end
+      result_type = { "name" => "Result", "params" => [type_ir("NetResponse"), type_ir("NetError")] }
+      typed_expr("call", result_type, deps, "fn" => "stdlib.net.request", "args" => typed_args)
+    end
+
     def infer_io_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
       spec = IO_STDLIB_FNS.fetch(fn)
       typed_args = args.map { |arg| infer_expr(arg, symbol_types, type_errors, type_warnings, node_name) }
