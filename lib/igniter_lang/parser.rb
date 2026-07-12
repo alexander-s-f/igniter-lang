@@ -31,7 +31,7 @@ module IgniterLang
     symbol_lit lbrace rbrace lparen rparen lbracket rbracket
     dot dot_dot comma colon double_colon dot_dot_dot arrow fat_arrow left_arrow
     op assign pipe question bang
-    newline eof comment
+    newline eof comment illegal
   ].freeze
 
   Token = Struct.new(:type, :value, :line, :col)
@@ -206,14 +206,49 @@ module IgniterLang
       end
     end
 
+    # LANG-RUBY-STRING-ESCAPES-PARITY-P2: decode the same minimal conventional escape
+    # set the Rust lexer already decodes (`\"` `\\` `\n` `\t` `\r`; see igniter-compiler
+    # src/lexer.rs `read_string`, LAB-LANG-STRING-ESCAPES-P1). An invalid escape or an
+    # unterminated string (including a trailing backslash at EOF) returns an `:illegal`
+    # token carrying the reason in `value` — mirrors Rust's `Illegal` token exactly, so
+    # the parser can surface it as a bounded `OOF-LEX1` diagnostic instead of silently
+    # mis-tokenizing (the old loop here read a `\` as a literal char and let the NEXT
+    # `"` close the string, desyncing every following token — see mesh_net_io.ig repro
+    # in lang-ruby-string-escapes-parity-p2-v0.md). Ordinary escape-free strings are
+    # byte-for-byte unchanged.
     def read_string(l, c)
       advance # consume opening "
       buf = +""
-      until peek == '"' || @pos >= @source.length
-        buf << advance
+      loop do
+        if @pos >= @source.length
+          return Token.new(:illegal, "unterminated string literal", l, c)
+        end
+        ch = peek
+        case ch
+        when '"'
+          advance # consume closing "
+          return Token.new(:string_lit, buf, l, c)
+        when "\\"
+          advance # consume the backslash
+          if @pos >= @source.length
+            return Token.new(:illegal, "unterminated string literal (trailing backslash)", l, c)
+          end
+          esc = peek
+          decoded = case esc
+                    when '"'  then '"'
+                    when "\\" then "\\"
+                    when "n"  then "\n"
+                    when "t"  then "\t"
+                    when "r"  then "\r"
+                    else
+                      return Token.new(:illegal, "invalid string escape: \\#{esc}", l, c)
+                    end
+          advance # consume the escape char
+          buf << decoded
+        else
+          buf << advance
+        end
       end
-      advance # consume closing "
-      Token.new(:string_lit, buf, l, c)
     end
 
     def read_number(l, c)
@@ -316,8 +351,32 @@ module IgniterLang
       end
 
       # top-level declarations
-      until peek_type?(:eof)
-        decl = parse_top_decl
+      #
+      # LANG-RUBY-STRING-ESCAPES-PARITY-P2: `parse_top_decl` can raise `ParseError` from a
+      # nested `expect_type!`/`expect_kw!`/`expect_value!` with no local rescue (e.g. an
+      # `:illegal` string-escape token — invalid escape / trailing backslash / unterminated
+      # string — that swallows the rest of the source to EOF, so the enclosing `expect_type!
+      # (:rbrace)` finds EOF instead). Rust's `pub fn parse(&mut self) -> SourceFile` NEVER
+      # raises: its top-level loop is `match self.parse_top_decl() { Ok(..) => .., _ =>
+      # self.advance() }`, so any parse error anywhere always resolves to a recorded
+      # diagnostic plus one-token resync, never a panic (src/parser.rs `parse`, ~line 1039).
+      # This rescue is the Ruby-side mirror of that same guarantee — it does not change
+      # what a WELL-FORMED program parses to (no local rescue existed here before because
+      # none was needed), it only stops a malformed one from raising past `Parser#parse`.
+      # `|| peek.nil?` guards a case `expect_type!`/friends already exhibited before this
+      # rescue existed (see the sibling LANG-RUBY-VARIANT-MATCH-PARSER-P1 note on
+      # `parse_primary`'s catch-all): those helpers `advance` the eof sentinel itself
+      # before raising, so by the time the rescue below runs `peek` may already be past
+      # the token array's end (nil) rather than sitting on `:eof` — treat both as "done".
+      until peek_type?(:eof) || peek.nil?
+        decl =
+          begin
+            parse_top_decl
+          rescue ParseError => e
+            @errors << { "message" => e.message, "line" => e.line, "col" => e.col }
+            advance if peek && !peek_type?(:eof)
+            nil
+          end
         case decl&.fetch("kind")
         when "trait"          then program["traits"]          << decl
         when "impl"           then program["impls"]           << decl
@@ -2938,6 +2997,15 @@ module IgniterLang
         advance; { "kind" => "literal", "value" => tok.value, "type_tag" => "Float" }
       when :string_lit
         advance; { "kind" => "literal", "value" => tok.value, "type_tag" => "String" }
+      # LANG-RUBY-STRING-ESCAPES-PARITY-P2: a malformed lexeme (invalid escape /
+      # unterminated string). `tok.value` carries the lexer's reason — surface it
+      # verbatim as OOF-LEX1, mirroring Rust's `TokenType::Illegal` handling in
+      # `parse_primary` (igniter-compiler src/parser.rs) exactly.
+      when :illegal
+        reason = tok.value
+        advance
+        add_parse_error(rule: "OOF-LEX1", message: reason, token: reason, line: tok.line, col: tok.col)
+        { "kind" => "error", "token" => reason }
       when :symbol_lit
         advance; { "kind" => "symbol", "value" => tok.value }
       when :bool_lit

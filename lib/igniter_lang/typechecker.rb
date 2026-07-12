@@ -72,9 +72,14 @@ module IgniterLang
     # PROP-043: Map[String,V] stdlib function registry (v0 — exhaustive, not user-extensible).
     # Short source names → qualified SemanticIR names (same pattern as TEXT_STDLIB_FNS).
     # Adding an entry requires a new PROP amendment and P3+ authorization.
+    # LANG-RUBY-MAP-GET-STRING-PARITY-P1 (IGMESH-P15): map_get_string added to close the one
+    # Rust-only gap found by a whole-family audit (igniter-compiler/src/typechecker/
+    # stdlib_calls.rs — "map_get" | "map_has_key" | "map_get_string" | "map_from_pairs" |
+    # "map_empty" is the exhaustive Rust set; map_get_string was the only one missing here).
     MAP_STDLIB_FNS = {
       "map_get"        => { qualified_name: "stdlib.map.get",        arity: 2 },
       "map_has_key"    => { qualified_name: "stdlib.map.has_key",    arity: 2 },
+      "map_get_string" => { qualified_name: "stdlib.map.get_string", arity: 2 },
       "map_from_pairs" => { qualified_name: "stdlib.map.from_pairs", arity: 1 },
       "map_empty"      => { qualified_name: "stdlib.map.empty",      arity: 0 },
     }.freeze
@@ -3392,6 +3397,8 @@ module IgniterLang
         infer_map_get(args, symbol_types, type_errors, type_warnings, node_name)
       when "map_has_key"
         infer_map_has_key(args, symbol_types, type_errors, type_warnings, node_name)
+      when "map_get_string"
+        infer_map_get_string(args, symbol_types, type_errors, type_warnings, node_name)
       when "map_from_pairs"
         infer_map_from_pairs(args, symbol_types, type_errors, type_warnings, node_name)
       when "map_empty"
@@ -3457,6 +3464,47 @@ module IgniterLang
       deps = (map_arg.fetch("deps", []) + key_arg.fetch("deps", [])).uniq
       typed_expr("call", type_ir("Bool"), deps,
                  "fn" => "stdlib.map.has_key", "args" => [map_arg, key_arg])
+    end
+
+    # Rule MAP-GET-STRING (LANG-RUBY-MAP-GET-STRING-PARITY-P1 / IGMESH-P15):
+    # map_get_string(Map[String,V], String) → Option[String]. Typed, fail-closed string
+    # extractor — stricter than map_get: Some ONLY for a present STRING value; None for
+    # missing / non-string / null (VM-side semantics, not re-validated here). A clearly
+    # non-Map first arg or non-String key is a typecheck error; Unknown is accepted for
+    # dynamic inputs like `req.body_json`. Mirrors
+    # igniter-compiler/src/typechecker/stdlib_calls.rs "map_get_string" arm exactly
+    # (same two OOF-TY0 messages, same arity check, always Option[String] regardless of
+    # the map's declared value type or of any diagnostic emitted above).
+    def infer_map_get_string(args, symbol_types, type_errors, type_warnings, node_name)
+      unless args.length == 2
+        type_errors << oof("OOF-TY0",
+          "stdlib.map.get_string: expected 2 arguments (map, key), got #{args.length}",
+          node_name)
+        return typed_expr("call", option_type_ir(type_ir("String")), [],
+                           "fn" => "stdlib.map.get_string", "args" => [])
+      end
+
+      map_arg = infer_expr(args[0], symbol_types, type_errors, type_warnings, node_name)
+      key_arg = infer_expr(args[1], symbol_types, type_errors, type_warnings, node_name)
+
+      map_name = type_name(map_arg.fetch("resolved_type"))
+      unless map_name == "Map" || map_name == "Unknown"
+        type_errors << oof("OOF-TY0",
+          "stdlib.map.get_string arg 1: expected Map[String, V], got #{map_name}",
+          node_name)
+      end
+
+      key_name = type_name(key_arg.fetch("resolved_type"))
+      unless key_name == "String" || key_name == "Unknown"
+        type_errors << oof("OOF-TY0",
+          "stdlib.map.get_string arg 2: expected String key, got #{key_name}",
+          node_name)
+      end
+
+      # Always Option[String] (the typed contract), regardless of the map's value type.
+      deps = (map_arg.fetch("deps", []) + key_arg.fetch("deps", [])).uniq
+      typed_expr("call", option_type_ir(type_ir("String")), deps,
+                 "fn" => "stdlib.map.get_string", "args" => [map_arg, key_arg])
     end
 
     # Rule MAP-FROM-PAIRS: map_from_pairs(Collection[PairRecord]) → Map[String,V]
@@ -4793,7 +4841,18 @@ module IgniterLang
         if arm_fields.key?(fname)
           expected = arm_fields[fname]
           actual   = typed_f.fetch("resolved_type")
-          unless type_name(actual) == type_name(expected) || type_name(actual) == "Unknown"
+          # LANG-RUBY-UNKNOWN-FIELD-ASSIGNABILITY-PARITY-P1: a variant field declared `Unknown`
+          # is an OPEN wildcard position (e.g. `Decision::RespondJson.body`) — it accepts any
+          # concrete actual value, validated downstream (host/VM), never here. Mirrors Rust's D3
+          # rule in `IgType::structurally_assignable` ("expected Unknown accepts any") as applied
+          # manually at this exact call site (igniter-compiler/src/typechecker.rs ~6340-6342:
+          # `actual_name != expected_name && actual_name != "Unknown" && expected_name != "Unknown"`).
+          # The pre-existing `type_name(actual) == "Unknown"` arm (an Unknown-typed VALUE flowing
+          # into a concrete-typed slot) is untouched — Rust already treats that direction the same
+          # way at this site, so no loosening is needed there.
+          unless type_name(actual) == type_name(expected) ||
+                 type_name(actual) == "Unknown" ||
+                 type_name(expected) == "Unknown"
             type_errors << oof("OOF-KIND2",
               "#{variant_name}::#{arm_name} field '#{fname}': " \
               "expected #{type_name(expected)}, got #{type_name(actual)}",
