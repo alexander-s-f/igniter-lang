@@ -3579,15 +3579,39 @@ module IgniterLang
                  "fn" => "stdlib.map.from_pairs", "args" => [pairs_arg])
     end
 
-    # Infer value type V from a Collection[PairRecord] type for map_from_pairs.
-    # Looks up @type_shapes[elem_name]["value"]. Silent Unknown on any miss.
+    # Infer value type V from a Collection[Pair[K, V]] (or Collection[NamedRecord]) type for
+    # map_from_pairs. Two element shapes are recognized:
+    #
+    #  1. LANG-STDLIB-MAP-RUNTIME-P1: the generic `Pair[K, V]` type IR `zip` produces
+    #     (`{"name" => "Pair", "params" => [K, V]}`, runtime fields `first`/`second` — the v0
+    #     authorized shape this card's Map runtime executes). V is `params[1]` directly, mirroring
+    #     the Rust lab compiler's `get_param(pair_ty, 1)` in stdlib_calls.rs. Checked FIRST since it
+    #     is the only shape the VM constructor (`map_from_pairs_value` in igniter-vm) actually
+    #     accepts at runtime. Before this card, `map_from_pairs(zip(...))` silently fell through to
+    #     `Map[String, Unknown]` regardless of the zipped value type — verified as an actual
+    #     `OOF-TY1` output-type-mismatch compile failure against a valid `Map[String, Integer]`
+    #     output annotation.
+    #  2. LAB-RECORD-MAP-P1 (C1 fix, pre-existing): a named `type`-declared Record used as the pair
+    #     element (e.g. `HeaderPair { key: String, value: String }`) infers V from that record's own
+    #     "value" field via `@type_shapes` — a Ruby-canon-only typecheck convenience (no VM
+    #     constructor arm consumes this shape; canon has no collection-HOF interpreter, so this path
+    #     is typecheck/emit parity only, never executed). Preserved verbatim to avoid regressing the
+    #     `verify_prop043_map_production.rb` MAP-D3/MAP-F6/MAP-BRIDGE proofs.
     def infer_from_pairs_value_type(pairs_type)
       return type_ir("Unknown") unless type_name(pairs_type) == "Collection"
 
       elem_params = pairs_type.fetch("params", [])
       return type_ir("Unknown") if elem_params.empty?
 
-      elem_type_name = type_name(elem_params[0])
+      elem_type = elem_params[0]
+      elem_type_name = type_name(elem_type)
+
+      if elem_type_name == "Pair"
+        pair_params = elem_type.is_a?(Hash) ? elem_type.fetch("params", []) : []
+        value_type = pair_params[1]
+        return value_type if value_type.is_a?(Hash)
+      end
+
       if @type_shapes&.key?(elem_type_name)
         value_field = @type_shapes[elem_type_name]["value"]
         return value_field if value_field

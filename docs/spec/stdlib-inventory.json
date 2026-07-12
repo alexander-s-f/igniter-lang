@@ -1,8 +1,8 @@
 {
   "kind": "stdlib_inventory",
   "format_version": "v0",
-  "stdlib_surface_digest": "4bb845c6d06a42617849f5a0548d50270fefb61349456645d72cdb34c4d7684f",
-  "note": "Normatively referenced by Ch8. Digest is computed from canonical re-serialization of entries sorted by canonical_name with entry_digest fields stripped — never from raw file bytes. P3 proof verifies determinism. P5 adds stdlib.collection.map + stdlib.collection.filter entries and updates stdlib.collection.count proof_lineage. CONSTRUCT-P1 adds stdlib.decimal.decimal (explicit Decimal constructor) and recomputes the digest. FLATMAP-P5 adds stdlib.collection.flat_map and recomputes the digest. PREDICATE-OPS-P4 adds stdlib.collection.find/any/all and recomputes the digest. LANG-STDLIB-NUMERIC-TEXT-CONVERSION-P1 adds stdlib.integer.parse_int/int_to_text/modulo (category numeric) and recomputes the digest. LANG-STDLIB-TEXT-ESCAPE-DELIMITED-P2 adds stdlib.text.encode_delimited/decode_delimited (escape-aware delimited row codec; decode -> Option[Collection[Text]]) and recomputes the digest. LANG-STDLIB-COLLECTION-AT-INVENTORY-P5 adds stdlib.collection.at (Collection[T] x Integer -> Option[T], zero-based, total) and recomputes the digest. LANG-STDLIB-TEXT-JOIN-P1 adds stdlib.text.join (Collection[Text] x Text -> Text, inverse of split) and recomputes the digest. LANG-STDLIB-WIRE-FRAME-CODEC-P2 adds stdlib.text.encode_frame (Text -> Text) and stdlib.text.decode_frame (Text -> Option[FrameDecode], length-prefixed netstring frame codec) and recomputes the digest. LANG-STDLIB-COLLECTION-SORT-BY-P3 adds stdlib.collection.sort_by (Collection[T] x (T -> K) -> Collection[T], stable ascending, K in {Integer, Text, Decimal}, OOF-COL11 fail-closed on Float and every other key shape) and recomputes the digest.",
+  "stdlib_surface_digest": "d8af246b2a153fc823e64497dca6415693c7736921b37fa723725bc46cb96644",
+  "note": "Normatively referenced by Ch8. Digest is computed from canonical re-serialization of entries sorted by canonical_name with entry_digest fields stripped — never from raw file bytes. P3 proof verifies determinism. P5 adds stdlib.collection.map + stdlib.collection.filter entries and updates stdlib.collection.count proof_lineage. CONSTRUCT-P1 adds stdlib.decimal.decimal (explicit Decimal constructor) and recomputes the digest. FLATMAP-P5 adds stdlib.collection.flat_map and recomputes the digest. PREDICATE-OPS-P4 adds stdlib.collection.find/any/all and recomputes the digest. LANG-STDLIB-NUMERIC-TEXT-CONVERSION-P1 adds stdlib.integer.parse_int/int_to_text/modulo (category numeric) and recomputes the digest. LANG-STDLIB-TEXT-ESCAPE-DELIMITED-P2 adds stdlib.text.encode_delimited/decode_delimited (escape-aware delimited row codec; decode -> Option[Collection[Text]]) and recomputes the digest. LANG-STDLIB-COLLECTION-AT-INVENTORY-P5 adds stdlib.collection.at (Collection[T] x Integer -> Option[T], zero-based, total) and recomputes the digest. LANG-STDLIB-TEXT-JOIN-P1 adds stdlib.text.join (Collection[Text] x Text -> Text, inverse of split) and recomputes the digest. LANG-STDLIB-WIRE-FRAME-CODEC-P2 adds stdlib.text.encode_frame (Text -> Text) and stdlib.text.decode_frame (Text -> Option[FrameDecode], length-prefixed netstring frame codec) and recomputes the digest. LANG-STDLIB-COLLECTION-SORT-BY-P3 adds stdlib.collection.sort_by (Collection[T] x (T -> K) -> Collection[T], stable ascending, K in {Integer, Text, Decimal}, OOF-COL11 fail-closed on Float and every other key shape) and recomputes the digest. LANG-STDLIB-MAP-RUNTIME-P1 makes stdlib.map.empty/stdlib.map.from_pairs ACTUALLY EXECUTABLE in the VM (bytecode OP_CALL + eval_ast HOF-dispatch, shared pair-validation/last-input-wins helper) — both entries previously claimed `production-implemented` with no live VM constructor arm (readers only); reconciles their signatures to Map[String, V] (v0 keys are exactly String, never a generic K), fixes stdlib.map.get's stale Option[V]/totality/diagnostics fields, and documents the LAST-INPUT-WINS duplicate-key law and Pair{first,second} shape; recomputes the digest.",
   "entries": [
     {
       "canonical_name": "stdlib.text.byte_length",
@@ -628,23 +628,22 @@
       "deterministic": true,
       "totality": "total",
       "type_params": [
-        "K",
         "V"
       ],
       "input_signature": [],
-      "output_signature": "Map[K, V]",
+      "output_signature": "Map[String, V]",
       "diagnostics": [],
       "failure_behavior": "none",
       "authority_surface": "none",
       "proof_lineage": [
         "PROP-043",
         "MAP_STDLIB_FNS ruby dispatch",
-        "Rust VM stdlib.map.empty"
+        "LANG-STDLIB-MAP-RUNTIME-P1 — igniter-vm bytecode OP_CALL + eval_ast HOF-dispatch constructor arm (shared `map_empty_value` helper); the VM previously had NO constructor arm (readers only) despite this entry's prior claim"
       ],
       "examples": [
         "map_empty() -> {}"
       ],
-      "compatibility_note": "Result type is Unknown in context-deferred inference when no downstream use constrains K/V. Live note: 'map_empty Unknown behavior recorded verbatim in P2'. Caller must constrain type via use site.",
+      "compatibility_note": "v0 keys are exactly String (Map[String, V], never a generic K — the runtime representation is the existing ordered record/BTreeMap value, reused as-is, never a new Map species). Result value type is Unknown in context-deferred inference when no downstream use constrains V. Live note: 'map_empty Unknown behavior recorded verbatim in P2'. Caller must constrain type via use site. Readable by all existing readers (map_get/map_has_key/map_get_string) exactly like any other Map.",
       "owner_surface": "PROP-043",
       "entry_digest": null
     },
@@ -668,27 +667,25 @@
       "deterministic": true,
       "totality": "total",
       "type_params": [
-        "K",
         "V"
       ],
       "input_signature": [
-        "Collection[Pair[K, V]]"
+        "Collection[Pair[String, V]]"
       ],
-      "output_signature": "Map[K, V]",
-      "diagnostics": [
-        "OOF-MAP3"
-      ],
-      "failure_behavior": "duplicate keys: last-wins or OOF-MAP3 depending on enforcement level",
+      "output_signature": "Map[String, V]",
+      "diagnostics": [],
+      "failure_behavior": "duplicate keys: deterministic LAST-INPUT-WINS — a later pair in authored input order overwrites an earlier pair with the same key (never OOF-MAP3; OOF-MAP3 is a SEPARATE type-level diagnostic for Unknown value in a Map OUTPUT ANNOTATION, not a dynamic duplicate-key detector). A malformed pair (non-Record element, missing `first`/`second`, or a non-String `first`) fails closed at runtime with a bounded operational error naming `Pair[String,V]` — never panics, never silently skips.",
       "authority_surface": "none",
       "proof_lineage": [
         "PROP-043",
         "MAP_STDLIB_FNS ruby dispatch",
-        "Rust VM stdlib.map.from_pairs"
+        "LANG-STDLIB-MAP-RUNTIME-P1 — igniter-vm bytecode OP_CALL + eval_ast HOF-dispatch constructor arm (shared `map_from_pairs_value` helper, one duplicate-key/pair-validation source for both paths); consumes exactly the `Pair{first, second}` shape `zip` produces; fixed a real Ruby/Rust divergence in `infer_from_pairs_value_type` (Ruby previously resolved `Map[String, Unknown]` for every `map_from_pairs(zip(...))` call regardless of the zipped value type — verified via `OOF-TY1` against a Rust-accepted `Map[String, Integer]` output annotation) while preserving the pre-existing LAB-RECORD-MAP-P1 named-Record `@type_shapes` fallback"
       ],
       "examples": [
-        "map_from_pairs([[\"a\", 1], [\"b\", 2]]) -> {a: 1, b: 2}"
+        "map_from_pairs(zip([\"a\", \"b\"], [1, 2])) -> {a: 1, b: 2}",
+        "map_from_pairs([{first: \"a\", second: 1}, {first: \"a\", second: 2}]) -> {a: 2} (last-input-wins)"
       ],
-      "compatibility_note": "VM lowering verified at P3 proof time.",
+      "compatibility_note": "Consumes exactly the `Pair{first, second}` record shape `zip` produces: `first` is the Map key (must be String — v0 keys are String/Text only under the existing alias policy), `second` is the value V (any Value, unchecked/dynamic). VM lowering executable as of LANG-STDLIB-MAP-RUNTIME-P1 (previously typecheck-only in both toolchains despite this entry's prior `production-implemented` claim — the live VM had readers only, no constructor arm). Runtime representation is the existing ordered record/BTreeMap value, so iteration/JSON is deterministically sorted-by-key regardless of authored pair order (two input permutations producing the same final mapping serialize byte-identically).",
       "owner_surface": "PROP-043",
       "entry_digest": null
     },
@@ -710,28 +707,27 @@
       "fragment_class": "core",
       "purity": "pure",
       "deterministic": true,
-      "totality": "partial: key not found raises OOF-MAP1",
+      "totality": "total",
       "type_params": [
-        "K",
         "V"
       ],
       "input_signature": [
-        "Map[K, V]",
-        "K"
+        "Map[String, V]",
+        "String"
       ],
-      "output_signature": "V",
-      "diagnostics": [
-        "OOF-MAP1"
-      ],
-      "failure_behavior": "key not found -> OOF-MAP1 diagnostic at typecheck or runtime error",
+      "output_signature": "Option[V]",
+      "diagnostics": [],
+      "failure_behavior": "none — absent key returns None (runtime Nil, no wrapper); present key returns Some(v) (the raw value, no wrapper). LANG-STDLIB-MAP-RUNTIME-P1 reconciliation: this entry previously claimed 'key not found -> OOF-MAP1 diagnostic at typecheck or runtime error' and `output_signature: V` — both stale. OOF-MAP1 is a Map ANNOTATION diagnostic (non-String key in a declared Map[K,V] type), never raised by a map_get call itself; a missing key is the ordinary Option[V]::None path, not an error.",
       "authority_surface": "none",
       "proof_lineage": [
         "PROP-043",
         "MAP_STDLIB_FNS ruby dispatch",
-        "Rust VM stdlib.map.get"
+        "Rust VM stdlib.map.get",
+        "LANG-STDLIB-MAP-RUNTIME-P1 — reconciled totality/output_signature/diagnostics/failure_behavior against the live VM reader (vm.rs `map_get` arm: `Value::Record(map) => map.get(key).cloned().unwrap_or(Value::Nil)`); reader semantics themselves unchanged"
       ],
       "examples": [
-        "map_get({a: 1}, \"a\") -> 1"
+        "map_get({a: 1}, \"a\") -> 1",
+        "map_get({a: 1}, \"b\") -> None"
       ],
       "compatibility_note": null,
       "owner_surface": "PROP-043",
@@ -757,12 +753,11 @@
       "deterministic": true,
       "totality": "total",
       "type_params": [
-        "K",
         "V"
       ],
       "input_signature": [
-        "Map[K, V]",
-        "K"
+        "Map[String, V]",
+        "String"
       ],
       "output_signature": "Bool",
       "diagnostics": [],
