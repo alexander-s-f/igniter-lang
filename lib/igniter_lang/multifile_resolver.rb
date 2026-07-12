@@ -261,6 +261,10 @@ module IgniterLang
           next unless parts.length >= 3 && parts[0] == "stdlib"
           module_path = parts[0...-1].join(".")
           table[module_path]
+          # LANG-STDLIB-INVENTORY-QUALIFIED-IMPORT-SURFACE-P2: `qualified_only` entries make
+          # their module known but contribute NO importable names — callable only through the
+          # qualified name (compat aliases included). Absent field defaults to `bare_alias`.
+          next if entry["import_surface"] == "qualified_only"
           entry.fetch("aliases", []).each do |al|
             table[module_path].add(al.fetch("name")) if al.fetch("kind") == "source_alias"
           end

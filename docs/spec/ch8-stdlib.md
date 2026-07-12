@@ -337,8 +337,11 @@ depend on the internal carrier; every admitted operation is carrier-invariant.
 
 ### 8.11.2 Qualified pure algebra (exact signatures)
 
-`stdlib.bytes.*` is a qualified language module (the `stdlib.IO.*`/`stdlib.net.*` precedent —
-qualified names, not bare-imported, not inventory entries; see 8.11.6):
+`stdlib.bytes.*` is a qualified language module: qualified names, never bare-imported.
+Since LANG-STDLIB-INVENTORY-QUALIFIED-IMPORT-SURFACE-P2 the 13 operations ARE canon inventory
+entries with `import_surface: "qualified_only"` — discoverable via inventory/help/MCP, callable
+only through their qualified names; a bare/named import is refused (OOF-IMP3). Capability/effect
+modules (`stdlib.IO.*`, `stdlib.net.*`) remain OUT of the inventory (see 8.11.6):
 
 ```
 stdlib.bytes.length(Bytes)                     -> Integer
@@ -410,7 +413,7 @@ seal. **Execution is VM authority** — the canon toolchain has no Bytes runtime
 | Item | Status |
 |------|--------|
 | Positional IO (`read_at`/`write_at`/`file_size`) | NOT admitted — lab capability surface |
-| `stdlib-inventory.json` entries for qualified modules | held — a joint IO/net/bytes inventory-ownership question, tracked separately; drift locked by tests, not by inventory |
+| `stdlib-inventory.json` entries for qualified modules | RESOLVED for pure Bytes (13 rows, `import_surface: "qualified_only"`, LANG-STDLIB-INVENTORY-QUALIFIED-IMPORT-SURFACE-P2); capability/effect modules (`stdlib.IO.*`, `stdlib.net.*`) stay OUT — the separately-owned capability catalog remains a named follow-up |
 | `Bytes[N]` fixed-length refinement | absent; future refinement over dynamic `Bytes`, kept compatible, no dependent types pretended |
 | `_be` / native-endian families | closed until demanded; naming law fixed above |
 | hex/base64 as identity or default representation | closed — explicit codecs only |
