@@ -1,8 +1,8 @@
 {
   "kind": "stdlib_inventory",
   "format_version": "v0",
-  "stdlib_surface_digest": "5bcd45a578845e7b952286c74289bfe3d31e635c94067e631cc0a6f71adc544d",
-  "note": "Normatively referenced by Ch8. Digest is computed from canonical re-serialization of entries sorted by canonical_name with entry_digest fields stripped — never from raw file bytes. P3 proof verifies determinism. P5 adds stdlib.collection.map + stdlib.collection.filter entries and updates stdlib.collection.count proof_lineage. CONSTRUCT-P1 adds stdlib.decimal.decimal (explicit Decimal constructor) and recomputes the digest. FLATMAP-P5 adds stdlib.collection.flat_map and recomputes the digest. PREDICATE-OPS-P4 adds stdlib.collection.find/any/all and recomputes the digest. LANG-STDLIB-NUMERIC-TEXT-CONVERSION-P1 adds stdlib.integer.parse_int/int_to_text/modulo (category numeric) and recomputes the digest. LANG-STDLIB-TEXT-ESCAPE-DELIMITED-P2 adds stdlib.text.encode_delimited/decode_delimited (escape-aware delimited row codec; decode -> Option[Collection[Text]]) and recomputes the digest. LANG-STDLIB-COLLECTION-AT-INVENTORY-P5 adds stdlib.collection.at (Collection[T] x Integer -> Option[T], zero-based, total) and recomputes the digest. LANG-STDLIB-TEXT-JOIN-P1 adds stdlib.text.join (Collection[Text] x Text -> Text, inverse of split) and recomputes the digest. LANG-STDLIB-WIRE-FRAME-CODEC-P2 adds stdlib.text.encode_frame (Text -> Text) and stdlib.text.decode_frame (Text -> Option[FrameDecode], length-prefixed netstring frame codec) and recomputes the digest.",
+  "stdlib_surface_digest": "4bb845c6d06a42617849f5a0548d50270fefb61349456645d72cdb34c4d7684f",
+  "note": "Normatively referenced by Ch8. Digest is computed from canonical re-serialization of entries sorted by canonical_name with entry_digest fields stripped — never from raw file bytes. P3 proof verifies determinism. P5 adds stdlib.collection.map + stdlib.collection.filter entries and updates stdlib.collection.count proof_lineage. CONSTRUCT-P1 adds stdlib.decimal.decimal (explicit Decimal constructor) and recomputes the digest. FLATMAP-P5 adds stdlib.collection.flat_map and recomputes the digest. PREDICATE-OPS-P4 adds stdlib.collection.find/any/all and recomputes the digest. LANG-STDLIB-NUMERIC-TEXT-CONVERSION-P1 adds stdlib.integer.parse_int/int_to_text/modulo (category numeric) and recomputes the digest. LANG-STDLIB-TEXT-ESCAPE-DELIMITED-P2 adds stdlib.text.encode_delimited/decode_delimited (escape-aware delimited row codec; decode -> Option[Collection[Text]]) and recomputes the digest. LANG-STDLIB-COLLECTION-AT-INVENTORY-P5 adds stdlib.collection.at (Collection[T] x Integer -> Option[T], zero-based, total) and recomputes the digest. LANG-STDLIB-TEXT-JOIN-P1 adds stdlib.text.join (Collection[Text] x Text -> Text, inverse of split) and recomputes the digest. LANG-STDLIB-WIRE-FRAME-CODEC-P2 adds stdlib.text.encode_frame (Text -> Text) and stdlib.text.decode_frame (Text -> Option[FrameDecode], length-prefixed netstring frame codec) and recomputes the digest. LANG-STDLIB-COLLECTION-SORT-BY-P3 adds stdlib.collection.sort_by (Collection[T] x (T -> K) -> Collection[T], stable ascending, K in {Integer, Text, Decimal}, OOF-COL11 fail-closed on Float and every other key shape) and recomputes the digest.",
   "entries": [
     {
       "canonical_name": "stdlib.text.byte_length",
@@ -1006,6 +1006,56 @@
       ],
       "compatibility_note": "Zero-based, total indexed reader — the generalization of first/last. Element type is extracted from Collection[T] and wrapped Option[T]; Collection[Unknown]/non-inferable first arg -> Option[Unknown] (permissive like first/last). Negative index and out-of-range return None (NOT from-end aliasing); empty collection returns None. OOF-COL1 (arity), OOF-COL2 (non-Collection first arg), OOF-COL10 (index not Integer) are compile-time; None is the runtime 'reject'. Like first/last, the lab Rust toolchain emits the bare SIR name `at` while canon Ruby emits qualified stdlib.collection.at; the VM resolves both. Runtime uses the same nullable-Nil Option representation as first/last (sealed Some/None normalization is a separate authorized card). Consume via or_else or sealed match; no source Some/None syntax.",
       "owner_surface": "LANG-STDLIB-COLLECTION-AT-PROP-P1",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.collection.sort_by",
+      "semantic_ir_name": "stdlib.collection.sort_by",
+      "legacy_sir": null,
+      "aliases": [
+        {
+          "kind": "source_alias",
+          "name": "sort_by"
+        }
+      ],
+      "category": "collection",
+      "lifecycle_status": "lab-implemented",
+      "semantic_stability": "experiment-pass",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "total",
+      "type_params": [
+        "T",
+        "K"
+      ],
+      "input_signature": [
+        "Collection[T]",
+        "T -> K"
+      ],
+      "output_signature": "Collection[T]",
+      "diagnostics": [
+        "OOF-COL1",
+        "OOF-COL2",
+        "OOF-COL11"
+      ],
+      "failure_behavior": "OOF-COL11 refuses any key type other than Integer, Text, or Decimal at typecheck (Float included, message routes to Decimal/Integer); a well-typed program's key extractor never fails at runtime for the type reason, but arbitrary extractor bodies (e.g. unwrap on a sometimes-None Option) can still error, propagating deterministically in input order",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "LANG-STDLIB-COLLECTION-ALGEBRA-PARITY-PROP-P1 — prior-art horizon research consumed by the readiness packet",
+        "LANG-STDLIB-COLLECTION-ORDER-GROUP-READINESS-P2 — readiness packet: sort_by chosen over index_by/group_by/distinct_by/comparator-lambda; Map-construction VM runtime is the structural blocker for the second slice",
+        "LANG-STDLIB-COLLECTION-SORT-BY-P3 — Ruby canon typechecker.rb infer_sort_by_call + OOF-COL11 (proof 19/19 PASS); Rust igniter-compiler typechecker/emitter parity; igniter-vm bytecode OP_CALL + both eval_ast HOF dispatch sites via shared stable merge sort; 100k-element budget proof; statistics/igmesh/IGDB consumer proofs"
+      ],
+      "examples": [
+        "sort_by([5, 1, 4, 1, 3], x -> x) -> [1, 1, 3, 4, 5]",
+        "sort_by([\"banana\", \"apple\", \"cherry\"], x -> x) -> [\"apple\", \"banana\", \"cherry\"]",
+        "sort_by(items, x -> x.key) -> items reordered ascending by .key, item type unchanged",
+        "sort_by(xs, x -> x) with Collection[Float] -> OOF-COL11 at typecheck (Float is not admissible — convert to Decimal or Integer)"
+      ],
+      "compatibility_note": "Stable ascending sort: equal keys preserve input order exactly (decorate-sort-undecorate; key extractor runs exactly once per item). Result type is Collection[T] — the ORIGINAL element type — never Collection[K] (unlike map, sort_by reorders, it does not transform elements). K is restricted to exactly Integer, Text, or Decimal (the three total scalar orders live natively in the VM); every other key shape (Float, Bool, Option, record, variant, Map, Bytes, Collection) is refused fail-closed by OOF-COL11, a FRESH code distinct from OOF-COL10 (owned by `at`'s index-type check). No comparator-lambda API, no descending/multi-key ordering, no Map construction, index_by, group_by, or distinct_by in v0 — group_by/index_by are structurally blocked on a missing VM Map-construction runtime and follow as a later card. Ruby canon is typecheck/emit parity only (no collection-HOF interpreter, execution is Rust VM authority); the VM implements a shared native stable merge sort reused identically by the bytecode OP_CALL arm and both eval_ast HOF dispatch sites.",
+      "owner_surface": "LANG-STDLIB-COLLECTION-ORDER-GROUP-READINESS-P2",
       "entry_digest": null
     },
     {

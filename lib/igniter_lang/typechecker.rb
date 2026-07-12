@@ -174,6 +174,29 @@ module IgniterLang
       "stdlib.IO.write_at"            => { args: %w[S I B C], ret: "WriteAtReceipt" },
     }.freeze
 
+    # LANG-STDLIB-BYTES-CANON-ADMISSION-P7 Stage 2: canon COMPILE-parity typing for the pure
+    # `stdlib.bytes.*` algebra (P4 semantic core + P5 explicit little-endian pack/unpack family).
+    # Signatures mirror the LIVE Rust compiler arms (igniter-lab stdlib_calls.rs) exactly. Ruby
+    # types and emits these calls; EXECUTION stays VM authority (the net-P5 precedent — no Ruby
+    # Bytes runtime exists or is claimed). Positional IO stays the IO table above (lab-only).
+    #   arg spec: "B" = Bytes; "I" = Integer; "S" = String/Text; "L" = Collection (of octets).
+    #   ret spec: either a plain type name, or [ok, "BytesError"] for Result-shaped ops.
+    BYTES_STDLIB_FNS = {
+      "stdlib.bytes.length"        => { args: %w[B],     ret: "Integer" },
+      "stdlib.bytes.equal"         => { args: %w[B B],   ret: "Bool" },
+      "stdlib.bytes.concat"        => { args: %w[B B],   ret: "Bytes" },
+      "stdlib.bytes.slice"         => { args: %w[B I I], ret: %w[Bytes BytesError] },
+      "stdlib.bytes.from_octets"   => { args: %w[L],     ret: %w[Bytes BytesError] },
+      "stdlib.bytes.from_text"     => { args: %w[S],     ret: "Bytes" },
+      "stdlib.bytes.to_text"       => { args: %w[B],     ret: %w[Text BytesError] },
+      "stdlib.bytes.pack_u16_le"   => { args: %w[I],     ret: %w[Bytes BytesError] },
+      "stdlib.bytes.pack_u32_le"   => { args: %w[I],     ret: %w[Bytes BytesError] },
+      "stdlib.bytes.pack_i16_le"   => { args: %w[I],     ret: %w[Bytes BytesError] },
+      "stdlib.bytes.unpack_u16_le" => { args: %w[B],     ret: %w[Integer BytesError] },
+      "stdlib.bytes.unpack_u32_le" => { args: %w[B],     ret: %w[Integer BytesError] },
+      "stdlib.bytes.unpack_i16_le" => { args: %w[B],     ret: %w[Integer BytesError] },
+    }.freeze
+
     # LANG-SUMTYPE-CONSTRUCT-MATCH-P3: sealed built-in sumtypes.
     # Registry shape mirrors the 3-level user variant_shapes (variant→arm→field→type)
     # but is held SEPARATELY from @variant_shapes so it is NOT emitted into the
@@ -601,6 +624,25 @@ module IgniterLang
         )
       end
       type_errors.concat(map_annotation_errors)
+
+      # LANG-STDLIB-BYTES-CANON-ADMISSION-P7 Stage 1 (seal): a contract INPUT or OUTPUT whose
+      # declared type contains `Bytes` — directly or nested in Result/Collection/Option params or a
+      # named record's fields — is refused. Bytes may not cross the host boundary implicitly; the
+      # fix is an explicit codec (encode_hex/encode_base64 -> Text) or the versioned `$bytes` host
+      # envelope. Mirrors the live Rust seal exactly (same rule id + message); intermediate
+      # computes keep the full Bytes algebra — only the ports are sealed.
+      all_decls.each do |decl|
+        kind = decl.fetch("kind", "")
+        next unless %w[input output].include?(kind)
+        ann = decl.fetch("type_annotation", nil)
+        next unless ann
+        next unless type_ir_contains_bytes?(type_ir(ann), [])
+        type_errors << oof(
+          "OOF-BY1",
+          "Bytes cannot cross the host boundary implicitly — use an explicit codec or envelope",
+          "#{kind}:#{decl.fetch("name")}"
+        )
+      end
 
       @recur_context = {
         authorized:         recur_authorized,
@@ -1827,11 +1869,25 @@ module IgniterLang
         # -> Result[NetResponse, NetError]. NetRequest/NetResponse/NetError are app-declared types
         # named by the signature (the same stringly convention IO uses for WriteReceipt/IoError).
         infer_net_request_call(args, symbol_types, type_errors, type_warnings, node_name)
+      when *BYTES_STDLIB_FNS.keys
+        # LANG-STDLIB-BYTES-CANON-ADMISSION-P7: the pure Bytes algebra (typing parity; VM executes).
+        infer_bytes_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
+      when "text_to_bytes", "bytes_to_text"
+        # P7: bare compat aliases — typed AND emitted as their qualified semantic-core names,
+        # mirroring the Rust emitter rewrite (text_to_bytes -> stdlib.bytes.from_text,
+        # bytes_to_text -> stdlib.bytes.to_text with the Result-shaped decode type).
+        qualified = fn == "text_to_bytes" ? "stdlib.bytes.from_text" : "stdlib.bytes.to_text"
+        infer_bytes_call(qualified, args, symbol_types, type_errors, type_warnings, node_name)
       when "at"
         # LANG-STDLIB-COLLECTION-AT-RUBY-P3 (admitted by -AT-PROP-P1): at(Collection[T], Integer) ->
         # Option[T]. A reader, not a HOF (no lambda). Element type via the first/last path; index
         # validated like char_at. Negative/out-of-range/empty are RUNTIME None (P4 VM), not diagnostics.
         infer_collection_at_call(args, symbol_types, type_errors, type_warnings, node_name)
+      when "sort_by"
+        # LANG-STDLIB-COLLECTION-SORT-BY-P3: sort_by(Collection[T], (T -> K)) -> Collection[T].
+        # Stable ascending sort by a total-scalar key (Integer|Text|Decimal); OOF-COL11 refuses
+        # Float and every other key shape. Element type is UNCHANGED (not a `map`-shaped transform).
+        infer_sort_by_call(args, symbol_types, type_errors, type_warnings, node_name)
       when "sum"
         # LANG-STDLIB-SUM-PROP-P3: stdlib.collection.sum two-arg field-projection form
         infer_sum_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
@@ -3699,6 +3755,88 @@ module IgniterLang
                  "fn" => qualified, "args" => [collection_arg, lambda_typed])
     end
 
+    # LANG-STDLIB-COLLECTION-SORT-BY-P3: sort_by(Collection[T], (T -> K)) -> Collection[T].
+    # Stable ascending sort by a total-scalar key; element type is UNCHANGED (mirrors `filter`'s
+    # output-type rule, not `map`'s — sort_by reorders, it does not transform). OOF-COL1 (arity /
+    # non-lambda second arg), OOF-COL2 (non-Collection first arg). K must be exactly Integer, Text,
+    # or Decimal — every other key shape (Float, Bool, Option, record, variant, Map, Bytes,
+    # Collection) fails closed with the NEW diagnostic OOF-COL11 (OOF-COL10 is already owned by
+    # `at`'s index-type check). The Float message additionally routes to Decimal/Integer.
+    def infer_sort_by_call(args, symbol_types, type_errors, type_warnings, node_name)
+      qualified = "stdlib.collection.sort_by"
+
+      # ── OOF-COL1: arity must be exactly 2 ────────────────────────────────────
+      unless args.length == 2
+        type_errors << oof("OOF-COL1",
+          "#{qualified}: expected 2 arguments, got #{args.length}",
+          node_name)
+        return typed_expr("call", type_ir("Unknown"), [], "fn" => qualified, "args" => [])
+      end
+
+      # ── Infer collection argument ─────────────────────────────────────────────
+      collection_arg = infer_expr(args[0], symbol_types, type_errors, type_warnings, node_name)
+      col_type_name  = type_name(collection_arg.fetch("resolved_type"))
+
+      # ── OOF-COL2: first arg must be Collection or Unknown ─────────────────────
+      unless col_type_name == "Collection" || col_type_name == "Unknown"
+        type_errors << oof("OOF-COL2",
+          "#{qualified}: first argument must be Collection[T], got #{col_type_name}",
+          node_name)
+        return typed_expr("call", type_ir("Unknown"), collection_arg.fetch("deps", []),
+                          "fn" => qualified, "args" => [collection_arg])
+      end
+
+      # ── second argument must be a lambda ──────────────────────────────────────
+      lambda_node = args[1]
+      unless lambda_node.is_a?(Hash) && lambda_node.fetch("kind", nil) == "lambda"
+        type_errors << oof("OOF-COL1",
+          "#{qualified}: second argument must be a lambda, got #{lambda_node.fetch("kind", "non-lambda") rescue "non-lambda"}",
+          node_name)
+        return typed_expr("call", collection_arg.fetch("resolved_type"), collection_arg.fetch("deps", []),
+                          "fn" => qualified, "args" => [collection_arg])
+      end
+
+      # ── Bind lambda parameter to element type ─────────────────────────────────
+      elem_type     = element_type_from_collection(collection_arg.fetch("resolved_type"))
+      lambda_params = lambda_node.fetch("params", [])
+      local_symbols = lambda_params.each_with_object(symbol_types.dup) do |param, acc|
+        acc[param] = elem_type
+      end
+
+      # ── Infer lambda body (the key extractor) ─────────────────────────────────
+      lambda_body = lambda_node.fetch("body")
+      body_typed  = infer_lambda_body(lambda_body, local_symbols, type_errors, type_warnings, node_name)
+      key_type    = body_typed.fetch("resolved_type")
+
+      # ── OOF-COL11: key must be exactly Integer, Text, or Decimal ──────────────
+      key_name = type_name(key_type)
+      unless %w[Integer Text String Decimal Unknown].include?(key_name)
+        message = if key_name == "Float"
+          "sort_by key must have a total order; expected Integer, Text, or Decimal " \
+          "(Float is not admissible — convert to Decimal or Integer)"
+        else
+          "sort_by key must have a total order; expected Integer, Text, or Decimal, got #{key_name}"
+        end
+        type_errors << oof("OOF-COL11", message, node_name)
+      end
+
+      lambda_deps = body_typed.fetch("deps", [])
+      all_deps    = (collection_arg.fetch("deps", []) + lambda_deps).uniq
+
+      # ── Output type: Collection[T] — the ORIGINAL element type, never Collection[K] ────────────
+      output_type = collection_type_ir_from(elem_type)
+
+      lambda_typed = {
+        "kind" => "lambda",
+        "params" => lambda_params,
+        "body" => body_typed,
+        "resolved_type" => key_type
+      }
+
+      typed_expr("call", output_type, all_deps,
+                 "fn" => qualified, "args" => [collection_arg, lambda_typed])
+    end
+
     # LANG-SUMTYPE-COLLECT-P3: filter_map(Collection[T], (T -> Option[U])) -> Collection[U].
     # Keeps each Some(u) payload, drops every None. Mirrors map/filter HOF handling:
     # OOF-COL1 (arity / non-lambda), OOF-COL2 (non-Collection first arg), OOF-COL3
@@ -3853,6 +3991,64 @@ module IgniterLang
       end
       result_type = { "name" => "Result", "params" => [ok_type, type_ir("IoError")] }
       typed_expr("call", result_type, deps, "fn" => fn, "args" => typed_args)
+    end
+
+    # LANG-STDLIB-BYTES-CANON-ADMISSION-P7 Stage 2: type a qualified `stdlib.bytes.*` call against
+    # BYTES_STDLIB_FNS (mirrors the live Rust arms: OOF-TM1 arity, OOF-TY0 argument types; String
+    # and Text both satisfy "S"; Unknown always passes — the Rust leniency). Result-shaped ops
+    # return Result[ok, BytesError]; plain ops return their type directly. Typing parity ONLY —
+    # execution stays VM authority (net-P5 precedent; no Ruby Bytes runtime).
+    def infer_bytes_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
+      spec = BYTES_STDLIB_FNS.fetch(fn)
+      typed_args = args.map { |arg| infer_expr(arg, symbol_types, type_errors, type_warnings, node_name) }
+      deps = typed_args.flat_map { |arg| arg.fetch("deps", []) }.uniq
+
+      if typed_args.length != spec[:args].length
+        type_errors << oof("OOF-TM1",
+          "#{fn}: expected #{spec[:args].length} arguments, got #{typed_args.length}",
+          node_name)
+      else
+        spec[:args].each_with_index do |kind, i|
+          got = type_name(typed_args[i].fetch("resolved_type"))
+          next if got == "Unknown"
+          ok = case kind
+               when "B" then got == "Bytes"
+               when "I" then got == "Integer"
+               when "S" then %w[String Text].include?(got)
+               when "L" then got == "Collection"
+               end
+          next if ok
+          expected = { "B" => "Bytes", "I" => "Integer", "S" => "String/Text",
+                       "L" => "Collection" }.fetch(kind)
+          type_errors << oof("OOF-TY0",
+            "#{fn}: argument #{i} must be #{expected}, got #{got}",
+            node_name)
+        end
+      end
+
+      resolved = if spec[:ret].is_a?(Array)
+        { "name" => "Result", "params" => [type_ir(spec[:ret][0]), type_ir(spec[:ret][1])] }
+      else
+        type_ir(spec[:ret])
+      end
+      typed_expr("call", resolved, deps, "fn" => fn, "args" => typed_args)
+    end
+
+    # P7 Stage 1 (seal): does a type-IR value contain `Bytes` anywhere — head name, generic params,
+    # or a named record type's declared field shapes? `visiting` guards the (currently
+    # inexpressible) recursive-shape case so the walk stays total. Mirrors the Rust helper.
+    def type_ir_contains_bytes?(ir, visiting)
+      return false unless ir.is_a?(Hash)
+      name = ir.fetch("name", "")
+      return true if name == "Bytes"
+      params = ir.fetch("params", [])
+      return true if params.any? { |p| type_ir_contains_bytes?(type_ir(p), visiting) }
+      if !name.empty? && !visiting.include?(name) && @type_shapes.key?(name)
+        return @type_shapes.fetch(name).values.any? do |f|
+          type_ir_contains_bytes?(type_ir(f), visiting + [name])
+        end
+      end
+      false
     end
 
     def infer_collection_first_last_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
