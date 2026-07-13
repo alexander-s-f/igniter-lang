@@ -538,6 +538,10 @@ module IgniterLang
       contract_modifier = classified_contract.fetch("modifier", "pure")
       contract_name_str = classified_contract.fetch("name")
       @current_contract_name = contract_name_str  # LAB-RUBY-CALL-CONTRACT-PARITY-P3: self-recursion guard
+      # LANG-EFFECT-CALL-NATURAL-SUGAR-P1: the caller's declared capability slot names, so
+      # OOF-EC7 can print the actual capability when the mapping is unique.
+      @current_contract_capabilities = classified_contract.fetch("declarations", [])
+        .select { |d| d["kind"] == "capability" }.map { |d| d["name"] }
       # PROP-050/P46: `convergent` is recur-authorized like `fuel_bounded` —
       # convergent iteration runs via recur(), fuel-capped by max_steps; it has no
       # `decreases` variant, so OOF-R3 (structural decrease) does not apply.
@@ -1144,8 +1148,13 @@ module IgniterLang
         end
 
         if entry["modifier"] != "pure"
-          type_errors << oof("OOF-TY0",
-            "call_contract: callee '#{callee_name}' is not pure (modifier: #{entry["modifier"]}); only pure contracts may be called via call_contract in v0",
+          # LANG-EFFECT-CALL-NATURAL-SUGAR-P1: call-mode error, not a generic type error —
+          # OOF-EC7 names the modifier and shows the actionable invoke skeleton. When the
+          # caller declares exactly one capability, print it; otherwise keep the placeholder.
+          caller_caps = @current_contract_capabilities || []
+          using_hint = caller_caps.length == 1 ? caller_caps.first : "<capability>"
+          type_errors << oof("OOF-EC7",
+            "contract '#{callee_name}' is #{entry["modifier"]} — an effectful contract is called with invoke: invoke #{node_name} = #{callee_name}(...) using #{using_hint}",
             node_name)
           return typed_expr("call", type_ir("Unknown"), [], "fn" => fn, "args" => [])
         end
@@ -1178,12 +1187,12 @@ module IgniterLang
     end
 
     # PROP-050 (ratified) / LAB-EFFECT-CALL-V0-P3 (S1): typecheck
-    #   invoke <binding> = contract("Callee", args...) using caps
+    #   invoke <binding> = Callee(args...) using caps
     # Reuses the call_contract registry (@call_contract_registry) for callee
     # resolution — the call_contract purity gate itself is UNTOUCHED (invoke is
     # the designed non-pure call; call_contract stays pure-only permanently).
     # Rules (OOF-EC namespace, PROP-050 D2; all fail-closed):
-    #   OOF-EC1 — callee unknown; `pure` callee (use call_contract); recursive/
+    #   OOF-EC1 — callee unknown; `pure` callee (call directly); recursive/
     #             service/convergent/fuel_bounded callee (held in v0);
     #             self-invocation (closed by the existing call-cycle rules)
     #   OOF-EC2 — surface absorption: every callee effect (verb + capability
@@ -1218,7 +1227,7 @@ module IgniterLang
       if @call_contract_registry.fetch("ambiguous").key?(callee_name)
         cands = @call_contract_registry.fetch("ambiguous").fetch(callee_name)
         type_errors << oof("OOF-DECL-AMBIGUOUS-CONTRACT",
-          "invoke contract('#{callee_name}') is ambiguous — #{cands.size} contracts declare the " \
+          "invoke callee '#{callee_name}' is ambiguous — #{cands.size} contracts declare the " \
           "short name '#{callee_name}' (#{cands.join(', ')}); use a qualified name",
           binding)
       elsif (entry = @call_contract_registry.fetch("entries")[callee_name]).nil?
@@ -1230,8 +1239,10 @@ module IgniterLang
           "invoke: self-invocation via '#{callee_name}' is closed (existing call-cycle rules, PROP-050)",
           binding)
       elsif entry["modifier"] == "pure"
+        # LANG-EFFECT-CALL-NATURAL-SUGAR-P1: guide to the authoring surface (direct pure
+        # call), never to the internal call_contract lowering name.
         type_errors << oof("OOF-EC1",
-          "invoke: callee '#{callee_name}' is pure — use call_contract for pure contracts",
+          "invoke: callee '#{callee_name}' is pure — call it directly: compute #{binding} = #{callee_name}(...)",
           binding)
       elsif !%w[observed effect privileged irreversible].include?(entry["modifier"])
         type_errors << oof("OOF-EC1",
@@ -1310,11 +1321,16 @@ module IgniterLang
         end
 
         # OOF-EC3 — attenuation mapping between `using` names and callee slots.
+        # LANG-EFFECT-CALL-NATURAL-SUGAR-P1 (single-root EC3): an unknown `using` name makes
+        # the pool untrustworthy — every slot/over-grant verdict derived from it is noise
+        # caused by the same root typo. One primary EC3; fix the name, then re-judge.
         resolved = []
+        unknown_using = false
         using_names.each do |u|
           if caller_caps.key?(u)
             resolved << u
           else
+            unknown_using = true
             type_errors << oof("OOF-EC3",
               "invoke '#{callee_name}': using '#{u}' is not a declared caller capability",
               binding)
@@ -1326,7 +1342,7 @@ module IgniterLang
           idx = available.index { |u| caller_caps[u] == slot["type"] }
           if idx
             slot_map[slot["name"]] = available.delete_at(idx)
-          else
+          elsif !unknown_using
             type_errors << oof("OOF-EC3",
               "invoke '#{callee_name}': callee capability slot '#{slot["name"]}: #{slot["type"]}' " \
               "has no matching 'using' capability of that type",
@@ -1334,6 +1350,7 @@ module IgniterLang
           end
         end
         available.each do |extra|
+          next if unknown_using
           type_errors << oof("OOF-EC3",
             "invoke '#{callee_name}': using '#{extra}' matches no callee capability slot " \
             "(over-granting is refused)",
@@ -2739,7 +2756,7 @@ module IgniterLang
     end
 
     def blocking_rule_present?(errors)
-      %w[OOF-P1 OOF-CE4 OOF-OS2 OOF-H1 OOF-BT1 OOF-BT2 OOF-BT3 OOF-BT4 OOF-TM1 OOF-TM3 OOF-TM4 OOF-TM5 OOF-TM6 OOF-S3 OOF-O3 OOF-O4 OOF-O5 OOF-IV3].any? { |rule| rule_present?(errors, rule) }
+      %w[OOF-P1 OOF-CE4 OOF-OS2 OOF-H1 OOF-BT1 OOF-BT2 OOF-BT3 OOF-BT4 OOF-TM1 OOF-TM3 OOF-TM4 OOF-TM5 OOF-TM6 OOF-S3 OOF-O3 OOF-O4 OOF-O5 OOF-IV3 OOF-EC7].any? { |rule| rule_present?(errors, rule) }
     end
 
     # OOF-IV helpers -------------------------------------------------------

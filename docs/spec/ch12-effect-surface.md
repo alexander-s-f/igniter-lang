@@ -422,7 +422,7 @@ in a profile that only permits `compensatable` is a compile-time error (OOF-M2).
 > no runtime authority — grants come from the host at run start, live IO stays
 > human-gated.
 
-`invoke <name> = contract("Callee", args…) using cap[, cap]` composes non-pure
+`invoke <name> = Callee(args…) using cap[, cap]` composes non-pure
 contracts under three laws:
 
 1. **Absorption (OOF-EC2).** The caller's effective Effect Surface is its own

@@ -1266,7 +1266,7 @@ module IgniterLang
       when "affects"     then advance; parse_affects_decl
       # LANG-CH13-WRITE-EVIDENCE-P60 (§13.6): `write store <- value evidence [refs]`
       when "write"       then advance; parse_write_decl
-      # PROP-050 / LAB-EFFECT-CALL-V0-P3 (S1): `invoke <name> = contract("Callee" [, arg]*) using <cap>[, <cap>]*`
+      # PROP-050 / LANG-EFFECT-CALL-NATURAL-SUGAR-P1: `invoke <name> = Callee(args...) using <cap>[, <cap>]*`
       when "invoke"      then advance; parse_invoke_decl
       # LANG-EFFECT-SURFACE-COMPENSATION-P22: compensation clauses
       when "compensation"    then advance; parse_compensation_decl
@@ -1459,7 +1459,7 @@ module IgniterLang
     end
 
     # PROP-050 (ratified 2026-07-08) / LAB-EFFECT-CALL-V0-P3 (S1):
-    #   invoke <name> = contract("Callee" [, <argExpr>]*) using <cap> [, <cap>]*
+    #   invoke <name> = Callee(args...) using <cap> [, <cap>]*
     # Body-level effect-contract call DECLARATION (effect altitude, ordered with
     # effects) — never an expression. Malformed forms fail closed at parse time
     # with OOF-EC6: missing '=', missing 'contract', missing callee string
@@ -1476,7 +1476,7 @@ module IgniterLang
       unless tok && %i[ident keyword].include?(tok.type)
         add_parse_error(
           rule: "OOF-EC6",
-          message: "invoke requires a binding name: invoke <name> = contract(\"Callee\") using <cap>",
+          message: "invoke requires a binding name: invoke <name> = Callee(...) using <cap>",
           token: tok&.value.to_s, line: tok&.line || 0, col: tok&.col || 0
         )
         skip_until_body_boundary
@@ -1487,25 +1487,49 @@ module IgniterLang
         return invoke_form_error(binding, "requires '=' after the binding name")
       end
       advance # consume `=`
-      unless peek_value?("contract")
-        return invoke_form_error(binding, "requires the callee form contract(\"Callee\" ...)")
+      # LANG-EFFECT-CALL-NATURAL-SUGAR-P1: the canonical callee form is the natural
+      # call spelling `invoke <name> = Callee(args...) using caps`. The legacy
+      # `contract("Callee", ...)` spelling is a MIGRATION branch: parse far enough to
+      # name the callee, then fail closed with ONE targeted OOF-EC6 showing the new
+      # form (one canonical spelling, never two).
+      if peek_value?("contract") && peek(1)&.type == :lparen
+        advance # consume `contract`
+        advance # consume `(`
+        legacy_callee = peek_type?(:string_lit) ? advance.value : "Callee"
+        tok = peek
+        add_parse_error(
+          rule: "OOF-EC6",
+          message: "invoke '#{binding}': the contract(\"...\") spelling was retired — write the callee directly: invoke #{binding} = #{legacy_callee}(...) using <capability>",
+          token: tok&.value.to_s, line: tok&.line || 0, col: tok&.col || 0
+        )
+        skip_until_body_boundary
+        return nil
       end
-      advance # consume `contract`
-      unless peek_type?(:lparen)
-        return invoke_form_error(binding, "requires '(' after 'contract'")
-      end
-      advance # consume `(`
-      unless peek_type?(:string_lit)
-        return invoke_form_error(binding, "requires a string-literal callee name (dynamic dispatch is closed)")
+      unless peek_type?(:ident)
+        return invoke_form_error(binding, "requires the callee contract name (dynamic dispatch is closed)")
       end
       callee = advance.value
+      while peek_type?(:dot)
+        advance # consume `.`
+        unless peek_type?(:ident)
+          return invoke_form_error(binding, "has a trailing '.' in the qualified callee name")
+        end
+        callee = "#{callee}.#{advance.value}"
+      end
+      unless peek_type?(:lparen)
+        return invoke_form_error(binding, "requires '(' after the callee name")
+      end
+      advance # consume `(`
       args = []
-      while peek_type?(:comma)
-        advance # consume `,`
+      unless peek_type?(:rparen)
         args << parse_expr
+        while peek_type?(:comma)
+          advance # consume `,`
+          args << parse_expr
+        end
       end
       unless peek_type?(:rparen)
-        return invoke_form_error(binding, "requires ')' to close the contract(...) argument list")
+        return invoke_form_error(binding, "requires ')' to close the callee argument list")
       end
       advance # consume `)`
       unless peek_kw?("using")
