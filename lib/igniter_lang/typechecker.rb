@@ -663,6 +663,7 @@ module IgniterLang
         modifier:           contract_modifier,
         input_names:        recur_inputs.map { |d| d.fetch("name") },
         output_count:       recur_outputs.length,
+        output_name:        recur_outputs.length == 1 ? recur_outputs.first.fetch("name") : nil,
         output_type:        recur_outputs.length == 1 ? type_ir(recur_outputs.first.fetch("type_annotation", "Unknown")) : type_ir("Unknown"),
         decreases_variant:  decreases_variant,
       }
@@ -823,6 +824,25 @@ module IgniterLang
               temp_hint_installed = true
             end
           end
+          # LANG-RECUR-NONTAIL-FAIL-CLOSED-P1: precompute the non-tail recur()
+          # node-identity set for this compute's expression BEFORE the generic
+          # infer_expr walk reaches (and validates arity/type/decrease for) each
+          # recur() call — infer_recur_call consults it by object identity.
+          @recur_nontail_ids =
+            if @recur_context && @recur_context[:authorized]
+              # Only the compute directly named by the single output is the
+              # contract's tail result. A recur() rooted in an intermediate
+              # compute is still value-consuming when a later compute builds
+              # the output from that binding.
+              # Output-cardinality errors retain OOF-R7 precedence. Only when
+              # there is exactly one output can we distinguish its producing
+              # compute from an intermediate non-tail compute.
+              root_is_tail = @recur_context[:output_count] != 1 ||
+                decl.fetch("name") == @recur_context[:output_name]
+              collect_recur_nontail_ids(decl.fetch("expr"), root_is_tail)
+            else
+              {}
+            end
           begin
             typed_expr = infer_expr(decl.fetch("expr"), symbol_types, type_errors, type_warnings, name)
           ensure
@@ -2766,7 +2786,7 @@ module IgniterLang
     end
 
     def blocking_rule_present?(errors)
-      %w[OOF-P1 OOF-CE4 OOF-OS2 OOF-H1 OOF-BT1 OOF-BT2 OOF-BT3 OOF-BT4 OOF-TM1 OOF-TM3 OOF-TM4 OOF-TM5 OOF-TM6 OOF-S3 OOF-O3 OOF-O4 OOF-O5 OOF-IV3 OOF-EC7 OOF-RET1].any? { |rule| rule_present?(errors, rule) }
+      %w[OOF-P1 OOF-CE4 OOF-OS2 OOF-H1 OOF-BT1 OOF-BT2 OOF-BT3 OOF-BT4 OOF-TM1 OOF-TM3 OOF-TM4 OOF-TM5 OOF-TM6 OOF-S3 OOF-O3 OOF-O4 OOF-O5 OOF-IV3 OOF-EC7 OOF-RET1 OOF-R15].any? { |rule| rule_present?(errors, rule) }
     end
 
     # OOF-IV helpers -------------------------------------------------------
@@ -3108,6 +3128,29 @@ module IgniterLang
         return typed_expr("call", type_ir("Unknown"), [], "fn" => "recur", "args" => [])
       end
 
+      # OOF-R15: tail-position law (LANG-RECUR-NONTAIL-FAIL-CLOSED-P1). A non-tail
+      # recur() lowers as an unconditional loop-jump on the VM, discarding any
+      # enclosing operator/argument/wrapper context — silent miscomputation, not a
+      # missing convenience. `@recur_nontail_ids` is precomputed once per compute
+      # expression (see collect_recur_nontail_ids) and identifies, by object
+      # identity, every recur() call node that does not sit in the tail slot.
+      # Refused before arity/type/decrease checks so one bad placement yields one
+      # diagnostic.
+      if @recur_nontail_ids&.key?(expr.object_id)
+        # Render the call's own args so two distinct misplaced recur() sites in the
+        # same compute (e.g. `recur(n - 1) + recur(n - 2)`) don't collapse into one
+        # diagnostic under the emitter's rule+message+node dedup (semanticir_emitter.rb).
+        args_desc = expr.fetch("args", []).map { |a| syntactic_arg_desc(a) }.join(", ")
+        type_errors << oof("OOF-R15",
+          "recur(#{args_desc}) in '#{node_name}' — non-tail placement: recur() must be the whole " \
+          "result expression, or a tail leaf of if/match that directly delivers it; " \
+          "found in a value-consuming position (operand, call argument, record/collection " \
+          "element, comparison, or wrapper) — rewrite so recur(...) is the direct branch " \
+          "value, e.g. 'if cond { recur(args) } else { base }'",
+          node_name)
+        return typed_expr("call", type_ir("Unknown"), [], "fn" => "recur", "args" => [])
+      end
+
       # OOF-R7: not single-output
       if ctx[:output_count] != 1
         type_errors << oof("OOF-R7", "recur() in '#{node_name}' — contract must have exactly one output (has #{ctx[:output_count]}); multi-output recur() deferred to v1", node_name)
@@ -3173,6 +3216,86 @@ module IgniterLang
         v.is_a?(Hash) ? expr_contains_recur?(v) :
         v.is_a?(Array) ? v.any? { |item| expr_contains_recur?(item) } : false
       }
+    end
+
+    # ── LANG-RECUR-NONTAIL-FAIL-CLOSED-P1: tail-position law ───────────────────
+    #
+    # Walk `expr` and return a Hash keyed by `object_id` identifying every
+    # recur() call node that does NOT sit in the tail slot. Consulted by
+    # infer_recur_call (by object identity, since infer_expr's own generic
+    # dispatch is what actually visits each recur() node) so the tail-position
+    # rule is checked without duplicating the arity/type/decrease logic already
+    # in infer_recur_call.
+    #
+    # Tail law v0 (mirrors Rust check_recur_in_expr):
+    #   allowed — the whole recursive result expression, and leaf branches of
+    #             `if_expr`/`match_expr` that directly deliver the iteration
+    #             value (their return_expr / arm body).
+    #   refused — binary/unary operands, call arguments, record/collection
+    #             elements, comparisons, interpolation fragments, lambda
+    #             bodies, and any other value-consuming wrapper.
+    #
+    # `in_tail` is a generic reflection-based descent (same shape as
+    # expr_contains_recur? / expr_has_call in the Rust twin): every nested Hash
+    # or Array value is walked at in_tail=false EXCEPT the two tail-propagating
+    # positions (`if_expr` then/else return_expr, `match_expr` arm bodies),
+    # which are special-cased below.
+    def collect_recur_nontail_ids(expr, in_tail, acc = {})
+      return acc unless expr.is_a?(Hash)
+      kind = expr.fetch("kind", "")
+
+      if kind == "call" && expr.fetch("fn", "") == "recur"
+        acc[expr.object_id] = true unless in_tail
+        # recur()'s own arguments are never tail, regardless of the call's own position.
+        expr.fetch("args", []).each { |a| collect_recur_nontail_ids(a, false, acc) }
+        return acc
+      end
+
+      case kind
+      when "if_expr"
+        collect_recur_nontail_ids(expr["cond"], false, acc)
+        collect_recur_block_ids(expr["then"], in_tail, acc)
+        collect_recur_block_ids(expr["else"], in_tail, acc) if expr["else"]
+      when "match_expr"
+        collect_recur_nontail_ids(expr["subject"], false, acc)
+        expr.fetch("arms", []).each do |arm|
+          next unless arm.is_a?(Hash)
+          body = arm["body"]
+          if body.is_a?(Hash) && body.fetch("kind", "") == "block"
+            collect_recur_block_ids(body, in_tail, acc)
+          else
+            collect_recur_nontail_ids(body, in_tail, acc)
+          end
+        end
+      when "block"
+        collect_recur_block_ids(expr, in_tail, acc)
+      else
+        # Generic descent (record/collection literals, call args, binary/unary
+        # ops, lambdas, variant construction, …): every nested position is a
+        # value-consuming wrapper — non-tail.
+        expr.each do |_k, v|
+          if v.is_a?(Hash)
+            collect_recur_nontail_ids(v, false, acc)
+          elsif v.is_a?(Array)
+            v.each { |item| collect_recur_nontail_ids(item, false, acc) }
+          end
+        end
+      end
+      acc
+    end
+
+    # A `{ stmts, return_expr }` block (if/match branch or lambda body): `let`/
+    # expr statements are never tail; `return_expr` is the leaf value the block
+    # delivers, so it inherits the caller's `in_tail`.
+    def collect_recur_block_ids(block, in_tail, acc)
+      return acc unless block.is_a?(Hash)
+      block.fetch("stmts", []).each do |stmt|
+        next unless stmt.is_a?(Hash)
+        collect_recur_nontail_ids(stmt["expr"], false, acc)
+      end
+      re = block["return_expr"]
+      collect_recur_nontail_ids(re, in_tail, acc) if re
+      acc
     end
 
     # ── PROP-039 gate 8: loop body helpers ─────────────────────────────────────

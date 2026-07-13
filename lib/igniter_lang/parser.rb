@@ -2969,8 +2969,31 @@ module IgniterLang
         params << advance.value
       end
       expect_type!(:arrow)
-      body = peek_type?(:lbrace) ? parse_lambda_block : parse_expr
+      # LAB-PARSER-RECORD-IN-HOF-P2: after `->`, a `{` that opens `ident :` (or `keyword :`) is a
+      # record-literal body, not a statement block. A bounded 3-token lookahead routes it through
+      # parse_record_or_block; every other `{` body (a `{ let … }` block, a multi-statement block,
+      # empty `{}`, or a nested block) keeps parse_lambda_block. Malformed record syntax fails closed
+      # inside parse_record_or_block (name_token!/expect_type!(:colon)/parse_expr record a diagnostic),
+      # never silently recovering into a block AST.
+      body = if lambda_body_record_literal?
+               parse_record_or_block
+             elsif peek_type?(:lbrace)
+               parse_lambda_block
+             else
+               parse_expr
+             end
       { "kind" => "lambda", "params" => params, "body" => body }
+    end
+
+    # LAB-PARSER-RECORD-IN-HOF-P2: bounded lookahead — true iff the upcoming tokens are
+    # `{ <name> :`, a record-literal opening in lambda-body position. `<name>` is an :ident or
+    # :keyword (record fields may be keyword-named); the `:` at offset +2 distinguishes a record
+    # from a `{ let x = … }` block (offset +2 is the binding name there, not a colon) and from
+    # `{ expr }` / empty `{}` block bodies.
+    def lambda_body_record_literal?
+      peek_type?(:lbrace) &&
+        %i[ident keyword].include?(peek(1)&.type) &&
+        peek(2)&.type == :colon
     end
 
     def parse_lambda_block

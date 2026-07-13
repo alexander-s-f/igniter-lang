@@ -128,6 +128,39 @@ recursive contract SumList {
 A `recur()` outside a `recursive` or `fuel_bounded` context is OOF-R1
 (experiment-pass — recursive_body_proof 100/100 PASS).
 
+> **v0 tail-position law (OOF-R15 gate, LANG-RECUR-NONTAIL-FAIL-CLOSED-P1,
+> 2026-07-13):** `recur()` must occupy the **tail slot** — the value the
+> contract's recursive result expression ultimately hands back. The VM lowers
+> `recur()` as an unconditional loop-jump (fuel check, input rebind, jump to
+> the body start); outside the tail slot that jump discards whatever enclosing
+> context the expression describes and silently returns the base-case value
+> with `status: success` instead of the intended computation. This is a
+> soundness gap, not a missing convenience, so it is refused at declaration
+> typechecking rather than left to miscompute.
+>
+> - **Allowed (tail):** the whole recursive result expression (`compute
+>   result = recur(...)`, where `result` is the single declared output), and a
+>   leaf branch of `if`/`match` that directly delivers the iteration value
+>   (`if cond { recur(...) } else { base }`,
+>   `match s { Arm { .. } => recur(...) ... }`). An `if`/`match` nested inside
+>   an already-tail leaf keeps propagating: `if a { if b { recur(...) } else
+>   { x } } else { y }` is accepted.
+> - **Refused (non-tail):** binary/unary operands (`n + recur(n - 1)`),
+>   function/call arguments (`f(recur(...))`), record or collection elements
+>   (`{ value: recur(...) }`, `[recur(...)]`), comparisons, string
+>   interpolation fragments, lambda bodies, a recur-rooted intermediate
+>   compute consumed by the output-producing compute, and any other
+>   value-consuming wrapper. Each refused placement fires exactly one
+>   **OOF-R15** — arity/
+>   type/decrease checks for that same `recur()` call are skipped so the
+>   placement error is the single diagnostic (no derivative noise).
+>
+> Ruby and Rust enforce the identical rule at declaration typechecking (not
+> merely at emit time or VM execution). The VM bytecode compiler additionally
+> refuses a `recur_call` SIR node found outside the tail slot before any
+> bytecode is emitted for it — an independent backstop for hand-built or
+> externally supplied SIR that bypassed typechecking.
+
 For fuel-bounded recursion, `decreases fuel` is the accepted shorthand:
 the fuel counter is compiler-managed, not a named input variant. `fuel_bounded`
 contracts and `recursive + decreases fuel` contracts are exempt from OOF-R3.
@@ -227,6 +260,8 @@ append is `lifecycle: :audit` by default.
 ### Managed Local Recursion (PROP-039 authority)
 
 All OOF-R1..R7 codes are PROP-039 canon experiment-pass compiler surface.
+OOF-R15 (LANG-RECUR-NONTAIL-FAIL-CLOSED-P1, 2026-07-13) joins this family —
+the tail-position law for `recur()` placement.
 
 | Code | Condition | Severity | Status |
 |------|-----------|----------|--------|
@@ -237,6 +272,14 @@ All OOF-R1..R7 codes are PROP-039 canon experiment-pass compiler surface.
 | OOF-R5 | `recur()` arity mismatch — arg count does not match input count | error | **experiment-pass** — typechecker.rb; recursive_body_proof 100/100 |
 | OOF-R6 | `recur()` argument type mismatch — arg type does not match corresponding input type | error | **experiment-pass** — typechecker.rb; recursive_body_proof 100/100 |
 | OOF-R7 | `recur()` return type unavailable or ambiguous — contract does not have exactly one output | error | **experiment-pass** — typechecker.rb; recursive_body_proof 100/100 |
+| OOF-R15 | `recur()` in a non-tail (value-consuming) position — intermediate compute, operand, call argument, record/collection element, comparison, or other wrapper; leaves the single output-producing compute expression and its `if`/`match` tail leaves as the only accepted positions | error | **experiment-pass** — typechecker.rs (Rust) / typechecker.rb (Ruby); LANG-RECUR-NONTAIL-FAIL-CLOSED-P1; recursive_body_proof + oof_r3_syntactic_variant_decrease_proof |
+
+> OOF-R15 fires before OOF-R5/R6/R3 for the same `recur()` call (checked
+> immediately after the OOF-R1 context check, ahead of arity/type/decrease) so
+> a non-tail placement produces exactly one diagnostic. The VM bytecode
+> compiler carries an independent backstop over the emitted `recur_call` SIR
+> node (`igniter-vm/src/compiler.rs::check_recur_call_tail_position`) for
+> hand-built or externally supplied SIR that bypassed typechecking.
 
 > Cross-reference: since LANG-CONTRACT-SINGLE-OUTPUT-LAW-P2 (2026-07-13), ANY
 > contract with two or more outputs is already refused at declaration by
@@ -269,7 +312,7 @@ it has no `decreases`, so OOF-R3 does not apply. v0 actions: `:return_partial`,
 > call-site check). The "OOF-R1..R7 owned by PROP-039" framing below predates
 > those allocations; ConvergentLoop therefore uses fresh **OOF-R12/R13/R14**.
 
-OOF-R1..R7 are managed local recursion codes owned by PROP-039.
+OOF-R1..R7 and OOF-R15 are managed local recursion codes owned by PROP-039.
 OOF-R3 scope: `recursive` contracts with named (non-fuel) `decreases` variant only;
 `fuel_bounded` and `recursive + decreases fuel` are exempt.
 Full termination proof, SMT verification, and dotted-path variant support remain
