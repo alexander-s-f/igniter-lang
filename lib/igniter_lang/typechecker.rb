@@ -234,11 +234,16 @@ module IgniterLang
     # OFF — with the gate off, no OOF-M17 is ever produced and warning/error sets
     # are byte-identical to before. Warning-only in v0; hard-error / default-ON /
     # profile-policy are explicitly out of scope.
+    # LANG-SECRET-REF-NATIVE-P2: `declared_secret_refs` is the explicit compile-context allowlist of
+    # SecretRef reference NAMES (Ruby/canon has no lab project resolver, so the proof harness passes
+    # the same declared set the Rust project mode reads from `[app] secret_refs`). `nil` = no
+    # declaration context ⇒ every `secret_ref(...)` is refused fail-closed (never all-allowed).
     def initialize(typechecker_version: DEFAULT_VERSION, optional_fields: false,
-                   required_effect_surface: false)
+                   required_effect_surface: false, declared_secret_refs: nil)
       @typechecker_version = typechecker_version
       @optional_fields = optional_fields
       @required_effect_surface = required_effect_surface
+      @declared_secret_refs = declared_secret_refs.nil? ? nil : declared_secret_refs.to_a
     end
 
     def typecheck(classified_program, cross_module_registry: {}, per_module_imports: {}, per_contract_module: {})
@@ -471,6 +476,11 @@ module IgniterLang
     # rejected. User variants take precedence (a user `variant Option {…}` would
     # shadow the built-in via @variant_shapes).
     def sealed_builtin?(name)
+      # LANG-SECRET-REF-NATIVE-P2: `SecretRef` is an unconditionally sealed, reserved nominal type —
+      # it cannot be shadowed by a user variant/type (construction only via the `secret_ref(...)`
+      # builtin, never a user shape).
+      return true if name == "SecretRef"
+
       !@variant_shapes.key?(name) && SEALED_VARIANT_SHAPES.key?(name)
     end
 
@@ -2000,6 +2010,9 @@ module IgniterLang
       when "or_else"
         # PROP-043: Option[V] unwrap with default (or_else introduced alongside Map v0)
         infer_or_else(args, symbol_types, type_errors, type_warnings, node_name)
+      when "secret_ref"
+        # LANG-SECRET-REF-NATIVE-P2: the sole SecretRef constructor.
+        infer_secret_ref_construct(args, node_name, type_errors)
       when *SEALED_CONSTRUCTORS
         # LANG-SUMTYPE-CONSTRUCT-MATCH-P3: sealed built-in constructors some/none/ok/err
         infer_sealed_construct(fn, args, symbol_types, type_errors, type_warnings, node_name)
@@ -2269,7 +2282,16 @@ module IgniterLang
     def infer_binary(expr, symbol_types, type_errors, type_warnings, node_name)
       left = infer_expr(expr.fetch("left"), symbol_types, type_errors, type_warnings, node_name)
       right = infer_expr(expr.fetch("right"), symbol_types, type_errors, type_warnings, node_name)
-      operator, result_type = operator_type(expr.fetch("op"), left.fetch("resolved_type"), right.fetch("resolved_type"), type_errors, node_name)
+      # LANG-SECRET-REF-NATIVE-P2: no binary operator may observe a SecretRef — ==/!=/ordering
+      # (identity leak), arithmetic/boolean, and `++` (interpolation/concat) all refuse OOF-SR1.
+      op = expr.fetch("op")
+      if type_name(left.fetch("resolved_type")) == "SecretRef" || type_name(right.fetch("resolved_type")) == "SecretRef"
+        type_errors << oof("OOF-SR1",
+          "SecretRef cannot be observed by operator `#{op}` — a reference only routes to a declared SecretRef sink",
+          node_name)
+        return typed_expr("call", type_ir("Unknown"), [], "fn" => op, "args" => [])
+      end
+      operator, result_type = operator_type(op, left.fetch("resolved_type"), right.fetch("resolved_type"), type_errors, node_name)
       typed_expr(
         "call",
         result_type,
@@ -5158,6 +5180,44 @@ module IgniterLang
         t = hint_param(hint, "Result", 0)
         build_sealed_construct("Err", "Result", { "error" => typed_args[0] }, result_type_ir(t, e), deps)
       end
+    end
+
+    # LANG-SECRET-REF-NATIVE-P2: type-check the sole `secret_ref("name")` constructor and lower it
+    # to a dedicated `secret_ref` node (NOT a call, NOT a forgeable record). Fail-closed; diagnostics
+    # NEVER echo the reference literal. OOF-SR1 messages are byte-identical to the Rust toolchain.
+    def infer_secret_ref_construct(args, node_name, type_errors)
+      refuse = lambda do |reason|
+        type_errors << oof("OOF-SR1", "SecretRef construction is invalid: #{reason}", node_name)
+        return typed_expr("call", type_ir("Unknown"), [], "fn" => "secret_ref", "args" => [])
+      end
+
+      return refuse.call("expected exactly one string-literal reference name") unless args.length == 1
+
+      arg = args[0]
+      unless arg.is_a?(Hash) && arg.fetch("kind", nil) == "literal" && arg.fetch("type_tag", nil) == "String"
+        return refuse.call("reference name must be a string literal, not a dynamic or interpolated value")
+      end
+      name = arg.fetch("value", nil)
+      return refuse.call("reference name must be a string literal") unless name.is_a?(String)
+      return refuse.call("reference name violates the v0 name grammar") unless secret_ref_name_grammar_valid?(name)
+
+      if @declared_secret_refs.nil?
+        return refuse.call("no manifest secret_refs declaration is in scope for this compile")
+      end
+      unless @declared_secret_refs.include?(name)
+        return refuse.call("reference name is not declared in the application manifest secret_refs allowlist")
+      end
+
+      typed_expr("secret_ref", type_ir("SecretRef"), [], "name" => name, "sealed" => true)
+    end
+
+    # LANG-SECRET-REF-NATIVE-P2 name grammar (shared law, mirrored in the Rust typechecker, the VM
+    # envelope decoder and the manifest parser): 1..=128 ASCII bytes, dot-separated segments, each
+    # [a-z][a-z0-9_-]*.
+    def secret_ref_name_grammar_valid?(name)
+      return false if name.empty? || name.bytesize > 128 || !name.ascii_only?
+
+      name.split(".", -1).all? { |seg| seg.match?(/\A[a-z][a-z0-9_-]*\z/) }
     end
 
     def sealed_arity(fn) = fn == "none" ? 0 : 1

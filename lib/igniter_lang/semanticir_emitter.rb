@@ -353,6 +353,14 @@ module IgniterLang
         # PROP-044 P6: variant_construct → typed variant_construct node
         elsif expr.fetch("kind", nil) == "variant_construct"
           semantic_variant_construct(expr)
+        # LANG-SECRET-REF-NATIVE-P2: secret_ref → dedicated sealed SIR node (name only).
+        elsif expr.fetch("kind", nil) == "secret_ref"
+          {
+            "kind"          => "secret_ref",
+            "name"          => expr.fetch("name"),
+            "resolved_type" => expr.fetch("resolved_type", { "name" => "SecretRef", "params" => [] }),
+            "sealed"        => true
+          }
         # LANG-OPTIONAL-FIELD-PARTIAL-RECORD-P3: option_construct → SIR node.
         # TC-synthesized only (no source syntax): appears when the optional-fields
         # gate is ON, at record-literal fields (omit→none / raw-T→some).
