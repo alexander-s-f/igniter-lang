@@ -2,6 +2,9 @@
 -- Conformance fixture for Direction F: try_catch, propagate, validate
 
 module SparkCRM.ErrorHandling
+-- LANG-CONTRACT-SINGLE-OUTPUT-LAW-P2: named result record (one value per contract)
+type ErrorHandlingWorkflowResult { recovered : Integer, ok_passthrough : Integer, propagated : Integer, validated : Result[Integer, String], invalid : Result[Integer, String] }
+
 
 contract ErrorHandlingWorkflow {
   -- Inputs
@@ -25,9 +28,7 @@ contract ErrorHandlingWorkflow {
   -- validate a failing case: 3 > 5 is false → err("too_small")
   compute invalid = validate(3, v -> v > threshold, "too_small")
 
-  output recovered:      Integer
-  output ok_passthrough: Integer
-  output propagated:     Integer
-  output validated:      Result[Integer, String]
-  output invalid:        Result[Integer, String]
+  compute result : ErrorHandlingWorkflowResult = { recovered: recovered, ok_passthrough: ok_passthrough, propagated: propagated, validated: validated, invalid: invalid }
+
+  output result : ErrorHandlingWorkflowResult
 }

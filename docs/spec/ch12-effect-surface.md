@@ -115,14 +115,23 @@ contract declaration.
 **Effect call (PROP-050, ratified 2026-07-08; v0 implemented — see § 12.7):**
 
 ```
-invoke-decl ::= "invoke" ident "=" "contract" "(" string ("," expr)* ")"
-                "using" ident ("," ident)*
+invoke-decl   ::= "invoke" ident "=" contract-name "(" (expr ("," expr)*)? ")"
+                  "using" ident ("," ident)*
+contract-name ::= ident ("." ident)*
 ```
 
 `invoke` is a BODY-LEVEL declaration (effect altitude — ordered with effects in
 declaration order). The `using` clause is mandatory and non-empty. The callee
 is a literal (possibly module-qualified) contract name; dynamic dispatch stays
-closed. `call_contract` remains the pure call — permanently.
+closed. `call_contract` remains the pure call — permanently. (The
+`contract("...")` spelling was retired by LANG-EFFECT-CALL-NATURAL-SUGAR-P1,
+2026-07-13; the retired form draws one targeted `OOF-EC6` migration
+diagnostic.)
+
+The `invoke` binding receives the callee's single result value: a callee
+declaring two or more outputs is refused at declaration by `OOF-RET1` (Ch2
+single-output law), so no invoke path ever silently receives output zero of a
+multi-output contract.
 
 ---
 

@@ -238,6 +238,13 @@ All OOF-R1..R7 codes are PROP-039 canon experiment-pass compiler surface.
 | OOF-R6 | `recur()` argument type mismatch — arg type does not match corresponding input type | error | **experiment-pass** — typechecker.rb; recursive_body_proof 100/100 |
 | OOF-R7 | `recur()` return type unavailable or ambiguous — contract does not have exactly one output | error | **experiment-pass** — typechecker.rb; recursive_body_proof 100/100 |
 
+> Cross-reference: since LANG-CONTRACT-SINGLE-OUTPUT-LAW-P2 (2026-07-13), ANY
+> contract with two or more outputs is already refused at declaration by
+> `OOF-RET1` (Ch2 single-output law). `OOF-R7` remains the recur-semantics
+> rule and keeps its own behavior and tests; on a multi-output recursive
+> contract both refusals may appear — R7 owns the `recur()` return-type
+> question, OUT1 owns the declaration shape.
+
 ### ConvergentLoop (PROP-050 / LANG-CH13-CONVERGENT-LOOP-P46)
 
 A `convergent` contract must declare four obligations; each missing one is a hard

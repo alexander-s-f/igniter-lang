@@ -7,6 +7,9 @@ type Item {
   id: Integer,
   value: Integer
 }
+-- LANG-CONTRACT-SINGLE-OUTPUT-LAW-P2: named result record (one value per contract)
+type CollectionWorkflowResult { found : Option[Item], has_any : Bool, all_pos : Bool, merged_count : Integer }
+
 
 contract CollectionWorkflow {
   input items: Collection[Item]
@@ -26,8 +29,7 @@ contract CollectionWorkflow {
   compute merged = concat(items, extra)
   compute merged_count = count(merged)
 
-  output found: Option[Item]
-  output has_any: Bool
-  output all_pos: Bool
-  output merged_count: Integer
+  compute result : CollectionWorkflowResult = { found: found, has_any: has_any, all_pos: all_pos, merged_count: merged_count }
+
+  output result : CollectionWorkflowResult
 }

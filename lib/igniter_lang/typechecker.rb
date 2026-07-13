@@ -542,6 +542,16 @@ module IgniterLang
       # OOF-EC7 can print the actual capability when the mapping is unique.
       @current_contract_capabilities = classified_contract.fetch("declarations", [])
         .select { |d| d["kind"] == "capability" }.map { |d| d["name"] }
+      # LANG-CONTRACT-SINGLE-OUTPUT-LAW-P2: a v0 contract returns exactly ONE value. Multiple
+      # authored `output` declarations were silent data loss (the VM loads only the first) —
+      # refused at DECLARATION so every invocation form inherits the law. Zero-output contracts
+      # keep current behavior (final ruling explicitly OPEN).
+      output_count = classified_contract.fetch("declarations", []).count { |d| d["kind"] == "output" }
+      if output_count >= 2
+        type_errors << oof("OOF-RET1",
+          "contract '#{contract_name_str}' declares #{output_count} outputs; a contract returns exactly one value — define a named result record and return it: type #{contract_name_str}Result { ... }; output result : #{contract_name_str}Result",
+          contract_name_str)
+      end
       # PROP-050/P46: `convergent` is recur-authorized like `fuel_bounded` —
       # convergent iteration runs via recur(), fuel-capped by max_steps; it has no
       # `decreases` variant, so OOF-R3 (structural decrease) does not apply.
@@ -2756,7 +2766,7 @@ module IgniterLang
     end
 
     def blocking_rule_present?(errors)
-      %w[OOF-P1 OOF-CE4 OOF-OS2 OOF-H1 OOF-BT1 OOF-BT2 OOF-BT3 OOF-BT4 OOF-TM1 OOF-TM3 OOF-TM4 OOF-TM5 OOF-TM6 OOF-S3 OOF-O3 OOF-O4 OOF-O5 OOF-IV3 OOF-EC7].any? { |rule| rule_present?(errors, rule) }
+      %w[OOF-P1 OOF-CE4 OOF-OS2 OOF-H1 OOF-BT1 OOF-BT2 OOF-BT3 OOF-BT4 OOF-TM1 OOF-TM3 OOF-TM4 OOF-TM5 OOF-TM6 OOF-S3 OOF-O3 OOF-O4 OOF-O5 OOF-IV3 OOF-EC7 OOF-RET1].any? { |rule| rule_present?(errors, rule) }
     end
 
     # OOF-IV helpers -------------------------------------------------------

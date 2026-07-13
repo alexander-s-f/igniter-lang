@@ -90,6 +90,13 @@ set needed by later assembly/runtime gates.
 
 `fragment_class: "oof"` is forbidden in a loadable SemanticIR contract.
 
+The `outputs` array remains an array for schema stability, but for an ACCEPTED
+value-returning contract it carries exactly ONE `PortIR`: two or more `output`
+declarations are refused at declaration typechecking with `OOF-RET1` (Ch2
+single-output law), so a multi-port `outputs` array never reaches a loadable
+SemanticIR. Zero-output contracts keep their current behavior (ruling OPEN).
+The field is documented, not redesigned, by LANG-CONTRACT-SINGLE-OUTPUT-LAW-P2.
+
 For Stage 3, TEMPORAL is first-class:
 
 ```text

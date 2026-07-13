@@ -113,6 +113,32 @@ LetExpr       := "let" Name "=" Expr   -- inside Body only
 sufficient to produce SemanticIR for the two canonical fixture contracts
 (Add, AvailabilityProjection). Full grammar is a separate track.
 
+**Single-output law (`OOF-RET1`)**: although the grammar admits repeated
+`OutputDecl`, a v0 contract returns exactly ONE value. A contract with two or
+more `output` declarations is refused at declaration typechecking with one root
+`OOF-RET1` in both toolchains (Ruby canon and lab Rust). When several fields
+belong together, the author defines a named result record and returns it:
+
+```igniter
+type ScoreResult { score : Integer, grade : String }
+
+contract Score {
+  input a : Integer
+  compute score = a * 10
+  compute grade = if a > 5 { "high" } else { "low" }
+  compute result : ScoreResult = { score: score, grade: grade }
+  output result : ScoreResult
+}
+```
+
+The named result record is the permanent v0 law, not a temporary workaround:
+the runtime returns one value per contract activation (Ch7), the SemanticIR
+`outputs` array carries exactly one port for accepted value-returning
+contracts (Ch6), effectful `invoke` binds one result value (Ch12), and
+`recur()` already requires exactly one output (`OOF-R7`, Ch13). Zero-output
+contracts keep their current behavior; their final ruling is explicitly OPEN.
+Landed by LANG-CONTRACT-SINGLE-OUTPUT-LAW-P2 (2026-07-13).
+
 ## 2.2.1 Entrypoint and Section Disposition (Stage 3 Candidate)
 
 `entrypoint` and `section` are not part of Grammar Kernel v0. They are Stage 3

@@ -2,6 +2,9 @@
 -- Conformance fixture verifying DateTime operations.
 
 module SparkCRM.DateTimeExtensions
+-- LANG-CONTRACT-SINGLE-OUTPUT-LAW-P2: named result record (one value per contract)
+type DateTimeWorkflowResult { diff : Integer, added : DateTime, parsed : Option[DateTime], formatted : String, before : Bool, after : Bool }
+
 
 contract DateTimeWorkflow {
   input dt1: DateTime
@@ -19,10 +22,7 @@ contract DateTimeWorkflow {
   compute before = is_before(dt1, dt2)
   compute after = is_after(dt1, dt2)
 
-  output diff: Integer
-  output added: DateTime
-  output parsed: Option[DateTime]
-  output formatted: String
-  output before: Bool
-  output after: Bool
+  compute result : DateTimeWorkflowResult = { diff: diff, added: added, parsed: parsed, formatted: formatted, before: before, after: after }
+
+  output result : DateTimeWorkflowResult
 }

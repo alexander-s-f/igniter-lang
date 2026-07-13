@@ -5,6 +5,9 @@
 -- See: igniter-lang/docs/spec/ch8-stdlib.md §8.10
 
 module SparkCRM.StringExtensions
+-- LANG-CONTRACT-SINGLE-OUTPUT-LAW-P2: named result record (one value per contract)
+type TextWorkflowResult { joined : Text, clean : Text, has_other : Bool, starts : Bool, ends_val : Bool, parts : Collection[Text], replaced : Text, replaced_all : Text, byte_count : Integer, rune_count : Integer, grapheme_count : Integer, byte_part : Text, rune_part : Text, grapheme_part : Text }
+
 
 pure contract TextWorkflow {
   input text: Text
@@ -39,18 +42,7 @@ pure contract TextWorkflow {
   compute rune_part: Text = rune_slice(text, start, end_idx)
   compute grapheme_part: Text = grapheme_slice(text, start, end_idx)
 
-  output joined: Text
-  output clean: Text
-  output has_other: Bool
-  output starts: Bool
-  output ends_val: Bool
-  output parts: Collection[Text]
-  output replaced: Text
-  output replaced_all: Text
-  output byte_count: Integer
-  output rune_count: Integer
-  output grapheme_count: Integer
-  output byte_part: Text
-  output rune_part: Text
-  output grapheme_part: Text
+  compute result : TextWorkflowResult = { joined: joined, clean: clean, has_other: has_other, starts: starts, ends_val: ends_val, parts: parts, replaced: replaced, replaced_all: replaced_all, byte_count: byte_count, rune_count: rune_count, grapheme_count: grapheme_count, byte_part: byte_part, rune_part: rune_part, grapheme_part: grapheme_part }
+
+  output result : TextWorkflowResult
 }
