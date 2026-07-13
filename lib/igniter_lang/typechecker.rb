@@ -262,6 +262,11 @@ module IgniterLang
       @cross_module_registry = cross_module_registry
       @per_module_imports = per_module_imports
       @per_contract_module = per_contract_module
+      # LANG-EFFECT-ITERATION-HELPER-WRAP-FAIL-CLOSED-P3: the deterministic transitive
+      # app-local `def` host-IO summary (Ruby twin of Rust's compute_ambient_io_summary),
+      # built ONCE over the whole program's function call graph + Tarjan SCC and consulted
+      # by the OOF-EC6 helper-in-iteration fence (compute-lambda and loop-body positions).
+      @io_helper_summary = compute_io_helper_summary(classified_program.fetch("functions", []))
       typed_contracts = classified_program.fetch("contracts").map do |contract|
         typecheck_contract(contract)
       end
@@ -823,6 +828,20 @@ module IgniterLang
           io_lambda_fn = find_host_io_in_lambda(decl.fetch("expr", nil))
           if io_lambda_fn
             type_errors << oof_ec6_iteration_io(io_lambda_fn, "a lambda body in compute '#{name}'", name)
+            symbol_types[name] = type_ir("Unknown")
+            typed_decls << typed_decl(decl, type_ir("Unknown"), nil, [])
+            next
+          end
+          # LANG-EFFECT-ITERATION-HELPER-WRAP-FAIL-CLOSED-P3: an app-local helper whose
+          # call graph transitively reaches host IO, called inside a HOF lambda, is the
+          # same placement violation one indirection out — refuse with one root OOF-EC6.
+          # Detected via the shared summary (which sees the parsed `def`s even though
+          # `infer_expr` does not resolve app-local calls inside lambdas), then the
+          # offending compute is bound Unknown so the single root is not buried under
+          # the pre-existing "Unknown function" / output-type noise.
+          io_helper_fn = find_io_helper_in_lambda(decl.fetch("expr", nil), @io_helper_summary)
+          if io_helper_fn
+            type_errors << oof_ec6_helper_iteration_io(io_helper_fn, "a lambda body in compute '#{name}'", name)
             symbol_types[name] = type_ir("Unknown")
             typed_decls << typed_decl(decl, type_ir("Unknown"), nil, [])
             next
@@ -2789,6 +2808,87 @@ module IgniterLang
       sccs
     end
 
+    # ── LANG-EFFECT-ITERATION-HELPER-WRAP-FAIL-CLOSED-P3: transitive host-IO summary ──
+    #
+    # Ruby twin of Rust's `compute_ambient_io_summary`, built over the SAME live
+    # function call graph (`fn_extract_all_calls`) + `tarjan_sccs` already used by the
+    # OOF-L4 recursion gate — one machinery, no second graph.
+    #
+    #   Seed:        a `def` body that directly calls a host-IO sink (`find_host_io`,
+    #                whose census is IO_STDLIB_FNS + stdlib.net.request — the P2 census).
+    #   Propagation: Tarjan emits SCCs callees-before-callers, so ONE forward pass over
+    #                the emission order finalizes each callee before its callers. Every
+    #                member of an SCC shares one value (IO iff any member touches IO
+    #                directly, or calls out to an already-IO def). Cyclic helper groups
+    #                terminate deterministically (bounded, monotone).
+    #
+    # Returns Hash{String => true/false} keyed by def name.
+    def compute_io_helper_summary(fns)
+      return {} if fns.nil? || fns.empty?
+      fn_names_set = fns.map { |f| f.fetch("name") }.to_set
+      fn_adj = fns.to_h { |f| [f.fetch("name"), fn_extract_all_calls(f.fetch("body", {}), fn_names_set)] }
+      ambient = fns.to_h { |f| [f.fetch("name"), !find_host_io(f.fetch("body", {})).nil?] }
+      tarjan_sccs(fns.map { |f| f.fetch("name") }, fn_adj).each do |scc|
+        io = scc.any? { |m| ambient[m] } ||
+             scc.any? { |m| (fn_adj[m] || []).any? { |callee| ambient[callee] } }
+        scc.each { |m| ambient[m] = true } if io
+      end
+      ambient
+    end
+
+    # First app-local helper name found ANYWHERE within `node` whose transitive
+    # summary reaches host IO, or nil. Generic descent (mirrors `find_host_io`),
+    # used for loop bodies where the whole body is an iteration context.
+    def find_io_helper(node, summary)
+      return nil if summary.nil? || summary.empty?
+      if node.is_a?(Array)
+        node.each { |v| r = find_io_helper(v, summary); return r if r }
+        return nil
+      end
+      return nil unless node.is_a?(Hash)
+      if node.fetch("kind", nil) == "call"
+        fn = node.fetch("fn", nil)
+        return fn if fn && summary[fn]
+      end
+      node.each_value { |v| r = find_io_helper(v, summary); return r if r }
+      nil
+    end
+
+    # First IO-reaching app-local helper name called inside a LAMBDA body reachable
+    # from `node`, or nil. `in_lambda` becomes true once descent crosses a lambda
+    # node, so a helper call at the expression root (top-level position) does not
+    # match — only a helper captured inside a HOF lambda does (twin of
+    # `find_host_io_in_lambda`).
+    def find_io_helper_in_lambda(node, summary, in_lambda = false)
+      return nil if summary.nil? || summary.empty?
+      if node.is_a?(Array)
+        node.each { |v| r = find_io_helper_in_lambda(v, summary, in_lambda); return r if r }
+        return nil
+      end
+      return nil unless node.is_a?(Hash)
+      if in_lambda && node.fetch("kind", nil) == "call"
+        fn = node.fetch("fn", nil)
+        return fn if fn && summary[fn]
+      end
+      entering = in_lambda || node.fetch("kind", nil) == "lambda"
+      node.each_value { |v| r = find_io_helper_in_lambda(v, summary, entering); return r if r }
+      nil
+    end
+
+    # One root OOF-EC6 for an IO-bearing app-local helper called from an iteration
+    # context. Names the helper + iteration locus + transitive host IO + the
+    # EffectIntent + single-invoke rewrite. The remedy sentence is held
+    # BYTE-IDENTICAL to the Rust twin (classifier `IterIoHit::Helper`).
+    def oof_ec6_helper_iteration_io(helper, locus, node_name)
+      oof("OOF-EC6",
+        "helper '#{helper}' called inside #{locus} reaches host IO through its call " \
+        "graph (a shipped stdlib.IO.* / stdlib.net.request sink is transitively " \
+        "reachable) — an app-local helper that performs an external effect is not " \
+        "allowed in iteration position; build a pure Collection[EffectIntent] and " \
+        "perform ONE declaration-position invoke outside the iteration (PROP-050)",
+        node_name)
+    end
+
     def oof_alias(rule, message, node_name, aliases)
       oof(rule, message, node_name).merge("aliases" => aliases)
     end
@@ -3434,6 +3534,14 @@ module IgniterLang
           # in iteration position — refuse with one root OOF-EC6.
           io_fn = find_host_io(b.fetch("expr", nil))
           errors << oof_ec6_iteration_io(io_fn, "loop body '#{loop_name}'", loop_name) if io_fn
+          # LANG-EFFECT-ITERATION-HELPER-WRAP-FAIL-CLOSED-P3: an IO-reaching app-local
+          # helper called in a loop-body compute is the same placement violation one
+          # indirection out (loop bodies currently accept helper calls silently) — one
+          # root OOF-EC6. Only when there is no direct-IO root already (disjoint families).
+          if !io_fn
+            helper_fn = find_io_helper(b.fetch("expr", nil), @io_helper_summary)
+            errors << oof_ec6_helper_iteration_io(helper_fn, "loop body '#{loop_name}'", loop_name) if helper_fn
+          end
           # PROP-039 gate 5: recur() in loop body is OOF-R1 (loop is not a recursive context)
           if expr_contains_recur?(b.fetch("expr", nil))
             errors << oof("OOF-R1", "recur() in loop body '#{loop_name}' — loop body is not a recursive or fuel_bounded context", loop_name)

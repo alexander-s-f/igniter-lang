@@ -256,7 +256,7 @@ in a profile that only permits `compensatable` is a compile-time error (OOF-M2).
 | OOF-EC3 | attenuation mismatch — callee capability slot unmatched by a same-TYPE `using` name; a `using` name matching no slot (over-grant); a `using` name not a declared caller capability | error |
 | OOF-EC4 | escalation placement — `pure` caller never invokes; `observed` → `observed` only; `effect`/`privileged`/`irreversible` → `observed`\|`effect`; all other caller classes fail closed | error |
 | OOF-EC5 | depth — the callee itself contains an `invoke` (v0 is depth-1) | error |
-| OOF-EC6 | form/position — malformed `invoke` (incl. missing or empty `using`); `invoke` in loop-body position; or a **direct host-IO call** (`stdlib.IO.*` / `stdlib.net.request`) inside an iteration context — a collection-HOF lambda body, or a managed-loop body (any nesting, incl. under `if`/`match`). Remedy: build a pure `Collection[EffectIntent]`, then perform ONE declaration-position `invoke` outside the iteration. Top-level direct IO is unaffected. | error |
+| OOF-EC6 | form/position — malformed `invoke` (incl. missing or empty `using`); `invoke` in loop-body position; a **direct host-IO call** (`stdlib.IO.*` / `stdlib.net.request`) inside an iteration context — a collection-HOF lambda body, or a managed-loop body (any nesting, incl. under `if`/`match`); **or an app-local helper `def` call whose call graph transitively reaches such a host-IO sink, in that same iteration context**. Remedy: build a pure `Collection[EffectIntent]`, then perform ONE declaration-position `invoke` outside the iteration. Top-level direct or helper IO is unaffected. | error |
 | OOF-M17 | `effect/privileged/irreversible` missing a required Effect Surface field, under the `required_effect_surface` completeness gate | warn |
 | OOF-M3 | `irreversible` without `compensation` or `no_compensation` | warn |
 | OOF-M4 | `idempotency: none` used in a retry-enabled profile | **implemented as `OOF-PROF4`** (ch11 §11.4; PROP-048/P31, hard error) — this M4 code stays retired prose |
@@ -280,6 +280,28 @@ in a profile that only permits `compensatable` is a compile-time error (OOF-M2).
 > the readiness row L2 "one byte written, `observations: 0`" shape is now
 > unreachable). This closes the placement slice only; effect-iteration syntax
 > stays HELD (`LAB-EFFECT-INTENT-BULK-WRITE-PROOF-P1`).
+>
+> **Extended to app-local helper indirection — IMPLEMENTED (2026-07-13,
+> LANG-EFFECT-ITERATION-HELPER-WRAP-FAIL-CLOSED-P3).** The fence now covers not
+> only a *direct* host-IO call but also a call to an app-local helper `def` whose
+> **call graph transitively reaches** a host-IO sink (same census), when that call
+> occurs in an iteration context. Reachability is decided by a deterministic
+> transitive summary over the program's `def` call graph (Tarjan SCC; cyclic
+> helper groups terminate and share one summary value) — the SAME summary machinery
+> that `OOF-M1` uses to catch a `pure` contract laundering I/O through a helper (one
+> analyzer, two consumers; seeded by the shared host-IO census incl.
+> `stdlib.net.request`). The helper diagnostic is one root `OOF-EC6` at the helper
+> call site, naming the helper, the iteration locus, the transitively-reached host
+> IO, and the same rewrite. Ownership is preserved: `OOF-M1` keeps the pure-laundering
+> case; a genuinely unknown callee keeps its own resolution diagnostic; a top-level
+> helper call keeps its receipt. Enforced in all three layers (Ruby canon, Rust lab,
+> and the VM backstop, which builds the static helper summary from `functions[]` and
+> refuses one-hop / two-hop / cyclic helper indirection before any bytecode). Scope
+> stays statically-known app-local `def` indirection — **no** dynamic helper target,
+> **no** cross-package effect inference, **no** effect annotations. In the Ruby
+> canon a helper called in a *HOF-lambda* position that is NOT IO-reaching still
+> carries its pre-existing "Unknown function" diagnostic (app-local `def`s are not
+> resolved inside lambdas there); the placement law owns only the IO-reaching case.
 
 > The target-prose row "OOF-M2 — missing required Effect Surface fields (error)"
 > is **RETIRED**: implemented `OOF-M2` is PROP-035's structural
