@@ -815,6 +815,18 @@ module IgniterLang
           typed_decls << typed_decl_invariant(decl, symbol_types)
         when "compute"
           name = decl.fetch("name")
+          # LANG-EFFECT-ITERATION-DIRECT-IO-FAIL-CLOSED-P2: a host-IO call captured inside a
+          # collection-HOF lambda body is a direct external effect in iteration position —
+          # refuse with one root OOF-EC6. Skip inference of the offending compute (bind it
+          # Unknown) so the single root diagnostic is not buried under derivative
+          # Unknown/output noise (the lambda body would otherwise re-raise unrelated errors).
+          io_lambda_fn = find_host_io_in_lambda(decl.fetch("expr", nil))
+          if io_lambda_fn
+            type_errors << oof_ec6_iteration_io(io_lambda_fn, "a lambda body in compute '#{name}'", name)
+            symbol_types[name] = type_ir("Unknown")
+            typed_decls << typed_decl(decl, type_ir("Unknown"), nil, [])
+            next
+          end
           temp_hint_installed = false
           if decl["type_annotation"] && decl.fetch("expr", {}).fetch("kind", nil) == "record_literal"
             declared_type = type_ir(decl["type_annotation"])
@@ -2786,7 +2798,10 @@ module IgniterLang
     end
 
     def blocking_rule_present?(errors)
-      %w[OOF-P1 OOF-CE4 OOF-OS2 OOF-H1 OOF-BT1 OOF-BT2 OOF-BT3 OOF-BT4 OOF-TM1 OOF-TM3 OOF-TM4 OOF-TM5 OOF-TM6 OOF-S3 OOF-O3 OOF-O4 OOF-O5 OOF-IV3 OOF-EC7 OOF-RET1 OOF-R15].any? { |rule| rule_present?(errors, rule) }
+      # OOF-EC6 (LANG-EFFECT-ITERATION-DIRECT-IO-FAIL-CLOSED-P2 + PROP-050): a host-IO/invoke
+      # placement refusal is the root cause; derivative Unknown/output-type noise on the same
+      # refused compute is suppressed.
+      %w[OOF-P1 OOF-CE4 OOF-OS2 OOF-H1 OOF-BT1 OOF-BT2 OOF-BT3 OOF-BT4 OOF-TM1 OOF-TM3 OOF-TM4 OOF-TM5 OOF-TM6 OOF-S3 OOF-O3 OOF-O4 OOF-O5 OOF-IV3 OOF-EC6 OOF-EC7 OOF-RET1 OOF-R15].any? { |rule| rule_present?(errors, rule) }
     end
 
     # OOF-IV helpers -------------------------------------------------------
@@ -3298,6 +3313,67 @@ module IgniterLang
       acc
     end
 
+    # ── LANG-EFFECT-ITERATION-DIRECT-IO-FAIL-CLOSED-P2: host-IO placement fence ──
+    #
+    # A direct external effect (a host-IO call) inside an ITERATION context — a
+    # collection-HOF lambda body, or a managed-loop body (any nesting, including
+    # under if/match) — is refused before execution with OOF-EC6, the same
+    # form/position identity that already fences `invoke` in loop bodies. The
+    # supported v0 shape is: build a pure Collection[EffectIntent] by iterating,
+    # then perform ONE declaration-position `invoke` OUTSIDE the iteration
+    # (PROP-050 placement law). Top-level direct IO is untouched by this fence.
+    #
+    # Census predicate: membership in the host-IO family comes from the live
+    # IO_STDLIB_FNS census plus `stdlib.net.request` (capability-bearing, not in
+    # the file-IO table) — never from a capability variable's name or a substring.
+    def host_io_call_node?(node)
+      return false unless node.is_a?(Hash) && node.fetch("kind", nil) == "call"
+      fn = node.fetch("fn", nil)
+      IO_STDLIB_FNS.key?(fn) || fn == "stdlib.net.request"
+    end
+
+    # First host-IO fn name found ANYWHERE within `node` (full generic descent —
+    # covers call args, if/match branches, blocks, record/array literals, lambdas),
+    # or nil. Used for loop bodies, where the whole body is an iteration context.
+    def find_host_io(node)
+      if node.is_a?(Array)
+        node.each { |v| r = find_host_io(v); return r if r }
+        return nil
+      end
+      return nil unless node.is_a?(Hash)
+      return node.fetch("fn") if host_io_call_node?(node)
+      node.each_value { |v| r = find_host_io(v); return r if r }
+      nil
+    end
+
+    # First host-IO fn name found inside a LAMBDA body reachable from `node`, or
+    # nil. `in_lambda` becomes true once descent crosses a lambda node, so a host
+    # IO at the expression root (top-level direct IO) does not match — only IO
+    # captured inside a HOF lambda does.
+    def find_host_io_in_lambda(node, in_lambda = false)
+      if node.is_a?(Array)
+        node.each { |v| r = find_host_io_in_lambda(v, in_lambda); return r if r }
+        return nil
+      end
+      return nil unless node.is_a?(Hash)
+      return node.fetch("fn") if in_lambda && host_io_call_node?(node)
+      entering = in_lambda || node.fetch("kind", nil) == "lambda"
+      node.each_value { |v| r = find_host_io_in_lambda(v, entering); return r if r }
+      nil
+    end
+
+    # One root OOF-EC6 diagnostic teaching the EffectIntent + single-invoke remedy.
+    # `locus` is a short human phrase naming the iteration context ("loop body
+    # 'Flush'" / "a lambda body in compute 'wrote'"). The remedy sentence is held
+    # byte-identical to the Rust twin so the two toolchains cannot drift.
+    def oof_ec6_iteration_io(fn, locus, node_name)
+      oof("OOF-EC6",
+        "host IO '#{fn}' inside #{locus} — a direct external effect is not allowed in " \
+        "iteration position; build a pure Collection[EffectIntent] and perform ONE " \
+        "declaration-position invoke outside the iteration (PROP-050)",
+        node_name)
+    end
+
     # ── PROP-039 gate 8: loop body helpers ─────────────────────────────────────
 
     # Return element type T from a Collection[T] type_ir value.
@@ -3353,6 +3429,11 @@ module IgniterLang
           lead_names << name
         when "compute"
           target = b.fetch("name")
+          # LANG-EFFECT-ITERATION-DIRECT-IO-FAIL-CLOSED-P2: a host-IO call anywhere in a
+          # loop-body compute (including nested under if/match) is a direct external effect
+          # in iteration position — refuse with one root OOF-EC6.
+          io_fn = find_host_io(b.fetch("expr", nil))
+          errors << oof_ec6_iteration_io(io_fn, "loop body '#{loop_name}'", loop_name) if io_fn
           # PROP-039 gate 5: recur() in loop body is OOF-R1 (loop is not a recursive context)
           if expr_contains_recur?(b.fetch("expr", nil))
             errors << oof("OOF-R1", "recur() in loop body '#{loop_name}' — loop body is not a recursive or fuel_bounded context", loop_name)

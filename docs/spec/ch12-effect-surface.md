@@ -256,11 +256,30 @@ in a profile that only permits `compensatable` is a compile-time error (OOF-M2).
 | OOF-EC3 | attenuation mismatch — callee capability slot unmatched by a same-TYPE `using` name; a `using` name matching no slot (over-grant); a `using` name not a declared caller capability | error |
 | OOF-EC4 | escalation placement — `pure` caller never invokes; `observed` → `observed` only; `effect`/`privileged`/`irreversible` → `observed`\|`effect`; all other caller classes fail closed | error |
 | OOF-EC5 | depth — the callee itself contains an `invoke` (v0 is depth-1) | error |
-| OOF-EC6 | form/position — malformed `invoke` (incl. missing or empty `using`), or `invoke` in loop-body position | error |
+| OOF-EC6 | form/position — malformed `invoke` (incl. missing or empty `using`); `invoke` in loop-body position; or a **direct host-IO call** (`stdlib.IO.*` / `stdlib.net.request`) inside an iteration context — a collection-HOF lambda body, or a managed-loop body (any nesting, incl. under `if`/`match`). Remedy: build a pure `Collection[EffectIntent]`, then perform ONE declaration-position `invoke` outside the iteration. Top-level direct IO is unaffected. | error |
 | OOF-M17 | `effect/privileged/irreversible` missing a required Effect Surface field, under the `required_effect_surface` completeness gate | warn |
 | OOF-M3 | `irreversible` without `compensation` or `no_compensation` | warn |
 | OOF-M4 | `idempotency: none` used in a retry-enabled profile | **implemented as `OOF-PROF4`** (ch11 §11.4; PROP-048/P31, hard error) — this M4 code stays retired prose |
 | OOF-M5 | `reversibility` exceeds profile maximum | **implemented as `OOF-PROF5`** (ch11 §11.4; PROP-048/P32, hard error) — this M5 code stays retired prose |
+
+> **OOF-EC6 host-IO placement fence — IMPLEMENTED (2026-07-13,
+> LANG-EFFECT-ITERATION-DIRECT-IO-FAIL-CLOSED-P2).** In addition to the malformed
+> `invoke` and `invoke`-in-loop cases, `OOF-EC6` now also fences a **direct
+> host-IO call** (`stdlib.IO.*` / `stdlib.net.request`; membership from the live
+> `IO_STDLIB_FNS` / `capability_mode` census, never a name substring) that occurs
+> inside an ITERATION context — a collection-HOF lambda body, or a managed-loop
+> body (finite, budgeted, or service; any nesting, including under `if`/`match`).
+> Reads are fenced as well as writes (reads also need durable observation
+> lineage). Exactly one root `OOF-EC6` per offending call; derivative
+> Unknown/output noise is suppressed via `blocking_rule_present`. Earlier root
+> laws are preserved: an unknown `stdlib.IO.*` op, a capability type/mode error
+> (`E-IO-CAP-*`), or a malformed `invoke` keep their own codes. **Top-level direct
+> IO is unaffected** and keeps its receipt. Enforced in the Ruby canon
+> typechecker, the Rust lab classifier, and — as an independent backstop over
+> hand-built/external SIR — the VM compiler (refused before any bytecode executes;
+> the readiness row L2 "one byte written, `observations: 0`" shape is now
+> unreachable). This closes the placement slice only; effect-iteration syntax
+> stays HELD (`LAB-EFFECT-INTENT-BULK-WRITE-PROOF-P1`).
 
 > The target-prose row "OOF-M2 — missing required Effect Surface fields (error)"
 > is **RETIRED**: implemented `OOF-M2` is PROP-035's structural
