@@ -1,8 +1,8 @@
 {
   "kind": "stdlib_inventory",
   "format_version": "v0",
-  "stdlib_surface_digest": "d850588f979ed2f9cf8dd17876e8a9e0d345c0be64edc54a4e8d5fe8c792b80a",
-  "note": "Normatively referenced by Ch8. Digest is computed from canonical re-serialization of entries sorted by canonical_name with entry_digest fields stripped — never from raw file bytes. P3 proof verifies determinism. P5 adds stdlib.collection.map + stdlib.collection.filter entries and updates stdlib.collection.count proof_lineage. CONSTRUCT-P1 adds stdlib.decimal.decimal (explicit Decimal constructor) and recomputes the digest. FLATMAP-P5 adds stdlib.collection.flat_map and recomputes the digest. PREDICATE-OPS-P4 adds stdlib.collection.find/any/all and recomputes the digest. LANG-STDLIB-NUMERIC-TEXT-CONVERSION-P1 adds stdlib.integer.parse_int/int_to_text/modulo (category numeric) and recomputes the digest. LANG-STDLIB-TEXT-ESCAPE-DELIMITED-P2 adds stdlib.text.encode_delimited/decode_delimited (escape-aware delimited row codec; decode -> Option[Collection[Text]]) and recomputes the digest. LANG-STDLIB-COLLECTION-AT-INVENTORY-P5 adds stdlib.collection.at (Collection[T] x Integer -> Option[T], zero-based, total) and recomputes the digest. LANG-STDLIB-TEXT-JOIN-P1 adds stdlib.text.join (Collection[Text] x Text -> Text, inverse of split) and recomputes the digest. LANG-STDLIB-WIRE-FRAME-CODEC-P2 adds stdlib.text.encode_frame (Text -> Text) and stdlib.text.decode_frame (Text -> Option[FrameDecode], length-prefixed netstring frame codec) and recomputes the digest. LANG-STDLIB-COLLECTION-SORT-BY-P3 adds stdlib.collection.sort_by (Collection[T] x (T -> K) -> Collection[T], stable ascending, K in {Integer, Text, Decimal}, OOF-COL11 fail-closed on Float and every other key shape) and recomputes the digest. LANG-STDLIB-MAP-RUNTIME-P1 makes stdlib.map.empty/stdlib.map.from_pairs ACTUALLY EXECUTABLE in the VM (bytecode OP_CALL + eval_ast HOF-dispatch, shared pair-validation/last-input-wins helper) — both entries previously claimed `production-implemented` with no live VM constructor arm (readers only); reconciles their signatures to Map[String, V] (v0 keys are exactly String, never a generic K), fixes stdlib.map.get's stale Option[V]/totality/diagnostics fields, and documents the LAST-INPUT-WINS duplicate-key law and Pair{first,second} shape; recomputes the digest. LANG-STDLIB-INVENTORY-QUALIFIED-IMPORT-SURFACE-P2 adds the additive import_surface field (absent/default = bare_alias, preserving every existing row's behavior) and registers the 13 canon Ch8 §8.11 stdlib.bytes.* pure operations as qualified_only — discoverable via inventory/help/MCP, callable only through qualified names, bare/named import refused (OOF-IMP3), compat aliases text_to_bytes/bytes_to_text recorded but not importable; capability/effect modules (stdlib.IO.*, stdlib.net.*) deliberately stay OUT of this canon inventory; recomputes the digest.",
+  "stdlib_surface_digest": "413f6dd6826fd0b1507dbea83bc7822231c0dd5334301e10d3b476e649cc2423",
+  "note": "Normatively referenced by Ch8. Digest is computed from canonical re-serialization of entries sorted by canonical_name with entry_digest fields stripped — never from raw file bytes. P3 proof verifies determinism. P5 adds stdlib.collection.map + stdlib.collection.filter entries and updates stdlib.collection.count proof_lineage. CONSTRUCT-P1 adds stdlib.decimal.decimal (explicit Decimal constructor) and recomputes the digest. FLATMAP-P5 adds stdlib.collection.flat_map and recomputes the digest. PREDICATE-OPS-P4 adds stdlib.collection.find/any/all and recomputes the digest. LANG-STDLIB-NUMERIC-TEXT-CONVERSION-P1 adds stdlib.integer.parse_int/int_to_text/modulo (category numeric) and recomputes the digest. LANG-STDLIB-TEXT-ESCAPE-DELIMITED-P2 adds stdlib.text.encode_delimited/decode_delimited (escape-aware delimited row codec; decode -> Option[Collection[Text]]) and recomputes the digest. LANG-STDLIB-COLLECTION-AT-INVENTORY-P5 adds stdlib.collection.at (Collection[T] x Integer -> Option[T], zero-based, total) and recomputes the digest. LANG-STDLIB-TEXT-JOIN-P1 adds stdlib.text.join (Collection[Text] x Text -> Text, inverse of split) and recomputes the digest. LANG-STDLIB-WIRE-FRAME-CODEC-P2 adds stdlib.text.encode_frame (Text -> Text) and stdlib.text.decode_frame (Text -> Option[FrameDecode], length-prefixed netstring frame codec) and recomputes the digest. LANG-STDLIB-COLLECTION-SORT-BY-P3 adds stdlib.collection.sort_by (Collection[T] x (T -> K) -> Collection[T], stable ascending, K in {Integer, Text, Decimal}, OOF-COL11 fail-closed on Float and every other key shape) and recomputes the digest. LANG-STDLIB-MAP-RUNTIME-P1 makes stdlib.map.empty/stdlib.map.from_pairs ACTUALLY EXECUTABLE in the VM (bytecode OP_CALL + eval_ast HOF-dispatch, shared pair-validation/last-input-wins helper) — both entries previously claimed `production-implemented` with no live VM constructor arm (readers only); reconciles their signatures to Map[String, V] (v0 keys are exactly String, never a generic K), fixes stdlib.map.get's stale Option[V]/totality/diagnostics fields, and documents the LAST-INPUT-WINS duplicate-key law and Pair{first,second} shape; recomputes the digest. LANG-STDLIB-INVENTORY-QUALIFIED-IMPORT-SURFACE-P2 adds the additive import_surface field (absent/default = bare_alias, preserving every existing row's behavior) and registers the 13 canon Ch8 §8.11 stdlib.bytes.* pure operations as qualified_only — discoverable via inventory/help/MCP, callable only through qualified names, bare/named import refused (OOF-IMP3), compat aliases text_to_bytes/bytes_to_text recorded but not importable; capability/effect modules (stdlib.IO.*, stdlib.net.*) deliberately stay OUT of this canon inventory; recomputes the digest. LANG-STDLIB-COLLECTION-TAKE-CANON-P5 adds stdlib.collection.take (Collection[T] x Integer -> Collection[T], prefix-bounded reader, n<=0 -> [], n>=count(xs) -> all input, OOF-COL12 fail-closed on a non-Integer/non-lambda second argument) and recomputes the digest.",
   "entries": [
     {
       "canonical_name": "stdlib.text.byte_length",
@@ -1051,6 +1051,56 @@
       ],
       "compatibility_note": "Stable ascending sort: equal keys preserve input order exactly (decorate-sort-undecorate; key extractor runs exactly once per item). Result type is Collection[T] — the ORIGINAL element type — never Collection[K] (unlike map, sort_by reorders, it does not transform elements). K is restricted to exactly Integer, Text, or Decimal (the three total scalar orders live natively in the VM); every other key shape (Float, Bool, Option, record, variant, Map, Bytes, Collection) is refused fail-closed by OOF-COL11, a FRESH code distinct from OOF-COL10 (owned by `at`'s index-type check). No comparator-lambda API, no descending/multi-key ordering, no Map construction, index_by, group_by, or distinct_by in v0 — group_by/index_by are structurally blocked on a missing VM Map-construction runtime and follow as a later card. Ruby canon is typecheck/emit parity only (no collection-HOF interpreter, execution is Rust VM authority); the VM implements a shared native stable merge sort reused identically by the bytecode OP_CALL arm and both eval_ast HOF dispatch sites.",
       "owner_surface": "LANG-STDLIB-COLLECTION-ORDER-GROUP-READINESS-P2",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.collection.take",
+      "semantic_ir_name": "stdlib.collection.take",
+      "legacy_sir": null,
+      "aliases": [
+        {
+          "kind": "source_alias",
+          "name": "take"
+        }
+      ],
+      "category": "collection",
+      "lifecycle_status": "production-implemented",
+      "semantic_stability": "experiment-pass",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "total",
+      "type_params": [
+        "T"
+      ],
+      "input_signature": [
+        "Collection[T]",
+        "Integer"
+      ],
+      "output_signature": "Collection[T]",
+      "diagnostics": [
+        "OOF-COL1",
+        "OOF-COL2",
+        "OOF-COL12"
+      ],
+      "failure_behavior": "OOF-COL12 refuses a second argument that is neither Integer nor Unknown at typecheck (a predicate lambda is explicitly refused this way — take is a READER, never modeled as a HOF); n <= 0 and n >= count(xs) are RUNTIME-total clamps, never a diagnostic or an error.",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "LANG-STDLIB-COLLECTION-ALGEBRA-PARITY-PROP-P1 — prior-art horizon research: take named as slice-2, lab-ahead in the Rust TC + VM, zero Ruby canon support",
+        "LANG-QUERY-ENGINE-ORDER-BY-ASCENDING-P1 — live consuming pressure: query_engine's app-local TakeRows workaround, built because bare `take` had no Ruby canon typechecker arm at all (OOF-TY0 Unknown function) and no inventory row",
+        "LANG-STDLIB-COLLECTION-TAKE-CANON-P5 — Ruby canon typechecker.rb infer_take_call (dedicated arm, verbatim-fn SIR pass-through mirroring sort_by/at); Rust igniter-compiler gets its OWN dedicated `take` arm (previously shared with `filter` via `\"filter\" | \"take\"`, which gave it no arity/type diagnostics of its own) plus both emitter qualify lists (bare `take` -> qualified `stdlib.collection.take`, mirroring sort_by rather than at's deliberate bare choice); igniter-vm bytecode OP_CALL + both eval_ast HOF dispatch sites already executed take pre-existing (verified, not re-implemented) via the existing qualified-name normalization; query_engine's TakeRows workaround retired in favor of the imported `take`"
+      ],
+      "examples": [
+        "take([1, 2, 3, 4, 5], 2) -> [1, 2]",
+        "take([1, 2, 3], 0) -> []",
+        "take([1, 2, 3], -1) -> []",
+        "take([1, 2, 3], 10) -> [1, 2, 3]",
+        "take(xs, x -> x > 0) -> OOF-COL12 at typecheck (second argument must be Integer, a predicate lambda is refused)"
+      ],
+      "compatibility_note": "Prefix-bounded READER, not a HOF — the second argument is an Integer count, never a predicate lambda (OOF-COL12 refuses lambdas and every other non-Integer shape structurally, since a lambda's generic type inference always resolves to Unknown and would otherwise slip past a naive type_name check). Preserves input order; element type is UNCHANGED (Collection[T], the same discipline as filter/sort_by, never map's). n <= 0 returns []; n >= count(xs) returns all input elements (clamped, never an error). Ruby canon is typecheck/emit parity only (no collection-HOF interpreter, execution is Rust VM authority, same boundary as sort_by); the VM's bytecode OP_CALL arm and both eval_ast HOF dispatch sites already executed `take` before this card (qualified-name normalization already covered it) — this card is a canon-admission/parity promotion, not a new VM capability.",
+      "owner_surface": "LANG-STDLIB-COLLECTION-TAKE-CANON-P5",
       "entry_digest": null
     },
     {

@@ -1888,6 +1888,13 @@ module IgniterLang
         # Stable ascending sort by a total-scalar key (Integer|Text|Decimal); OOF-COL11 refuses
         # Float and every other key shape. Element type is UNCHANGED (not a `map`-shaped transform).
         infer_sort_by_call(args, symbol_types, type_errors, type_warnings, node_name)
+      when "take"
+        # LANG-STDLIB-COLLECTION-TAKE-CANON-P5: take(Collection[T], Integer) -> Collection[T].
+        # A prefix-bounded reader, NOT a HOF — the second argument is an Integer count, never a
+        # predicate lambda. Element type is UNCHANGED (mirrors filter/sort_by, not map). OOF-COL12
+        # refuses a non-Integer/non-lambda second argument (a NEW dedicated code — OOF-COL10 stays
+        # owned by `at`, OOF-COL11 by `sort_by`). n<=0/n>=count(xs) are RUNTIME-total (VM clamps).
+        infer_take_call(args, symbol_types, type_errors, type_warnings, node_name)
       when "sum"
         # LANG-STDLIB-SUM-PROP-P3: stdlib.collection.sum two-arg field-projection form
         infer_sum_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
@@ -3859,6 +3866,70 @@ module IgniterLang
 
       typed_expr("call", output_type, all_deps,
                  "fn" => qualified, "args" => [collection_arg, lambda_typed])
+    end
+
+    # LANG-STDLIB-COLLECTION-TAKE-CANON-P5: take(Collection[T], Integer) -> Collection[T].
+    # A prefix-bounded READER, not a HOF — the second argument is an Integer count, never a
+    # predicate lambda. Element type is UNCHANGED (mirrors filter/sort_by's output-type rule, not
+    # map's). OOF-COL1 (arity), OOF-COL2 (non-Collection first arg), OOF-COL12 (second argument
+    # neither Integer nor Unknown — a NEW dedicated code; OOF-COL10 stays owned by `at`'s index
+    # check, OOF-COL11 by `sort_by`'s key check). `n<=0`/`n>=count(xs)` are RUNTIME-total (VM
+    # clamps to `[0, count(xs)]`), never a diagnostic.
+    #
+    # IMPORTANT: the second argument is checked for the lambda SHAPE structurally, BEFORE ever
+    # calling the generic `infer_expr` on it. `infer_expr`'s `case` has no `"lambda"` arm at all,
+    # so blindly inferring a lambda node would inject a spurious `OOF-TY0 "Unsupported expression
+    # kind: lambda"` into `type_errors` in addition to (or instead of) the intended `OOF-COL12` —
+    # exactly the trap `sort_by`/`at`'s Ruby arms avoid by checking `kind == "lambda"` first.
+    def infer_take_call(args, symbol_types, type_errors, type_warnings, node_name)
+      qualified = "stdlib.collection.take"
+
+      # ── OOF-COL1: arity must be exactly 2 ────────────────────────────────────
+      unless args.length == 2
+        type_errors << oof("OOF-COL1",
+          "#{qualified}: expected 2 arguments (collection, n), got #{args.length}",
+          node_name)
+        return typed_expr("call", type_ir("Unknown"), [], "fn" => qualified, "args" => [])
+      end
+
+      # ── Infer collection argument ─────────────────────────────────────────────
+      collection_arg = infer_expr(args[0], symbol_types, type_errors, type_warnings, node_name)
+      col_type_name  = type_name(collection_arg.fetch("resolved_type"))
+
+      # ── OOF-COL2: first arg must be Collection or Unknown ─────────────────────
+      unless col_type_name == "Collection" || col_type_name == "Unknown"
+        type_errors << oof("OOF-COL2",
+          "#{qualified}: first argument must be Collection[T], got #{col_type_name}",
+          node_name)
+        return typed_expr("call", type_ir("Unknown"), collection_arg.fetch("deps", []),
+                          "fn" => qualified, "args" => [collection_arg])
+      end
+
+      elem_type   = element_type_from_collection(collection_arg.fetch("resolved_type"))
+      output_type = collection_type_ir_from(elem_type)
+
+      # ── OOF-COL12: second argument must be Integer, never a lambda ────────────
+      n_node = args[1]
+      if n_node.is_a?(Hash) && n_node.fetch("kind", nil) == "lambda"
+        type_errors << oof("OOF-COL12",
+          "#{qualified}: second argument must be Integer, got a lambda",
+          node_name)
+        return typed_expr("call", output_type, collection_arg.fetch("deps", []),
+                          "fn" => qualified, "args" => [collection_arg])
+      end
+
+      n_typed = infer_expr(n_node, symbol_types, type_errors, type_warnings, node_name)
+      n_name  = type_name(n_typed.fetch("resolved_type"))
+      unless n_name == "Integer" || n_name == "Unknown"
+        type_errors << oof("OOF-COL12",
+          "#{qualified}: second argument must be Integer, got #{n_name}",
+          node_name)
+      end
+
+      all_deps = (collection_arg.fetch("deps", []) + n_typed.fetch("deps", [])).uniq
+
+      typed_expr("call", output_type, all_deps,
+                 "fn" => qualified, "args" => [collection_arg, n_typed])
     end
 
     # LANG-SUMTYPE-COLLECT-P3: filter_map(Collection[T], (T -> Option[U])) -> Collection[U].

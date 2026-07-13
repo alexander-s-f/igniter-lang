@@ -475,3 +475,61 @@ collection ops ARE inventory-owned, unlike qualified `stdlib.IO.*`/`stdlib.net.*
 modules). **Execution is Rust VM authority** — Ruby canon has no collection-HOF interpreter/runtime
 (same boundary as every other collection op); the VM implements the bytecode `OP_CALL` arm and both
 `eval_ast` HOF dispatch sites with a shared native stable merge sort.
+
+## 8.13 Collection `take` — prefix-bounded reader (LANG-STDLIB-COLLECTION-TAKE-CANON-P5, 2026-07-13)
+
+Supersedes the §8.2 placeholder signature with the v0-implemented, dual-toolchain contract. The
+predicate/query slice (`find`/`any`/`all`) and the ordering slice (`sort_by`, §8.12) landed first;
+`take` is the slicing-cluster promotion named by
+`lang-stdlib-collection-algebra-parity-prop-p1-v0.md` (`drop`, `chunk`, `window`, lazy iteration,
+and pagination policy remain OUT of scope — see §8.13.3).
+
+### 8.13.1 Signature
+
+```
+take(xs: Collection[T], n: Integer) -> Collection[T]
+```
+
+- A prefix-bounded **READER**, not a HOF — the second argument is an Integer count, never a
+  predicate lambda (unlike `filter`/`sort_by`/`find`/`any`/`all`, `take` never binds a lambda
+  parameter to the element type).
+- Preserves input order; element type is **unchanged** — the result is `Collection[T]`, the
+  ORIGINAL element type (the same discipline as `filter`/`sort_by`, never `map`'s transform).
+- `n <= 0` (including negative `n`) returns `[]`.
+- `n >= count(xs)` returns all input elements (clamped, never an error, never padded).
+- Otherwise returns exactly the first `n` elements.
+- Pure, finite, deterministic, no mutation, no authority surface.
+
+### 8.13.2 Diagnostics — `OOF-COL12`
+
+A second argument that is neither `Integer` nor `Unknown` — including a predicate lambda, which is
+explicitly refused rather than silently accepted as a HOF — is refused fail-closed **at typecheck**
+by the new diagnostic `OOF-COL12`:
+
+```
+stdlib.collection.take: second argument must be Integer, got <Type>
+```
+
+`OOF-COL10` is `at`'s index-type check and `OOF-COL11` is `sort_by`'s key-type check — neither is
+reused. `OOF-COL1` (arity) and `OOF-COL2` (non-Collection first argument) are shared with the rest
+of the collection HOF family. Runtime bounds (`n<=0`, `n>=count(xs)`) are never diagnostics — they
+are total, clamped VM semantics.
+
+### 8.13.3 Closed (v0)
+
+`drop`, `chunk`, `window`, lazy/streaming iteration, pagination policy beyond a single `take`,
+database pushdown, comparator-driven slicing, and any new effect/capability surface.
+
+### 8.13.4 Dual-toolchain responsibilities
+
+Ruby/canon owns typechecker parity (dedicated `infer_take_call`, qualified
+`stdlib.collection.take`, `OOF-COL12` message parity, element-type-preserved result discipline) and
+the `stdlib-inventory.json` entry. Before this card, Ruby canon had **zero** `take` support at all
+(confirmed live: `OOF-TY0 "Unknown function: take"`). **Execution is Rust VM authority** — the
+bytecode `OP_CALL` arm and both `eval_ast` HOF dispatch sites already executed `take` before this
+card (the existing `stdlib.collection.*` -> bare qualified-name normalization already covered it);
+this card is a canon-admission/parity promotion, not a new VM capability. The Rust lab compiler
+previously shared a `"filter" | "take"` typechecker arm that gave `take` no arity/type diagnostics
+of its own — it now has a dedicated arm, and the emitter's bare-name qualify lists were extended so
+`take` reaches the SIR as `stdlib.collection.take` (mirroring `sort_by`, not `at`'s deliberate bare
+choice).
