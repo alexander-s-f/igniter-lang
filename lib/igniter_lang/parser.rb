@@ -1177,15 +1177,30 @@ module IgniterLang
     end
 
     def parse_contract_decl(modifier: nil)
+      hdr_tok = peek
       name = name_token!(%i[ident])
       type_params = peek_type?(:lbracket) ? parse_contract_type_params : []
       implements = peek_kw?("implements") ? parse_implements_clause : nil
       # PROP-033: optional "via <profile_name>" clause before the body brace
       via_profile = peek_kw?("via") ? (advance; name_token!(%i[ident])) : nil
+      # LANG-SIGNATURE-BOUND-CONTRACT-CANON-PARITY-P1: optional compact signature
+      # `(in: T, ...) -> (out: U, ...)`. When present, the header IS the contract's
+      # graph boundary: inputs desugar to canonical `input` decls, outputs to `output`
+      # decls, and the body is bare `name [:T] = expr` bindings that desugar to
+      # `compute`. Pure parse-time desugar — no new node kind, same AST/SIR as the
+      # explicit form (mirrors Rust `parse_contract_signature`/`build_signature_body`,
+      # LAB-LANG-SIGNATURE-BOUND-CONTRACT-SURFACE-P2). `<-` boundary bindings, `?`,
+      # and comprehensions stay closed (DEFERred by …-BOUNDARY-BINDINGS-P3).
+      signature = peek_type?(:lparen) ? parse_contract_signature : nil
       expect_type!(:lbrace)
       body = []
-      until peek_type?(:rbrace) || peek_type?(:eof)
-        body << parse_body_decl
+      if signature
+        build_signature_body(signature[0], signature[1], body,
+                             hdr_line: hdr_tok&.line || 0, hdr_col: hdr_tok&.col || 0)
+      else
+        until peek_type?(:rbrace) || peek_type?(:eof)
+          body << parse_body_decl
+        end
       end
       expect_type!(:rbrace)
       node = { "kind" => "contract", "name" => name, "modifier" => modifier || "pure", "type_params" => type_params }
@@ -1193,6 +1208,82 @@ module IgniterLang
       node["via_profile"] = via_profile if via_profile  # PROP-033
       node["body"] = body.compact
       node
+    end
+
+    # Parse a compact contract signature `(name: Type, ...) -> (name: Type, ...)`.
+    # Same param-list grammar as trait methods / user fns (`parse_params`), which
+    # matches Rust's `parse_sig_param_list` exactly.
+    def parse_contract_signature
+      inputs = parse_params
+      expect_type!(:arrow)
+      outputs = parse_params
+      [inputs, outputs]
+    end
+
+    # Desugar a signature-bound contract body into canonical `input`/`compute`/
+    # `output` body decls. Inputs → `input`; bare `name [:T] = expr` bindings →
+    # `compute` (reusing `parse_compute_decl`); signature outputs → `output`. An
+    # output's compute inherits the signature type when its binding omits one.
+    # Diagnostics (aligned with Rust, both OOF-P1): missing output binding,
+    # duplicate body binding; a malformed binding recovers via
+    # `skip_until_body_boundary`.
+    def build_signature_body(inputs, outputs, body, hdr_line:, hdr_col:)
+      # signature inputs → canonical `input` decls
+      inputs.each do |p|
+        body << { "kind" => "input", "name" => p.fetch("name"),
+                  "type_annotation" => p.fetch("type_annotation") }
+      end
+
+      # body: bare `name [:T] = expr` bindings → canonical `compute` decls
+      seen = []
+      until peek_type?(:rbrace) || peek_type?(:eof) || peek.nil?
+        tok = peek
+        begin
+          # suppress_form_invocation: in a signature body the token pair after a
+          # binding's RHS is the NEXT bare binding (`name =`), which the Gap-I
+          # form-invocation lookahead would otherwise claim as attributes (same
+          # guard class as `if` conditions / `match` subjects). Rust parity is
+          # exact: the lab parser has no form-invocation expression at all.
+          decl = suppress_form_invocation { parse_compute_decl }
+          if %w[compute fold_stream].include?(decl["kind"])
+            dname = decl.fetch("name")
+            if seen.include?(dname)
+              add_parse_error(
+                rule: "OOF-P1",
+                message: "duplicate body binding `#{dname}` in signature contract",
+                token: dname, line: tok.line, col: tok.col
+              )
+            end
+            seen << dname
+          end
+          body << decl
+        rescue ParseError => e
+          add_parse_error(rule: "OOF-P1", message: e.message, token: tok.value,
+                          line: tok.line, col: tok.col)
+          skip_until_body_boundary unless peek.nil?
+        end
+      end
+
+      # an output binding may omit its type — fill it from the signature output type.
+      body.each do |decl|
+        next unless decl["kind"] == "compute" && !decl.key?("type_annotation")
+        out = outputs.find { |p| p.fetch("name") == decl["name"] }
+        decl["type_annotation"] = out.fetch("type_annotation") if out
+      end
+
+      # signature outputs → canonical `output` decls; each must be bound exactly once.
+      outputs.each do |p|
+        oname = p.fetch("name")
+        unless seen.include?(oname)
+          add_parse_error(
+            rule: "OOF-P1",
+            message: "signature output `#{oname}` is not defined in the contract body",
+            token: oname, line: hdr_line, col: hdr_col
+          )
+        end
+        body << { "kind" => "output", "name" => oname,
+                  "type_annotation" => p.fetch("type_annotation") }
+      end
     end
 
     def parse_trait_decl

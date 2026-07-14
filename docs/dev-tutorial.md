@@ -41,6 +41,22 @@ entrypoint Double                    -- names the program's start contract
 control a program by choosing *which* contract is the entry and *what* you observe;
 the internal evaluation order is pure dataflow (dependency-driven), not line order.
 
+A pure contract may also be written **signature-bound** — the same `Double` as:
+
+```igniter
+pure contract Double(n: Integer) -> (r: Integer) {
+  r = n + n
+}
+```
+
+This is pure parse-time sugar (dual-toolchain): signature inputs desugar to
+`input` decls, each bare `name [: Type] = expr` body binding to a `compute`, and
+signature outputs to `output` decls — identical AST/SIR to the explicit form.
+Every declared output must be bound exactly once; an output binding may omit its
+type (inherited from the signature); intermediates follow the normal `compute`
+typing. The one-output law applies unchanged
+(LANG-SIGNATURE-BOUND-CONTRACT-CANON-PARITY-P1).
+
 ---
 
 ## 2. Types and records

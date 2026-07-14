@@ -92,9 +92,24 @@ OlapClause        ::= "dimensions" ":" "{" (Name ":" TypeRef ("," Name ":" TypeR
 
 ### 3.4 Contracts
 ```ebnf
-ContractDecl      ::= "contract" Name ("[" ContractTypeParams "]")? ("implements" QualifiedRef ("[" TypeRef "]")?)? "{" BodyDecl* "}"
+ContractDecl      ::= "contract" Name ("[" ContractTypeParams "]")? ("implements" QualifiedRef ("[" TypeRef "]")?)?
+                      ( ContractSignature "{" SigBinding* "}"
+                      | "{" BodyDecl* "}" )
 ContractTypeParams::= ContractTypeParam ("," ContractTypeParam)*
 ContractTypeParam ::= Name ":" QualifiedRef
+
+ContractSignature ::= SigParamList "->" SigParamList
+SigParamList      ::= "(" (Name ":" TypeRef ("," Name ":" TypeRef)*)? ")"
+SigBinding        ::= Name (":" TypeRef)? "=" Expr
+                      -- signature-bound contract: `pure contract C(a: X) -> (out: Y) { out = expr }`
+                      -- is pure parse-time sugar — the signature inputs desugar to `input`
+                      -- decls, each body binding to a `compute` decl, and the signature
+                      -- outputs to `output` decls (identical AST/SIR to the explicit form).
+                      -- Every signature output must be bound exactly once in the body; an
+                      -- output binding may omit its type (inherited from the signature).
+                      -- `<-` boundary bindings, `?`, inferred outputs, named/default
+                      -- arguments stay closed. The one-output law (OOF-RET1) applies
+                      -- unchanged. LANG-SIGNATURE-BOUND-CONTRACT-CANON-PARITY-P1
 ```
 
 ---
