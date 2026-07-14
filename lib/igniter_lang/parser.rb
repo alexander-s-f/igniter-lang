@@ -3356,9 +3356,28 @@ module IgniterLang
       expect_type!(:lbrace)
       fields = {}
       until peek_type?(:rbrace) || peek_type?(:eof)
+        key_tok = peek
         key = name_token!(%i[ident keyword])
-        expect_type!(:colon)
-        val = parse_expr
+        # LANG-RECORD-FIELD-PUNNING-CANON-PARITY-P1: a field with no `:` is punned —
+        # `{ name }` ⇒ `{ name: name }` (also mixed `{ name, other: expr }`). Desugars
+        # immediately to the canonical ref value, so the record literal sees the same
+        # `{ name: <ref> }` shape as the explicit form — no new AST/SIR node. Mirrors
+        # Rust parse_record_or_block (igniter-compiler src/parser.rs, LAB-LANG-RECORD-
+        # FIELD-PUNNING-P2). Dotted punning (`{ a.b }`) stays closed: after the punned
+        # `a` the `.` is not a comma/rbrace, so the next name_token! fails closed with
+        # the same "Expected name, got dot" parse diagnostic Rust raises.
+        val =
+          if peek_type?(:colon)
+            advance
+            parse_expr
+          else
+            { "kind" => "ref", "name" => key }
+          end
+        # Duplicate fields fail closed (no last-write-wins) — same rule and message as
+        # Rust parse_record_or_block; punned and explicit fields share this guard.
+        if fields.key?(key)
+          raise ParseError.new("duplicate field `#{key}` in record literal", key_tok.line, key_tok.col)
+        end
         fields[key] = val
         advance if peek_type?(:comma)
       end

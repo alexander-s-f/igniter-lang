@@ -191,7 +191,14 @@ Lambda            ::= "(" Params? ")" "->" Expr | Name "->" Expr
 FieldAccess       ::= Expr "." Name
 IndexAccess       ::= Expr "[" Expr "]"
 ArrayLit          ::= "[" (Expr ("," Expr)*)? "]"
-RecordLit         ::= "{" (Name ":" Expr ("," Name ":" Expr)*)? "}"
+RecordLit         ::= "{" (RecordField ("," RecordField)*)? "}"
+RecordField       ::= Name ":" Expr
+                    | Name
+                      -- field punning: `{ name }` is pure parse-time sugar for
+                      -- `{ name: name }` (value = Ref(name)); punned and explicit
+                      -- fields mix freely. Dotted/keypath punning (`{ a.b }`),
+                      -- string keys, and duplicate field names are rejected.
+                      -- LANG-RECORD-FIELD-PUNNING-CANON-PARITY-P1
 LetExpr           ::= "let" Name "=" Expr
 
 Stmt              ::= "let" Name "=" Expr

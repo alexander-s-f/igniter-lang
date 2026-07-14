@@ -63,6 +63,11 @@ There is no float — money/coordinates use **fixed-point Integer** (e.g. scale 
 A **record literal** `{ x: 1, y: 2 }` infers to the named type whose field set it
 matches. ⚠️ See the factory gotcha in §8.
 
+A field whose value is a same-named in-scope binding may be **punned**: `{ title }`
+is pure parse-time sugar for `{ title: title }`, and punned/explicit fields mix
+freely (`{ field: "zip", value }`). Dotted punning (`{ a.b }`) is rejected at parse
+(LANG-RECORD-FIELD-PUNNING-CANON-PARITY-P1, dual-toolchain).
+
 ---
 
 ## 3. Compute and contract calls
