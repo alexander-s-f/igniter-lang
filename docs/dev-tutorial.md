@@ -57,6 +57,20 @@ type (inherited from the signature); intermediates follow the normal `compute`
 typing. The one-output law applies unchanged
 (LANG-SIGNATURE-BOUND-CONTRACT-CANON-PARITY-P1).
 
+When a pure signature has exactly one explicitly named output, the body may be
+the expression directly:
+
+```igniter
+pure contract Double(n: Integer) -> (r: Integer) = n + n
+```
+
+This lowers to exactly the same `input` / `compute r` / `output r` graph as the
+signature block above and the fully explicit form. It does not infer an output
+name, does not introduce `-> Type` shorthand, and is unavailable to effect/read
+contracts. Calls remain `Double(args...)` for pure contracts and
+`invoke result = Contract(args...) using capability` for effectful contracts
+(LANG-PURE-CONTRACT-EXPRESSION-BODY-P1).
+
 ---
 
 ## 2. Types and records

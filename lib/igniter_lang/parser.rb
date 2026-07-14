@@ -1192,17 +1192,24 @@ module IgniterLang
       # LAB-LANG-SIGNATURE-BOUND-CONTRACT-SURFACE-P2). `<-` boundary bindings, `?`,
       # and comprehensions stay closed (DEFERred by …-BOUNDARY-BINDINGS-P3).
       signature = peek_type?(:lparen) ? parse_contract_signature : nil
-      expect_type!(:lbrace)
       body = []
-      if signature
-        build_signature_body(signature[0], signature[1], body,
-                             hdr_line: hdr_tok&.line || 0, hdr_col: hdr_tok&.col || 0)
+      if peek_type?(:assign)
+        parse_contract_expression_body(
+          name, modifier, signature, body,
+          hdr_line: hdr_tok&.line || 0, hdr_col: hdr_tok&.col || 0
+        )
       else
-        until peek_type?(:rbrace) || peek_type?(:eof)
-          body << parse_body_decl
+        expect_type!(:lbrace)
+        if signature
+          build_signature_body(signature[0], signature[1], body,
+                               hdr_line: hdr_tok&.line || 0, hdr_col: hdr_tok&.col || 0)
+        else
+          until peek_type?(:rbrace) || peek_type?(:eof)
+            body << parse_body_decl
+          end
         end
+        expect_type!(:rbrace)
       end
-      expect_type!(:rbrace)
       node = { "kind" => "contract", "name" => name, "modifier" => modifier || "pure", "type_params" => type_params }
       node["implements"] = implements if implements
       node["via_profile"] = via_profile if via_profile  # PROP-033
@@ -1220,6 +1227,46 @@ module IgniterLang
       [inputs, outputs]
     end
 
+    # LANG-PURE-CONTRACT-EXPRESSION-BODY-P1: `= Expression` is parser sugar only
+    # for a pure contract with exactly one explicitly named signature output.
+    # Parse the RHS through the same compute-binding tail and signature desugar as
+    # `{ output_name = Expression }`, preserving byte-identical AST/SIR.
+    def parse_contract_expression_body(name, modifier, signature, body, hdr_line:, hdr_col:)
+      eq_tok = peek
+      effective_modifier = modifier || "pure"
+      outputs = signature ? signature[1] : []
+      problem = if signature.nil?
+                  "expression-bodied contract `#{name}` requires a signature `(inputs...) -> (name: Type)`"
+                elsif effective_modifier != "pure"
+                  "expression body is only allowed on a `pure` contract; `#{name}` is `#{effective_modifier}`"
+                elsif outputs.length != 1
+                  "expression-bodied contract `#{name}` requires exactly one named signature output; found #{outputs.length}"
+                end
+      if problem
+        add_parse_error(rule: "OOF-P1", message: problem, token: name,
+                        line: eq_tok&.line || hdr_line, col: eq_tok&.col || hdr_col)
+      end
+
+      # Consume the invalid RHS too, preventing a top-level recovery cascade.
+      out_name = outputs.first&.fetch("name")
+      decl = suppress_form_invocation { parse_compute_binding(out_name || name) }
+
+      return unless signature
+
+      inputs = signature[0]
+      if out_name
+        # Truncation is recovery-only: OOF-P1 already makes multi-output forms fail closed.
+        build_signature_body(inputs, outputs.first(1), body,
+                             hdr_line: hdr_line, hdr_col: hdr_col,
+                             expression_body: [decl, eq_tok])
+      else
+        inputs.each do |p|
+          body << { "kind" => "input", "name" => p.fetch("name"),
+                    "type_annotation" => p.fetch("type_annotation") }
+        end
+      end
+    end
+
     # Desugar a signature-bound contract body into canonical `input`/`compute`/
     # `output` body decls. Inputs → `input`; bare `name [:T] = expr` bindings →
     # `compute` (reusing `parse_compute_decl`); signature outputs → `output`. An
@@ -1227,7 +1274,7 @@ module IgniterLang
     # Diagnostics (aligned with Rust, both OOF-P1): missing output binding,
     # duplicate body binding; a malformed binding recovers via
     # `skip_until_body_boundary`.
-    def build_signature_body(inputs, outputs, body, hdr_line:, hdr_col:)
+    def build_signature_body(inputs, outputs, body, hdr_line:, hdr_col:, expression_body: nil)
       # signature inputs → canonical `input` decls
       inputs.each do |p|
         body << { "kind" => "input", "name" => p.fetch("name"),
@@ -1236,7 +1283,12 @@ module IgniterLang
 
       # body: bare `name [:T] = expr` bindings → canonical `compute` decls
       seen = []
-      until peek_type?(:rbrace) || peek_type?(:eof) || peek.nil?
+      if expression_body
+        decl, = expression_body
+        seen << decl.fetch("name") if %w[compute fold_stream].include?(decl["kind"])
+        body << decl
+      end
+      until expression_body || peek_type?(:rbrace) || peek_type?(:eof) || peek.nil?
         tok = peek
         begin
           # suppress_form_invocation: in a signature body the token pair after a
@@ -1659,6 +1711,12 @@ module IgniterLang
 
     def parse_compute_decl
       name = name_token!(%i[ident keyword])
+      parse_compute_binding(name)
+    end
+
+    # Parse `[: Type] = expr [stream bound]` for an already-known compute name.
+    # Expression-bodied contracts use this exact tail parser with their output name.
+    def parse_compute_binding(name)
       type_ref = nil
       if peek_type?(:colon)
         advance

@@ -94,6 +94,7 @@ OlapClause        ::= "dimensions" ":" "{" (Name ":" TypeRef ("," Name ":" TypeR
 ```ebnf
 ContractDecl      ::= "contract" Name ("[" ContractTypeParams "]")? ("implements" QualifiedRef ("[" TypeRef "]")?)?
                       ( ContractSignature "{" SigBinding* "}"
+                      | ContractSignature "=" Expr
                       | "{" BodyDecl* "}" )
 ContractTypeParams::= ContractTypeParam ("," ContractTypeParam)*
 ContractTypeParam ::= Name ":" QualifiedRef
@@ -110,6 +111,11 @@ SigBinding        ::= Name (":" TypeRef)? "=" Expr
                       -- `<-` boundary bindings, `?`, inferred outputs, named/default
                       -- arguments stay closed. The one-output law (OOF-RET1) applies
                       -- unchanged. LANG-SIGNATURE-BOUND-CONTRACT-CANON-PARITY-P1
+                      -- The expression alternative is pure-only and requires exactly
+                      -- one explicitly named signature output. `= expr` lowers exactly
+                      -- as `{ output_name = expr }`. Missing/zero/multiple outputs,
+                      -- effect/read contracts, inferred output names, and `-> Type`
+                      -- shorthand stay closed. LANG-PURE-CONTRACT-EXPRESSION-BODY-P1
 ```
 
 ---
