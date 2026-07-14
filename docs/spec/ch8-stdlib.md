@@ -215,6 +215,15 @@ pure contract ConcatExample {
 
 Method syntax (`text.concat(other)`) is deferred.
 
+**Operator form**: `++` is the concat operator (Ch2 §2.2). `String ++ String`
+lowers to `stdlib.string.concat` and `Collection[T] ++ Collection[T]` lowers
+to `stdlib.collection.concat` in both toolchains; collection element mismatch
+refuses `OOF-COL7`. `+` never concatenates. The named `concat(...)` call form
+above stays accepted; `Text ++ Text` currently refuses (the operator accepts
+the `String` spelling — String/Text alias seam, not a `++` decision). String
+interpolation (`"a ${expr} b"`, Ch2) is parse-time sugar over the same concat
+lowering. Landed by LANG-CONCAT-OPERATOR-DUAL-PARITY-P1 (2026-07-14).
+
 ### 8.10.3 Text unit model
 
 Three explicit, non-ambiguous unit families.

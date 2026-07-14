@@ -411,6 +411,16 @@ module IgniterLang
       program
     end
 
+    # LANG-STRING-INTERPOLATION-DUAL-PARITY-P2: public sub-parser surface for
+    # `${...}` interpolation expressions. Parses one expression from the token
+    # stream and reports [expr, errors, next_token] so the host parser can
+    # refuse on sub-errors or trailing tokens (mirrors the Rust parser's
+    # parse_interpolation_expr contract).
+    def parse_interpolation_subexpr
+      expr = parse_expr
+      [expr, @errors, peek]
+    end
+
     private
 
     # ---- Token navigation --------------------------------------------------
@@ -2989,6 +2999,134 @@ module IgniterLang
       BINARY_OPS[op]
     end
 
+    # ---- String interpolation desugar --------------------------------------
+    #
+    # LANG-STRING-INTERPOLATION-DUAL-PARITY-P2: "prefix ${expr} suffix" is pure
+    # parse-time sugar for left-associated nested concat(...) calls, mirroring
+    # the Rust parser (desugar_string_literal, igniter-compiler src/parser.rs)
+    # exactly — no new AST/SIR node, no template runtime, no implicit
+    # formatting. The lexer has already decoded escapes, so interpolation is
+    # detected on the decoded value. There is NO escape for a literal `${` in
+    # either toolchain (HELD; Ch2). Malformed interpolation refuses OOF-P1 with
+    # the same messages as Rust. Const RHS strings do not desugar (parity with
+    # the Rust parse_const_expr path).
+
+    def desugar_string_literal(value, line, col)
+      return string_literal_expr(value) unless value.include?("${")
+
+      parts = interpolated_string_parts(value, line, col)
+      return parts if parts.is_a?(Hash) # error node from a malformed part
+
+      concat_parts(parts)
+    end
+
+    def string_literal_expr(value)
+      { "kind" => "literal", "value" => value, "type_tag" => "String" }
+    end
+
+    def concat_parts(parts)
+      return string_literal_expr("") if parts.empty?
+
+      parts.reduce do |left, right|
+        { "kind" => "call", "fn" => "concat", "args" => [left, right] }
+      end
+    end
+
+    # Splits the decoded literal into literal/expression parts. Returns an
+    # Array of expression nodes, or a single error node after refusing OOF-P1.
+    def interpolated_string_parts(value, line, col)
+      parts = []
+      cursor = 0
+
+      while (start = value.index("${", cursor))
+        parts << string_literal_expr(value[cursor...start]) if start > cursor
+
+        expr_start = start + 2
+        expr_end = find_interpolation_end(value, expr_start)
+        unless expr_end
+          add_parse_error(rule: "OOF-P1",
+                          message: "unterminated string interpolation; expected `}`",
+                          token: "${", line: line, col: col)
+          return { "kind" => "error", "token" => "${" }
+        end
+
+        expr_src = value[expr_start...expr_end].strip
+        if expr_src.empty?
+          add_parse_error(rule: "OOF-P1",
+                          message: "empty string interpolation expression",
+                          token: "${}", line: line, col: col)
+          return { "kind" => "error", "token" => "${}" }
+        end
+
+        inner = parse_interpolation_expr(expr_src, line, col)
+        return inner if inner["kind"] == "error"
+
+        parts << inner
+        cursor = expr_end + 1
+      end
+
+      parts << string_literal_expr(value[cursor..]) if cursor < value.length
+      parts
+    end
+
+    # Position of the `}` closing the interpolation opened at `start`, or nil.
+    # Brace-depth matcher, string-aware: nested "..." (with escapes) is skipped,
+    # and (, [, { open matching depth (mirrors Rust find_interpolation_end).
+    def find_interpolation_end(value, start)
+      depth = 0
+      in_string = false
+      escaped = false
+      i = start
+
+      while i < value.length
+        ch = value[i]
+        if in_string
+          if escaped
+            escaped = false
+          elsif ch == "\\"
+            escaped = true
+          elsif ch == '"'
+            in_string = false
+          end
+        else
+          case ch
+          when '"' then in_string = true
+          when "(", "[", "{" then depth += 1
+          when ")", "]" then depth = depth.positive? ? depth - 1 : 0
+          when "}"
+            return i if depth.zero?
+
+            depth -= 1
+          end
+        end
+        i += 1
+      end
+
+      nil
+    end
+
+    # Parses one `${...}` inner expression with a fresh sub-parser. The inner
+    # source uses the ordinary expression grammar; sub-errors and trailing
+    # tokens refuse OOF-P1 (never recover as literal text).
+    def parse_interpolation_expr(expr_src, line, col)
+      sub = Parser.new(Lexer.new(expr_src).tokenize)
+      expr, sub_errors, next_token = sub.parse_interpolation_subexpr
+
+      if (err = sub_errors.first)
+        message = "invalid string interpolation expression `#{expr_src}`: #{err["message"]}"
+        add_parse_error(rule: "OOF-P1", message: message, token: expr_src, line: line, col: col)
+        return { "kind" => "error", "token" => expr_src }
+      end
+
+      unless next_token.nil? || next_token.type == :eof
+        message = "invalid string interpolation expression `#{expr_src}`: trailing token `#{next_token.value}`"
+        add_parse_error(rule: "OOF-P1", message: message, token: expr_src, line: line, col: col)
+        return { "kind" => "error", "token" => expr_src }
+      end
+
+      expr
+    end
+
     def parse_unary
       if peek_type?(:bang)
         op = advance.value
@@ -3192,7 +3330,11 @@ module IgniterLang
       when :float_lit
         advance; { "kind" => "literal", "value" => tok.value, "type_tag" => "Float" }
       when :string_lit
-        advance; { "kind" => "literal", "value" => tok.value, "type_tag" => "String" }
+        # LANG-STRING-INTERPOLATION-DUAL-PARITY-P2: "${expr}" routes through the
+        # parse-time interpolation desugar (nested concat calls, mirroring the
+        # Rust parser); plain literals keep the direct node.
+        advance
+        desugar_string_literal(tok.value, tok.line, tok.col)
       # LANG-RUBY-STRING-ESCAPES-PARITY-P2: a malformed lexeme (invalid escape /
       # unterminated string). `tok.value` carries the lexer's reason — surface it
       # verbatim as OOF-LEX1, mirroring Rust's `TokenType::Illegal` handling in

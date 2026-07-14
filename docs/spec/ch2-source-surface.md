@@ -139,6 +139,22 @@ contracts (Ch6), effectful `invoke` binds one result value (Ch12), and
 contracts keep their current behavior; their final ruling is explicitly OPEN.
 Landed by LANG-CONTRACT-SINGLE-OUTPUT-LAW-P2 (2026-07-13).
 
+**Operator semantics — `+` vs `++`**: `+` is arithmetic-only (homogeneous
+numeric operands; Ch3). Concatenation is the separate `++` operator:
+
+- `String ++ String -> String`, lowering to `stdlib.string.concat`;
+- `Collection[T] ++ Collection[T] -> Collection[T]`, lowering to
+  `stdlib.collection.concat`; element type mismatch refuses through the
+  existing collection concat law (`OOF-COL7`).
+
+There is no implicit number-to-text conversion and no `+` overload for text,
+collections or bytes. A text-shaped `+` (e.g. `String + String`) refuses
+`OOF-TY0` with an actionable hint naming `++` and string interpolation
+(§2.2.4). `++` accepts the `String` spelling; `Text ++ Text` currently refuses
+in both toolchains (named `concat(Text, Text)` remains the Text route — the
+alias seam is tracked by the String/Text alias policy, not by `++`).
+Landed by LANG-CONCAT-OPERATOR-DUAL-PARITY-P1 (2026-07-14).
+
 ## 2.2.1 Entrypoint and Section Disposition (Stage 3 Candidate)
 
 `entrypoint` and `section` are not part of Grammar Kernel v0. They are Stage 3
@@ -264,6 +280,44 @@ branch-local declaration scoping beyond BlockExpr is not added;
 statement-level if is not supported;
 public API/CLI is not widened by this surface.
 ```
+
+### 2.2.4 String interpolation (source-surface sugar)
+
+`"prefix ${expr} suffix"` is accepted parse-time sugar in both toolchains,
+desugaring to left-associated nested `concat(...)` calls:
+
+```text
+"dispatch:${application_id}:${idempotency_key}"
+  -> concat(concat(concat("dispatch:", application_id), ":"), idempotency_key)
+```
+
+Rules:
+
+- `${expr}` uses the ordinary expression grammar (refs, calls, field access,
+  nested strings). There is no new AST/SIR/VM node and no template runtime —
+  the typechecker and emitter own everything after parse through the existing
+  concat path (Ch8 §8.10).
+- **Explicit-conversion law**: interpolation performs NO implicit formatting.
+  `${text_value}` is accepted; `${int_to_text(n)}` is accepted; `${n}` for a
+  numeric refuses through ordinary concat typing (`OOF-TY0`). Float requires
+  an explicit conversion with a rounding mode.
+- `SecretRef` and future protected values cannot interpolate — the existing
+  concat observation refusal (`OOF-SR1` family) stays authoritative.
+- Malformed interpolation refuses at parse time (`OOF-P1`, identical messages
+  in both toolchains): unterminated `${`, empty `${}`, trailing tokens, or an
+  invalid inner expression. Interpolation never recovers as literal text.
+- **Literal `${` is HELD**: there is no escape for it. `\$` refuses
+  `OOF-LEX1` (invalid string escape) in both toolchains. Representing a
+  literal `${` inside a string literal is an explicit open decision; do not
+  assume an escape exists.
+- `const` RHS strings do NOT desugar (const expressions cannot carry calls);
+  `${` in a const string stays literal bytes in both toolchains.
+- Interpolation applies only to `.ig` string literals — host config, SQL,
+  secrets, manifests and other non-`.ig` syntaxes are not interpolated by
+  implication.
+
+Landed by LANG-STRING-INTERPOLATION-DUAL-PARITY-P2 (2026-07-14), promoting
+the Rust lab proof LAB-LANG-STRING-INTERPOLATION-SUGAR-P1.
 
 ## 2.2.2 Assumptions Surface (PROP-032 Experiment-Pass)
 

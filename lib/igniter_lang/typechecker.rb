@@ -2357,8 +2357,47 @@ module IgniterLang
 
       case op
       when "+"
-        type_errors << type_mismatch(type_ir("Integer"), type_ir("#{left_name}+#{right_name}"), node_name) unless unknown?(left, right) || left_name == "Integer" && right_name == "Integer"
+        unless unknown?(left, right) || left_name == "Integer" && right_name == "Integer"
+          # LANG-CONCAT-OPERATOR-DUAL-PARITY-P1: `+` is arithmetic-only. When both sides
+          # are text-shaped, the refusal must route the developer to the accepted text
+          # construction surface. Message text mirrors the Rust `+` arm byte-for-byte.
+          if %w[String Text].include?(left_name) && %w[String Text].include?(right_name)
+            type_errors << oof("OOF-TY0",
+              "Type mismatch: expected Integer, got #{left_name}+#{right_name}; `+` is arithmetic — use `++` or string interpolation for text",
+              node_name)
+          else
+            type_errors << type_mismatch(type_ir("Integer"), type_ir("#{left_name}+#{right_name}"), node_name)
+          end
+        end
         ["stdlib.integer.add", type_ir("Integer")]
+      when "++"
+        # LANG-CONCAT-OPERATOR-DUAL-PARITY-P1: `++` is the concat operator, mirroring the
+        # Rust arm exactly — String ++ String -> stdlib.string.concat, Collection[T] ++
+        # Collection[T] -> stdlib.collection.concat. Collection element mismatch refuses
+        # through the existing collection concat law (OOF-COL7), same as the named
+        # concat(...) call path in infer_concat_call.
+        if left_name == "String" && right_name == "String"
+          return ["stdlib.string.concat", type_ir("String")]
+        end
+        if left_name == "Collection" && right_name == "Collection"
+          elem1      = element_type_from_collection(left)
+          elem2      = element_type_from_collection(right)
+          elem1_name = type_name(elem1)
+          elem2_name = type_name(elem2)
+          unless elem1_name == "Unknown" || elem2_name == "Unknown" || elem1_name == elem2_name
+            type_errors << oof("OOF-COL7",
+              "stdlib.collection.concat: element type mismatch — first collection contains #{elem1_name}, second contains #{elem2_name}",
+              node_name)
+          end
+          result_elem = elem1_name == "Unknown" ? elem2 : elem1
+          return ["stdlib.collection.concat", collection_type_ir_from(result_elem)]
+        end
+        unless unknown?(left, right)
+          type_errors << oof("OOF-TY0",
+            "Type mismatch: expected String/String or Collection/Collection, got #{left_name}++#{right_name}",
+            node_name)
+        end
+        ["stdlib.unsupported.++", type_ir("Unknown")]
       when "-"
         type_errors << type_mismatch(type_ir("Integer"), type_ir("#{left_name}-#{right_name}"), node_name) unless unknown?(left, right) || left_name == "Integer" && right_name == "Integer"
         ["stdlib.integer.sub", type_ir("Integer")]
