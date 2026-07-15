@@ -3497,10 +3497,25 @@ module IgniterLang
       expect_type!(:lbrace)
       fields = {}
       until peek_type?(:rbrace) || peek_type?(:eof)
+        key_tok = peek
         key = name_token!(%i[ident keyword])
         expect_type!(:colon)
         val = parse_expr
-        fields[key] = val
+        # Named construction shares the record-literal duplicate-field law:
+        # record one OOF-P1 while parsing instead of silently keeping the last
+        # value. Continuing through the balanced field list avoids a derivative
+        # recovery cascade; the parse stage still fails closed.
+        if fields.key?(key)
+          add_parse_error(
+            rule: "OOF-P1",
+            message: "duplicate field `#{key}` in record literal",
+            token: key,
+            line: key_tok.line,
+            col: key_tok.col
+          )
+        else
+          fields[key] = val
+        end
         advance if peek_type?(:comma)
       end
       expect_type!(:rbrace)
