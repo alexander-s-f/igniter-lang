@@ -1,6 +1,7 @@
 # Ch2: Source Surface and Grammar
 
-Source PROPs: PROP-014, PROP-015; PROP-032 (bounded assumptions surface)
+Source PROPs: PROP-014, PROP-015; PROP-032 (bounded assumptions surface);
+PROP-ENTRYPOINT (default target selector)
 Status: accepted (grammar kernel); partial (OOF rejection at parse time); PROP-032 experiment-pass for compiler surface only
 Proof: experiments/parser/ — 61 specs, add.ig + availability_projection.ig + polymorphic_add.ig
 
@@ -155,34 +156,23 @@ in both toolchains (named `concat(Text, Text)` remains the Text route — the
 alias seam is tracked by the String/Text alias policy, not by `++`).
 Landed by LANG-CONCAT-OPERATOR-DUAL-PARITY-P1 (2026-07-14).
 
-## 2.2.1 Entrypoint and Section Disposition (Stage 3 Candidate)
+## 2.2.1 Entrypoint (Implemented) and Section (Candidate)
 
-`entrypoint` and `section` are not part of Grammar Kernel v0. They are Stage 3
-proposal candidates routed by syntax-pressure review, not current canonical
-syntax and not parser-supported declarations.
+`entrypoint ContractName` is a top-level contextual declaration with cardinality
+zero-or-one per compilation unit. Both compiler pipelines resolve it to a
+contract, emit it into SemanticIR and the `.igapp` manifest, and diagnose
+duplicate, unknown, ambiguous, or non-contract targets with `OOF-EP*` rules.
 
-Current source authors and proof fixtures should treat `contract` as the
-canonical computation boundary. Tooling that needs to choose what to compile or
-evaluate must use explicit invocation metadata, CLI/API arguments, or fixture
-metadata until an accepted PROP defines source-level entry selection.
+The VM consumes the manifest entrypoint when no explicit `--entry` selector is
+provided. This is selection metadata only: an effect contract still requires
+normal host capability admission and policy checks. A CLI selector may override
+the default for an explicit operator run.
 
-The current parser does not reserve `entrypoint` or `section` as hard keywords.
-Pressure fixtures may use those spellings to test human/agent comprehension,
-but those fixtures are non-canon and are not expected to parse.
-
-Collision risks for a future PROP:
-
-- `entrypoint` already has package/API meaning in compiler tooling, while a
-  source-level `entrypoint` could mean default contract, default output,
-  evaluation target, UI route, scheduler trigger, or fixture start. A PROP must
-  choose one meaning and name diagnostics around that choice.
-- `section` must not accidentally become `module`, namespace, visibility,
+`section` remains a Stage 3 proposal candidate and is not parser-supported.
+It must not accidentally become `module`, namespace, visibility,
   lifecycle, dependency, or evaluation-order syntax. If promoted, its default
   recommended semantics are grouping-only with explicit flattening into normal
   top-level declarations.
-- Reserving either spelling too early would collide with ordinary identifiers
-  without a proven AST shape. Keyword reservation belongs in the future PROP,
-  not in this spec sync.
 
 ## 2.2.3 Expression-Level if_expr v0 (R190 Internal Compiler Support)
 
@@ -333,8 +323,10 @@ assumptions {
 }
 
 observed contract ScoreInteraction {
+  input signal: Signal
   uses assumptions homophily
-  output score: Decimal[4] evidence [homophily]
+  compute rationale = homophily.statement
+  output rationale: String evidence [signal, homophily]
 }
 ```
 
@@ -343,14 +335,14 @@ The accepted source surface is limited to:
 - one top-level `assumptions {}` block per module;
 - named `assumption NAME { ... }` declarations;
 - body-level `uses assumptions NAME` declarations;
-- passive parsing of `output ... evidence [...]` lists.
+- propagation of `output ... evidence [...]` lists as opaque provenance labels.
 
 Compiler status: experiment-pass by S3-R36-C2-A for parser, classifier,
 TypeChecker, and SemanticIR propagation. P28 unnamed-assumption rejection is part
 of this surface. OOF-A1 undeclared-assumption detection and TASSUMP-1 strength
 checks are compiler diagnostics, not runtime behavior.
 
-Explicit exclusions: PROP-033 evidence-list validation, runtime receipt
+Explicit exclusions: semantic validation of evidence sufficiency/freshness, runtime receipt
 `assumption_refs`, runtime injection of assumption values, cross-module
 assumption sharing, constraints/form/effect-surface behavior, and production
 RuntimeMachine behavior are not authorized by this Ch2 sync.

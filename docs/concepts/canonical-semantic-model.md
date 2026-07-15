@@ -1,7 +1,7 @@
 # Canonical Semantic Model (CSM)
 
 Status: index (living document)
-Date: 2026-05-11
+Date: 2026-07-15
 Author: `[Igniter-Lang Meta Expert]`
 Source: S3-R29-C2-P (R28 meta-card) + S3-R29-C5-P (R29 bootstrap) + S3-R34-C3-S (PROP-036 placeholder sync)
 
@@ -74,9 +74,10 @@ with existing scalar/record/array literal nodes before classification.
 |--------|--------|---------------------|---------------------|---------------|------|----------|
 | Receipt (runtime execution trace) | implemented | Runtime (post-SemanticIR) | N/A — runtime artifact | `runtime_machine_memory_proof/ffi_ruby_receipt_fixtures/ffi_ruby_receipts.golden.json` | PROP-008 | P8 |
 
-**Note:** Receipt shape is defined by runtime contract (PROP-008). Full production receipt
-semantics (authority, compensation, audit reference) are gated on PROP-035 (Effect Surface).
-The golden anchor covers FFI-level receipt descriptors only.
+**Note:** Receipt shape is defined by runtime contract (PROP-008). The seven-field
+Effect Surface is now emitted by both compilers, while runtime consumption remains
+field-specific. Assumption refs and output-evidence refs are not yet copied into
+live receipts. The golden anchor covers FFI-level receipt descriptors only.
 
 ### Escape Declaration
 
@@ -106,8 +107,20 @@ The golden anchor covers FFI-level receipt descriptors only.
 
 | entity | status | pipeline_entry_point | classifier_fragment | golden_anchor | PROP | Covenant |
 |--------|--------|---------------------|---------------------|---------------|------|----------|
-| `assumptions { assumption NAME { ... } }` block | proposed | Parser | `epistemic` (new — PROP-032 §5.1) | — | PROP-032 | P22, P27, P28 |
-| `uses assumptions NAME` declaration | proposed | Classifier | `epistemic` | — | PROP-032 | P22, P28 |
+| `assumptions { assumption NAME { ... } }` block | experiment-pass | Parser | `epistemic` (PROP-032 §5.1) | `assumptions_proof/golden/assumption_basic.semantic_ir.json` | PROP-032 | P22, P27, P28 |
+| `uses assumptions NAME` declaration | experiment-pass | Classifier | `epistemic` | `assumptions_proof/golden/epistemic_only_pure.semantic_ir.json` | PROP-032 | P22, P28 |
+
+### Epistemic and Execution Descriptors
+
+| entity | status | pipeline_entry_point | classifier_fragment | golden_anchor | PROP | Covenant |
+|--------|--------|---------------------|---------------------|---------------|------|----------|
+| top-level `entrypoint ContractName` | implemented | Parser | N/A — program metadata | `entrypoint_descriptor_proof/out/valid_entrypoint.igapp/manifest.json` | PROP-ENTRYPOINT | P2, P27 |
+| module/contract `intent "..."` descriptor | experiment-pass (Ruby canon only; Rust parity open) | Parser | unchanged — metadata only | `intent_descriptor_proof/` (53/53 proof) | PROP-045 | P27 |
+| `output ... evidence [refs]` | experiment-pass | Parser | enclosing contract fragment | `output_evidence_proof/` (51/51 proof) | PROP-034 | P22, P27 |
+
+See [Implemented Epistemic Surface](implemented-epistemic-surface.md) for the
+compiler/runtime boundary. In particular, `assumption_refs` are not yet copied
+into live runtime receipts and source `intent` is not Rust-parity.
 
 ### Form Constructor
 
@@ -152,14 +165,12 @@ Entities without a golden anchor as of R29. All are at most `spec_candidate`.
 
 | entity | gap | blocking PROP |
 |--------|-----|---------------|
-| `assumptions {}` block | Gap-H — PROP-032 authored (S3-R30-C6-P); no compiler implementation yet | PROP-032 |
-| `uses assumptions NAME` | Gap-H — PROP-032 authored; no classifier implementation yet | PROP-032 |
 | `form NAME -> T` | Gap-I — no parser keyword, no fragment class | TBD |
 | Loop class (all variants) | Stage 3 Language Lane — no parser, no classifier; PROP-036 is occupied by `compiler_profile_id` | PROP-037+ placeholder |
 | OOF-I1 | Stage 2 deferred invariant OOF | PROP-025 addendum |
 | OOF-I3 | Stage 2 deferred invariant OOF | PROP-025 addendum |
 | OOF-I5 | Stage 2 deferred invariant OOF | PROP-025 addendum |
-| Receipt (production shape) | Effect Surface not yet implemented | PROP-035 |
+| Receipt (full epistemic provenance envelope) | Runtime receipts do not yet carry assumption refs or output-evidence refs; Effect Surface enforcement remains field-specific | runtime provenance follow-up |
 
 ---
 
@@ -167,12 +178,7 @@ Entities without a golden anchor as of R29. All are at most `spec_candidate`.
 
 **Promote from `spec_candidate` → `experiment-pass`:**
 
-1. **Assumption (PROP-032)**: Gap-H is rated HIGH priority in the gap analysis.
-   PROP-032 bootstrap is the C3 deliverable of R29. Once the PROP is written, the
-   Research Agent can create the minimum fixture (one positive, one OOF case for
-   undeclared assumption in contract body) to generate a golden anchor.
-
-2. **OOF-I1, OOF-I3, OOF-I5**: deferred from Stage 2. No new PROP needed — these
+1. **OOF-I1, OOF-I3, OOF-I5**: deferred from Stage 2. No new PROP needed — these
    are addenda to PROP-025. A focused experiment pass would close the missing anchors.
 
 **Do not promote yet:**

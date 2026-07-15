@@ -1,7 +1,7 @@
 # Igniter-Lang Documentation
 
 Status: split-era language documentation index
-Updated: 2026-06-06
+Updated: 2026-07-15
 
 This directory contains reader-facing language documentation: covenant,
 specification, concepts, and package-adjacent docs. Agent operating material
@@ -16,6 +16,7 @@ lives in [`../.agents/`](../.agents/).
 | [Spec Chapters](spec/README.md) | Chaptered specification surface. |
 | [Axiomatic Contract Model](concepts/axiomatic-contract-model.md) | Conceptual model for contract semantics. |
 | [Canonical Semantic Model](concepts/canonical-semantic-model.md) | Semantic entity map. |
+| [Implemented Epistemic Surface](concepts/implemented-epistemic-surface.md) | Live map from intent and assumptions to runtime receipts. |
 | [Temporal Lifecycle](concepts/temporal-lifecycle.md) | Temporal model notes. |
 
 ## Adjacent Surfaces
