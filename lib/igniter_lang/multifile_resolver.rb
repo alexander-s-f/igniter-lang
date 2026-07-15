@@ -349,6 +349,9 @@ module IgniterLang
         "profiles" => units.flat_map { |unit| unit.fetch("parsed").fetch("profiles", []) },
         "size_relations" => units.flat_map { |unit| unit.fetch("parsed").fetch("size_relations", []) },
         "entrypoint" => entrypoints.first,
+        # LANG-INTENT-DUAL-TOOLCHAIN-PARITY-P3: the aggregate program never
+        # silently adopts one module's intent — module intent stays attached to
+        # its source unit in `source_units` evidence (see source_units_evidence).
         "intent_text" => nil,
         "parse_errors" => []
       )
@@ -357,13 +360,20 @@ module IgniterLang
 
     def source_units_evidence(units)
       units.sort_by { |unit| [unit.fetch("module").to_s, unit.fetch("source_path")] }.map do |unit|
-        {
+        evidence = {
           "module" => unit.fetch("module"),
           "source_path" => unit.fetch("source_path"),
           "source_hash" => unit.fetch("source_hash"),
           "types" => unit.fetch("type_names"),
           "contracts" => unit.fetch("contract_names")
         }
+        # LANG-INTENT-DUAL-TOOLCHAIN-PARITY-P3: preserve per-module intent in the
+        # deterministic source-unit evidence (the merged aggregate keeps
+        # intent_text nil — it must never select one module's intent). Key present
+        # ONLY when the unit declared one, so intent-free evidence is unchanged.
+        unit_intent = unit.fetch("parsed").fetch("intent_text", nil)
+        evidence["intent_text"] = unit_intent if unit_intent
+        evidence
       end
     end
 

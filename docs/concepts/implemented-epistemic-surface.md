@@ -39,7 +39,7 @@ does not become proof merely because it is compiled.
 | surface | epistemic question | Ruby canon | Rust compiler | artifact | runtime | current truth |
 | --- | --- | --- | --- | --- | --- | --- |
 | `entrypoint Contract` | What should run by default? | live | live | SemanticIR + `.igapp` manifest | VM selects it when `--entry` is absent | `runner-live`; selector only, never capability authority |
-| module/contract `intent "..."` | Why does this declaration exist? | 53/53 proof live | rejected (`OOF-G1` / `OOF-P0`) | Ruby `intent_text` only | deliberately absent | `canon-only`, `metadata-only`; highest parity gap |
+| module/contract `intent "..."` | Why does this declaration exist? | 53/53 proof live | 11/11 parity proof live | dual `intent_text`; multifile module intent stays on its source unit | deliberately absent | `compiler-live`, `metadata-only`; declaration grants no authority |
 | `assumptions { ... }` | Which premises are declared? | live | live | `assumption_registry` | ignored | `compiler-live`, `metadata-only` |
 | `uses assumptions name` | Which premises does this contract rely on? | live, `OOF-A1` | live, `OOF-A1` | `contract_ir.assumption_refs` | not copied into receipts | `compiler-live`; runtime provenance is held |
 | `output ... evidence [refs]` | What supports this output? | live; pure placement refused by `OOF-M9` | live | output-port metadata | refs are not validated against observations at runtime | `compiler-live`, opaque provenance labels |
@@ -86,14 +86,18 @@ treated as aliases.
 ## Verified Receipts (2026-07-15)
 
 - Ruby source `intent`: `experiments/intent_descriptor_proof/` passes 53/53.
+- Ruby multifile intent preservation:
+  `experiments/intent_multifile_proof/` passes 10/10.
 - Ruby `entrypoint`: `experiments/entrypoint_descriptor_proof/` passes 53/53.
 - Assumptions proof was refreshed against current output-evidence and type rules;
   its golden check passes. The local experiment tree is evidence, not runtime
   authority.
 - Rust compiles an assumptions specimen and emits both
   `assumption_registry` and `assumption_refs`.
-- Rust rejects the same source-intent specimen at parse time; there is no hidden
-  parity implementation.
+- Rust source and multifile intent parity:
+  `intent_parity_tests` passes 11/11. Module intent remains attached to its
+  deterministic source-unit evidence; the merged aggregate intentionally
+  selects no module intent.
 - Rust emits a manifest entrypoint, and the VM executes that contract without an
   explicit `--entry` selector (probe result `42`).
 - No `assumption_refs` consumer exists in `igniter-vm` or `igniter-machine`.
@@ -104,38 +108,30 @@ treated as aliases.
 
 ## Known Drift and Gaps
 
-1. **Intent parity:** Rust has no parser, typechecker, or emitter surface for
-   source `intent`.
-2. **Multifile module intent:** Ruby's multifile resolver currently emits
-   `intent_text: nil`; preservation and duplicate semantics need a focused
-   decision.
-3. **Assumption receipts:** PROP-032 describes receipt propagation as a target,
+1. **Assumption receipts:** PROP-032 describes receipt propagation as a target,
    but the live runtime does not implement it. Ch2's explicit exclusion is the
    current truth.
-4. **Evidence binding:** output evidence refs remain opaque labels. Write
+2. **Evidence binding:** output evidence refs remain opaque labels. Write
    evidence checks local symbol existence, but neither form proves freshness,
    quality, or causal sufficiency by itself.
-5. **Declared versus fulfilled:** Effect Surface and service obligations are
+3. **Declared versus fulfilled:** Effect Surface and service obligations are
    increasingly rich declarations. Every runtime claim still needs a named
    admission/enforcement/receipt proof.
-6. **Discovery:** intent, assumptions, evidence, and entrypoint are not yet one
+4. **Discovery:** intent, assumptions, evidence, and entrypoint are not yet one
    queryable command-center/MCP surface for developers and agents.
 
 ## Activation Order
 
 The smallest sequence that gives the existing syntax real leverage is:
 
-1. **Dual-toolchain intent parity.** Preserve module and contract intent through
-   Rust and multifile compilation without changing behavior digests or granting
-   authority.
-2. **Epistemic discovery.** Expose entrypoint, intent, assumptions, evidence
+1. **Epistemic discovery.** Expose entrypoint, intent, assumptions, evidence
    declarations, Effect Surface, and obligations through one read-only
    compiler/command-center query.
-3. **Execution epistemic context.** Additively link the selected entrypoint and
+2. **Execution epistemic context.** Additively link the selected entrypoint and
    declared assumption/evidence refs to the existing `receipt_envelope_v0`.
    It must distinguish `declared`, `resolved`, `verified`, and `unknown` rather
    than collapsing them into a boolean or replacing outcome normalization.
-4. **Assumption binding only under evidence pressure.** Runtime values,
+3. **Assumption binding only under evidence pressure.** Runtime values,
    freshness, expiry, and cross-module assumptions remain held until a real
    application requires them and a receipt model exists.
 
