@@ -1133,6 +1133,7 @@ module IgniterLang
           "modifier"           => contract.fetch("modifier", "pure"),
           "input_count"        => inputs.size,
           "input_names"        => inputs.map { |d| d.fetch("name") },
+          "input_types"        => inputs.map { |d| d.fetch("type_annotation", "Unknown") },
           "single_output_type" => outputs.size == 1 ? outputs[0].fetch("type_annotation", nil) : nil,
           "single_output_name" => outputs.size == 1 ? outputs[0].fetch("name") : nil,
           "contract_name"      => name,
@@ -1244,11 +1245,35 @@ module IgniterLang
           return typed_expr("call", type_ir("Unknown"), [], "fn" => fn, "args" => [])
         end
 
+        typed_positional = args[1..].map { |a| infer_expr(a, symbol_types, type_errors, type_warnings, node_name) }
+        # LANG-DERIVED-RECORD-CONSTRUCTOR-P2 closes the canon-side tail of
+        # LAB-IGNITER-COMPILER-CALL-CONTRACT-ARG-TYPING-P8: static call_contract
+        # arguments inherit the same structural input check as Rust. This is the
+        # existing boundary named constructor invocation lowers into; Unknown on
+        # either side remains deferred and each concrete mismatch names the
+        # callee parameter with byte-identical OOF-TY0 wording.
+        entry.fetch("input_types", []).each_with_index do |expected_raw, idx|
+          actual_arg = typed_positional[idx]
+          break unless actual_arg
+
+          expected = type_ir(expected_raw)
+          actual = actual_arg.fetch("resolved_type")
+          next if unknown_or_unknown_bearing?(expected) || unknown_or_unknown_bearing?(actual)
+          next if structurally_assignable?(actual, expected)
+
+          parameter_name = entry.fetch("input_names", [])[idx] || "##{idx + 1}"
+          type_errors << oof(
+            "OOF-TY0",
+            "call_contract: callee '#{callee_name}' parameter '#{parameter_name}' expects " \
+            "#{type_display(expected)}, got #{type_display(actual)}",
+            node_name
+          )
+        end
+
         # All checks pass — resolve output type.
         # LANG-OUTPUT-TYPE-ASSIGNABILITY-P3 is implemented; structurally_assignable?
         # covers parametric types at the output boundary so we resolve fully here.
         out_type = entry["single_output_type"] ? type_ir(entry["single_output_type"]) : type_ir("Unknown")
-        typed_positional = args[1..].map { |a| infer_expr(a, symbol_types, type_errors, type_warnings, node_name) }
         all_deps = typed_name_arg.fetch("deps", []) + typed_positional.flat_map { |a| a.fetch("deps", []) }
         typed_expr("call", out_type, all_deps, "fn" => fn, "args" => [typed_name_arg] + typed_positional)
       else

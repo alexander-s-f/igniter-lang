@@ -10,6 +10,7 @@ require_relative "classifier"
 require_relative "compilation_report"
 require_relative "contract_call_sugar"
 require_relative "const_resolver"
+require_relative "derived_constructor_sugar"
 require_relative "compiler_profile_contract_validator"
 require_relative "compiler_result"
 require_relative "multifile_resolver"
@@ -186,6 +187,13 @@ module IgniterLang
       per_module_imports: {},
       per_contract_module: {}
     )
+      # LANG-DERIVED-RECORD-CONSTRUCTOR-P2: constructor declarations and named
+      # invocations are whole-program syntax sugar. Lower after single-file parse
+      # or multifile merge, before any classify/typecheck work and before natural
+      # contract-call sugar sees the now-ordinary derived contracts.
+      DerivedConstructorSugar.lower!(parsed)
+      return parse_failure(parsed, source_path, out_path) unless parsed.fetch("parse_errors").empty?
+
       resolved_sample_input = sample_input || resolve_sample_input(parsed, sample_input_resolver)
       # LANG-CONTRACT-CALL-SUGAR-P6: desugar a bare visible-contract call `Name(args)` into the
       # static contract-call form BEFORE classify (logic + rewrite live in ContractCallSugar; parity

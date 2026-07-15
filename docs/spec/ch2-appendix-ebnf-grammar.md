@@ -25,6 +25,7 @@ ModPath         ::= Name ("." Name)*
 
 TopDecl         ::= AssumptionsDecl
                   | ContractDecl
+                  | ConstructorDecl
                   | TypeDecl
                   | ConstDecl
                   | FunctionDecl
@@ -92,6 +93,15 @@ OlapClause        ::= "dimensions" ":" "{" (Name ":" TypeRef ("," Name ":" TypeR
 
 ### 3.4 Contracts
 ```ebnf
+ConstructorDecl   ::= "constructor" Name "->" ConstructorOutput
+ConstructorOutput ::= "(" Name ":" TypeRef ")"
+                       -- contextual, implicitly pure, modifier-free and body-free;
+                       -- the output target must be a visible, non-generic,
+                       -- non-recursive, non-empty record TypeDecl.
+                       -- Before classification/typechecking it lowers to the
+                       -- ordinary signature-bound pure ContractDecl whose inputs
+                       -- and punned record body follow TypeDecl field order.
+
 ContractDecl      ::= "contract" Name ("[" ContractTypeParams "]")? ("implements" QualifiedRef ("[" TypeRef "]")?)?
                       ( ContractSignature "{" SigBinding* "}"
                       | ContractSignature "=" Expr
@@ -190,6 +200,7 @@ Expr              ::= Literal
                     | Ref
                     | BinOp
                     | Call
+                    | NamedConstruct
                     | IfExpr
                     | BlockExpr
                     | FieldAccess
@@ -205,6 +216,18 @@ BinOp             ::= Expr Op Expr
 Op                ::= "+" | "-" | "*" | "/" | "==" | "!=" | "<" | ">" | "<=" | ">="
                     | "&&" | "||" | "++"
 Call              ::= Name "(" (Expr ("," Expr)*)? ")"
+NamedConstruct    ::= Name "{" (NamedField ("," NamedField)*)? "}"
+NamedField        ::= Name (":" Expr)?
+                      -- For a visible ConstructorDecl, this is an exact-field,
+                      -- order-independent invocation. Punned and explicit fields
+                      -- may mix. The pre-classify lowerer reorders expressions by
+                      -- target TypeDecl field order and emits call_contract.
+                      -- Missing/extra fields are OOF-CTOR7/8; duplicate fields
+                      -- remain OOF-P1; constructor/variant ambiguity is OOF-CTOR5.
+                      -- Positional natural Call to a constructor is OOF-CTOR4;
+                      -- literal call_contract remains the explicit escape hatch.
+                      -- Dotted `Module.Name { ... }` is held in v0; qualification
+                      -- remains available to entrypoint and literal call_contract.
 IfExpr            ::= "if" Expr BlockExpr ("else" (IfExpr | BlockExpr))?
                       -- `else if` is surface sugar desugaring to `else { if ... }`; see ch2 §2.2.3.1
 BlockExpr         ::= "{" Stmt* Expr "}"

@@ -7,6 +7,7 @@ require "set"
 
 require_relative "parser"
 require_relative "const_resolver"
+require_relative "derived_constructor_sugar"
 
 module IgniterLang
   class MultifileResolver
@@ -48,13 +49,18 @@ module IgniterLang
 
       source_hash = composite_source_hash(sorted)
       merged = merge_units(sorted, source_hash)
+      # LANG-DERIVED-RECORD-CONSTRUCTOR-P2: sibling-file TypeDecls are visible
+      # only after merge. Lower the merged program before deriving the imported
+      # contract registry so constructor signatures expose their real ordered
+      # inputs/one output rather than the parser placeholder's output-only body.
+      DerivedConstructorSugar.lower!(merged, scope: build_constructor_scope(sorted))
       {
         "ok" => true,
         "parsed_program" => merged,
         "source_units" => source_units_evidence(sorted),
         "source_hash" => source_hash,
         "source_path" => merged.fetch("source_path"),
-        "cross_module_registry" => build_cross_module_registry(sorted),
+        "cross_module_registry" => build_cross_module_registry(sorted, merged.fetch("contracts", [])),
         "per_module_imports" => build_per_module_imports(sorted),
         "per_contract_module" => build_per_contract_module(sorted)
       }
@@ -82,12 +88,18 @@ module IgniterLang
 
     private
 
-    # LANG-TYPED-CONTRACT-REF-PROP-P5: build per-module contract signature registry.
-    # Built from parsed (pre-merge) units so module attribution is preserved.
-    def build_cross_module_registry(sorted)
+    # LANG-TYPED-CONTRACT-REF-PROP-P5: build the per-module contract signature
+    # registry. Module order/evidence still comes from the parsed source units;
+    # when supplied, signatures come from the lowered merged contracts and retain
+    # their origin_module attribution.
+    def build_cross_module_registry(sorted, lowered_contracts = nil)
+      contracts_by_module =
+        if lowered_contracts
+          lowered_contracts.group_by { |contract| contract["origin_module"] }
+        end
       sorted.each_with_object({}) do |unit, registry|
         mod_name = unit.fetch("module")
-        contracts = unit.fetch("parsed").fetch("contracts", [])
+        contracts = contracts_by_module ? contracts_by_module.fetch(mod_name, []) : unit.fetch("parsed").fetch("contracts", [])
         registry[mod_name] = contracts.each_with_object({}) do |contract, mod_reg|
           body = contract.fetch("body", [])
           inputs  = body.select { |d| d.fetch("kind", "") == "input" }
@@ -117,6 +129,51 @@ module IgniterLang
       sorted.each_with_object({}) do |unit, map|
         unit.fetch("contract_names").each { |name| map[name] = unit.fetch("module") }
       end
+    end
+
+    # LANG-DERIVED-RECORD-CONSTRUCTOR-P2: the textual merge preserves contract
+    # origin but erases lexical scope for every other declaration. Supply the
+    # lowering pass with the ordinary module/import ownership it needs without
+    # persisting new metadata into the parsed program or emitted SIR.
+    def build_constructor_scope(sorted)
+      collection_names = %w[
+        traits impls contract_shapes types variants functions consts pipelines
+        olap_points assumptions profiles size_relations
+      ]
+      collection_modules = collection_names.to_h do |collection|
+        modules = sorted.flat_map do |unit|
+          Array(unit.fetch("parsed").fetch(collection, [])).map { unit.fetch("module") }
+        end
+        [collection, modules]
+      end
+
+      type_modules = {}
+      function_modules = Hash.new { |hash, name| hash[name] = [] }
+      variant_arm_owners = Hash.new { |hash, name| hash[name] = [] }
+      sorted.each do |unit|
+        mod = unit.fetch("module")
+        parsed = unit.fetch("parsed")
+        Array(parsed.fetch("types", [])).each { |type| type_modules[type.fetch("name")] = mod }
+        Array(parsed.fetch("functions", [])).each do |function|
+          function_modules[function.fetch("name")] << mod
+        end
+        Array(parsed.fetch("variants", [])).each do |variant|
+          Array(variant.fetch("arms", [])).each do |arm|
+            variant_arm_owners[arm.fetch("name")] << {
+              "module" => mod,
+              "variant_name" => variant.fetch("name")
+            }
+          end
+        end
+      end
+
+      {
+        "per_module_imports" => build_per_module_imports(sorted),
+        "type_modules" => type_modules,
+        "function_modules" => function_modules.to_h,
+        "variant_arm_owners" => variant_arm_owners.to_h,
+        "collection_modules" => collection_modules
+      }
     end
 
     def source_unit(path)

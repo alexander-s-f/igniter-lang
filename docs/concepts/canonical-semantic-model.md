@@ -42,6 +42,7 @@ Source: S3-R29-C2-P (R28 meta-card) + S3-R29-C5-P (R29 bootstrap) + S3-R34-C3-S 
 |--------|--------|---------------------|---------------------|---------------|------|----------|
 | Contract (pure, unmodified) | implemented | Parser | `core` | `contract_modifiers_proof/golden/pure_contract_implicit.semantic_ir.json` | PROP-031 | P1, P2 |
 | Contract modifier: `pure` (explicit) | implemented | Parser | `core` | `contract_modifiers_proof/golden/pure_contract_explicit.semantic_ir.json` | PROP-031 | P1, P2 |
+| Derived record constructor source sugar | experiment-pass | Parser → pre-classify lowering | `core` after lowering to an ordinary pure contract | `derived_record_constructor_canon_parity_proof/golden/plan_email_send.normalized-contract-sir.json` | LANG-DERIVED-RECORD-CONSTRUCTOR-P2 | P1, P2, P27 |
 | Contract modifier: `observed` | experiment-pass | Parser | `escape` or `temporal`† | `contract_modifiers_proof/golden/observed_contract_basic.semantic_ir.json` (escape path); `contract_modifiers_proof/golden/observed_temporal_precedence.classified.json` (temporal path — V-3) | PROP-031 | P4, P7 |
 | Contract modifier: `effect` | experiment-pass | Parser | `escape` | `contract_modifiers_proof/golden/modifier_variants.semantic_ir.json` | PROP-031 | P4, P17, P19 |
 | Contract modifier: `privileged` | experiment-pass | Parser | `escape` | `contract_modifiers_proof/golden/modifier_variants.semantic_ir.json` | PROP-031 | P9 |
@@ -49,6 +50,11 @@ Source: S3-R29-C2-P (R28 meta-card) + S3-R29-C5-P (R29 bootstrap) + S3-R34-C3-S 
 
 †`observed` yields `temporal` when body contains `History[T]` or `BiHistory[T]` reads;
 `escape` otherwise. See PROP-031 §4.1 and §14.4.
+
+The derived record constructor is a source-surface entity only. Its parser
+placeholder and named invocation are erased before classification; the golden
+anchor records normalized ordinary-contract SIR and does not imply a constructor
+SIR node, VM value, opcode, host capability, or runtime authority.
 
 ### Type Declaration
 

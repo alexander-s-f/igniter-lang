@@ -1,0 +1,181 @@
+[
+  {
+    "contract_name": "PlanEmailSend",
+    "escape_boundaries": [],
+    "inputs": [
+      {
+        "lifecycle": "local",
+        "name": "notification_id",
+        "type": {
+          "name": "String",
+          "params": []
+        }
+      },
+      {
+        "lifecycle": "local",
+        "name": "delivery_id",
+        "type": {
+          "name": "String",
+          "params": []
+        }
+      },
+      {
+        "lifecycle": "local",
+        "name": "event_id",
+        "type": {
+          "name": "String",
+          "params": []
+        }
+      },
+      {
+        "lifecycle": "local",
+        "name": "contract_digest",
+        "type": {
+          "name": "String",
+          "params": []
+        }
+      },
+      {
+        "lifecycle": "local",
+        "name": "from",
+        "type": {
+          "name": "String",
+          "params": []
+        }
+      },
+      {
+        "lifecycle": "local",
+        "name": "recipient",
+        "type": {
+          "name": "String",
+          "params": []
+        }
+      },
+      {
+        "lifecycle": "local",
+        "name": "subject",
+        "type": {
+          "name": "String",
+          "params": []
+        }
+      },
+      {
+        "lifecycle": "local",
+        "name": "body",
+        "type": {
+          "name": "String",
+          "params": []
+        }
+      },
+      {
+        "lifecycle": "local",
+        "name": "message_body_sha256",
+        "type": {
+          "name": "String",
+          "params": []
+        }
+      },
+      {
+        "lifecycle": "local",
+        "name": "correlation_id",
+        "type": {
+          "name": "String",
+          "params": []
+        }
+      },
+      {
+        "lifecycle": "local",
+        "name": "audit_context",
+        "type": {
+          "name": "AuditContext",
+          "params": []
+        }
+      }
+    ],
+    "kind": "contract_ir",
+    "nodes": [
+      {
+        "deps": [
+          "audit_context",
+          "body",
+          "contract_digest",
+          "correlation_id",
+          "delivery_id",
+          "event_id",
+          "from",
+          "message_body_sha256",
+          "notification_id",
+          "recipient",
+          "subject"
+        ],
+        "expr": {
+          "fields": {
+            "audit_context": {
+              "kind": "ref",
+              "name": "audit_context"
+            },
+            "body": {
+              "kind": "ref",
+              "name": "body"
+            },
+            "contract_digest": {
+              "kind": "ref",
+              "name": "contract_digest"
+            },
+            "correlation_id": {
+              "kind": "ref",
+              "name": "correlation_id"
+            },
+            "delivery_id": {
+              "kind": "ref",
+              "name": "delivery_id"
+            },
+            "event_id": {
+              "kind": "ref",
+              "name": "event_id"
+            },
+            "from": {
+              "kind": "ref",
+              "name": "from"
+            },
+            "message_body_sha256": {
+              "kind": "ref",
+              "name": "message_body_sha256"
+            },
+            "notification_id": {
+              "kind": "ref",
+              "name": "notification_id"
+            },
+            "recipient": {
+              "kind": "ref",
+              "name": "recipient"
+            },
+            "subject": {
+              "kind": "ref",
+              "name": "subject"
+            }
+          },
+          "kind": "record_literal"
+        },
+        "kind": "compute",
+        "name": "intent",
+        "type": {
+          "name": "EmailSendIntent",
+          "params": []
+        }
+      }
+    ],
+    "outputs": [
+      {
+        "lifecycle": "session",
+        "name": "intent",
+        "type": {
+          "name": "EmailSendIntent",
+          "params": []
+        }
+      }
+    ],
+    "specialization_of": null,
+    "type_args": {}
+  }
+]

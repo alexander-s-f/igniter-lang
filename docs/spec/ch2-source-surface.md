@@ -3,7 +3,8 @@
 Source PROPs: PROP-014, PROP-015; PROP-032 (bounded assumptions surface);
 PROP-ENTRYPOINT (default target selector)
 Status: accepted (grammar kernel); partial (OOF rejection at parse time); PROP-032 experiment-pass for compiler surface only
-Proof: experiments/parser/ — 61 specs, add.ig + availability_projection.ig + polymorphic_add.ig
+Proof: experiments/parser/ — 61 specs, add.ig + availability_projection.ig + polymorphic_add.ig;
+experiments/derived_record_constructor_canon_parity_proof/
 
 ---
 
@@ -34,7 +35,7 @@ ModuleDecl    := "module" ModPath
 ImportDecl    := "import" ModPath ("." "{" Name ("," Name)* "}")?
 ModPath       := Name ("." Name)*
 
-TopDecl       := AssumptionsDecl | ContractDecl | TypeDecl | ConstDecl | FunctionDecl | ExternalDecl
+TopDecl       := AssumptionsDecl | ContractDecl | ConstructorDecl | TypeDecl | ConstDecl | FunctionDecl | ExternalDecl
 
 AssumptionsDecl := "assumptions" "{" AssumptionDecl* "}"
 AssumptionDecl  := "assumption" Name "{" AssumptionField* "}"
@@ -45,6 +46,7 @@ AssumptionField := "kind" ":" AssumptionKind
 AssumptionKind  := ":heuristic"|":empirical"|":synthetic"|":calibrated"
 
 ContractDecl  := "contract" Name "{" BodyDecl* "}"
+ConstructorDecl := "constructor" Name "->" "(" Name ":" TypeRef ")"
 BodyDecl      := EscapeDecl | InputDecl | ReadDecl | ComputeDecl
                | SnapshotDecl | WindowDecl | UsesAssumptionsDecl | OutputDecl
 
@@ -87,7 +89,7 @@ TypeRef       := "Integer"|"Float"|"String"|"Bool"|"Text"|"Timestamp"|"Date"|"Sy
                | "Result["     TypeRef "," TypeRef "]"
                | "Map["        TypeRef "," TypeRef "]"
 
-Expr          := Literal | Ref | BinOp | Call | IfExpr | BlockExpr
+Expr          := Literal | Ref | BinOp | Call | NamedConstruct | IfExpr | BlockExpr
                | FieldAccess | IndexAccess | Lambda | ArrayLit | RecordLit
                | LetExpr
 
@@ -96,6 +98,8 @@ BinOp         := Expr Op Expr
 Op            := "+" | "-" | "*" | "/" | "==" | "!=" | "<" | ">" | "<=" | ">="
                | "&&" | "||" | "++"
 Call          := Name "(" (Expr ("," Expr)*)? ")"
+NamedConstruct:= Name "{" (NamedField ("," NamedField)*)? "}"
+NamedField    := Name (":" Expr)?
 IfExpr        := "if" Expr "{" Expr "}" ("else" "{" Expr "}")?
   -- Note: the parser accepts the tolerant shape above. V0 accepted semantics
   -- require else; a missing else produces OOF-IF2, not a parse error.
@@ -308,6 +312,134 @@ Rules:
 
 Landed by LANG-STRING-INTERPOLATION-DUAL-PARITY-P2 (2026-07-14), promoting
 the Rust lab proof LAB-LANG-STRING-INTERPOLATION-SUGAR-P1.
+
+### 2.2.5 Derived structural record constructors
+
+`constructor` is a contextual top-level declaration for one narrow class of
+pure contracts: total construction of a declared structural record from all of
+its fields. It is not a lexer-reserved word outside this declaration position.
+
+```igniter
+type EmailSendIntent {
+  notification_id: String
+  from: String
+  recipient: String
+}
+
+constructor PlanEmailSend -> (intent: EmailSendIntent)
+
+pure contract Prepare(
+  notification_id: String,
+  from: String,
+  recipient: String
+) -> (intent: EmailSendIntent) =
+  PlanEmailSend { recipient, notification_id, from: from }
+```
+
+The declaration is body-free, modifier-free, implicitly pure, and has exactly
+one named output. Its target must resolve in the merged compilation program to
+a visible, non-generic, non-recursive record `TypeDecl` with at least one field.
+Optional omission, defaults, aliases, generic/recursive/zero-field targets,
+effect/read constructors, and hidden configuration lookup are not part of v0.
+
+Before classification and typechecking, after multifile merge and before
+natural contract-call sugar, the declaration is erased by this exact rewrite.
+For target fields `f1: T1 ... fn: Tn` in `TypeDecl` declaration order:
+
+```text
+constructor N -> (out: T)
+
+⇒ pure contract N(f1: T1, ..., fn: Tn) -> (out: T) =
+    { f1, ..., fn }
+```
+
+The right-hand side uses ordinary record-field punning. After this rewrite the
+program contains only the existing pure `ContractDecl`, record literal, and
+input/compute/output declarations. No constructor AST kind survives the shared
+pre-classify funnel; no SemanticIR node, VM opcode/value, host authority, or
+second runtime path is introduced.
+
+`N { ... }` is a named, exact-field invocation only when `N` resolves to a
+visible constructor declaration. Field order at the call site is irrelevant;
+punned `field` and explicit `field: expr` entries may mix. The lowerer checks
+that the supplied field-name set exactly equals the target record's field set,
+then emits the existing static call in derived input order:
+
+```text
+N { fn: en, f1, ..., f2: e2 }
+
+⇒ call_contract("N", f1, e2, ..., en)
+```
+
+This exact-field gate is stricter than ordinary structural width assignability:
+construction cannot silently omit or add a field. `N(args...)` is refused for
+constructor-declared contracts because the derived positional order is an
+implementation detail. A literally authored `call_contract("N", ...)` remains
+the explicit positional escape hatch and retains all existing call-contract
+typing and identity rules. If `N { ... }` could denote both a constructor and a
+variant arm, compilation is ambiguous and fail-closed; neither category wins.
+For a same-module constructor the generated literal remains `"N"`. For a
+selectively imported constructor, visibility is resolved before the rewrite and
+the generated static call records its ordinary qualified identity
+`"Module.N"`; an unimported declaration in the merged closure is never a
+candidate and cannot create a false ambiguity.
+
+#### Identity, evolution, and pin law
+
+The lowered declaration has ordinary contract identity. Module qualification,
+selective import/export visibility, short-name ambiguity, `entrypoint`, static
+call typing, and contract graph behavior are inherited without a constructor
+identity tier. Constructor, compact signature-bound contract, and explicit
+input/compute/output spellings therefore have identical normalized contract
+SemanticIR when their lowered declarations are equal.
+
+The v0 named-construction spelling itself is bare `N { ... }`. Imported
+constructors use that bare source name after ordinary visibility resolution;
+their lowered static call carries the resolved qualified identity. Dotted
+`Module.N { ... }` source syntax is HOLD; qualification remains available
+through ordinary qualified `entrypoint` identity and the explicit
+`call_contract("Module.N", ...)` escape hatch.
+
+Source spelling is still evidence. Respelling an explicit or compact contract
+as `constructor` changes `source_hash` and therefore rotates source-derived
+artifact/semantic hashes and every program/artifact pin derived from them, even
+when normalized contract SemanticIR is equal. The structural `contract_ref`
+remains stable when that normalized contract IR is identical; it rotates only
+when the lowered contract IR changes. Migration still requires normal
+program/artifact pin re-minting: sugar equivalence never authorizes reusing a
+stale artifact pin.
+
+The input list is re-derived from the live `TypeDecl` on every compilation:
+
+- add a field: stale named calls fail `OOF-CTOR7`, host calls lack a required
+  input, and SIR/pins rotate;
+- remove or rename a field: stale named calls fail `OOF-CTOR7` and/or
+  `OOF-CTOR8`;
+- retype a field: the lowered static call fails inherited `OOF-TY0`;
+- reorder fields: named calls remain source-valid, but derived input order is
+  semantic, so normalized SIR and pins rotate.
+
+No evolution silently widens construction.
+
+#### Fail-closed diagnostics
+
+| Rule | Condition |
+|---|---|
+| `OOF-CTOR1` | missing/malformed named output, or an unknown, non-record, generic, recursive, or zero-field target |
+| `OOF-CTOR2` | constructor body supplied; use a `pure contract` for derivation or validation |
+| `OOF-CTOR3` | any modifier supplied; only the contextual `constructor` spelling is legal |
+| `OOF-CTOR4` | positional natural invocation `N(args...)`; use `N { field: ... }` |
+| `OOF-CTOR5` | `N { ... }` is ambiguous between a constructor and a variant arm |
+| `OOF-CTOR7` | one or more required named fields are missing |
+| `OOF-CTOR8` | one or more unknown named fields are supplied |
+| inherited `OOF-P1` | duplicate named field, rejected by the shared named-field parser |
+| inherited `OOF-RET1` | more than one declared output; the ordinary single-output law remains authoritative |
+| inherited `OOF-TY0` | supplied expression has the wrong type after static-call lowering |
+| inherited declaration/identity rules | duplicate or ambiguous ordinary contract identity |
+
+Ruby canon and Rust lab must use equivalent actionable messages. There is no
+`OOF-CTOR6`: duplicate named fields remain owned by parser-level `OOF-P1`.
+Landed by LANG-DERIVED-RECORD-CONSTRUCTOR-P2 (2026-07-15).
 
 ## 2.2.2 Assumptions Surface (PROP-032 Experiment-Pass)
 

@@ -381,7 +381,12 @@ module IgniterLang
         when "trait"          then program["traits"]          << decl
         when "impl"           then program["impls"]           << decl
         when "contract_shape" then program["contract_shapes"] << decl
-        when "contract"       then program["contracts"]       << decl
+        when "contract", "constructor"
+          # LANG-DERIVED-RECORD-CONSTRUCTOR-P2: constructor declarations live in
+          # the existing contract slot, preserving declaration order and all
+          # multifile contract identity/import bookkeeping. The dedicated
+          # pre-classify lowering replaces every placeholder before classify.
+          program["contracts"] << decl
         when "type"           then program["types"]           << decl
         when "const"          then program["consts"]          << decl
         when "variant"        then program["variants"]        << decl  # PROP-044-P3
@@ -513,17 +518,33 @@ module IgniterLang
 
     def parse_top_decl
       tok = peek
+      # Structural constructors are implicitly pure. `read constructor` and
+      # `write constructor` are category errors too even though read/write are
+      # not ordinary contract modifiers; consume the pair as one bounded
+      # OOF-CTOR3 declaration instead of producing an unexpected-token cascade.
+      if %w[read write].include?(tok.value) && peek(1)&.value == "constructor"
+        modifier = tok.value
+        advance
+        advance
+        return parse_constructor_decl(modifier: modifier)
+      end
       case tok.value
       when "trait"          then advance; parse_trait_decl
       when "impl"           then advance; parse_impl_decl
       when "contract_shape" then advance; parse_contract_shape_decl
       when "contract"       then advance; parse_contract_decl
+      # `constructor` is deliberately contextual: it is NOT added to KEYWORDS,
+      # so it remains a legal identifier in every non-top-level position.
+      when "constructor"    then advance; parse_constructor_decl
       when *CONTRACT_MODIFIERS
         modifier = tok.value
         advance
         if peek.value == "contract"
           advance
           parse_contract_decl(modifier: modifier)
+        elsif peek.value == "constructor"
+          advance
+          parse_constructor_decl(modifier: modifier)
         else
           @errors << { "message" => "Expected 'contract' after modifier '#{modifier}'", "line" => tok.line }
           nil
@@ -1225,6 +1246,102 @@ module IgniterLang
       node["via_profile"] = via_profile if via_profile  # PROP-033
       node["body"] = body.compact
       node
+    end
+
+    # LANG-DERIVED-RECORD-CONSTRUCTOR-P2: contextual, body-free structural
+    # constructor declaration. Keep an in-order placeholder in the ordinary
+    # contracts collection. Its body contains only the authored output
+    # declaration(s); DerivedConstructorSugar derives inputs + the canonical
+    # record-literal compute after the whole program (including sibling-file
+    # TypeDecls) is available.
+    def parse_constructor_decl(modifier: nil)
+      hdr_tok = peek
+      name = name_token!(%i[ident])
+
+      if modifier
+        add_parse_error(
+          rule: "OOF-CTOR3",
+          message: "constructor '#{name}' cannot use modifier '#{modifier}'; only `constructor` is legal",
+          token: name,
+          line: hdr_tok&.line || 0,
+          col: hdr_tok&.col || 0
+        )
+      end
+
+      outputs = parse_constructor_outputs(name, hdr_tok)
+
+      if peek_type?(:lbrace) || peek_type?(:assign)
+        body_tok = peek
+        add_parse_error(
+          rule: "OOF-CTOR2",
+          message: "constructor '#{name}' is total and body-free; use `pure contract` for derivation/validation",
+          token: name,
+          line: body_tok&.line || hdr_tok&.line || 0,
+          col: body_tok&.col || hdr_tok&.col || 0
+        )
+        if peek_type?(:lbrace)
+          skip_balanced_block
+        else
+          advance # `=`
+          suppress_form_invocation { parse_expr }
+        end
+      end
+
+      {
+        "kind" => "constructor",
+        "name" => name,
+        "modifier" => "pure",
+        "type_params" => [],
+        "body" => outputs.map do |output|
+          { "kind" => "output", "name" => output.fetch("name"),
+            "type_annotation" => output.fetch("type_annotation") }
+        end,
+        "source_span" => { "line" => hdr_tok&.line || 0, "col" => hdr_tok&.col || 0 }
+      }
+    end
+
+    def parse_constructor_outputs(name, hdr_tok)
+      unless peek_type?(:arrow)
+        add_constructor_output_error(name, hdr_tok)
+        # Consume an otherwise well-bounded `(out: Type)` tail after the missing
+        # arrow so the one CTOR1 remains the root diagnostic.
+        skip_balanced_parens if peek_type?(:lparen)
+        return []
+      end
+
+      advance # `->`
+      unless peek_type?(:lparen)
+        add_constructor_output_error(name, hdr_tok)
+        return []
+      end
+
+      signature_start = @pos
+      parse_params
+    rescue ParseError
+      add_constructor_output_error(name, hdr_tok)
+      @pos = signature_start if signature_start
+      skip_balanced_parens if peek_type?(:lparen)
+      []
+    end
+
+    def add_constructor_output_error(name, token)
+      add_parse_error(
+        rule: "OOF-CTOR1",
+        message: "constructor '#{name}' must declare exactly one named record output",
+        token: name,
+        line: token&.line || 0,
+        col: token&.col || 0
+      )
+    end
+
+    def skip_balanced_parens
+      depth = 0
+      until peek_type?(:eof)
+        token = advance
+        depth += 1 if token.type == :lparen
+        depth -= 1 if token.type == :rparen
+        break if depth.zero?
+      end
     end
 
     # Parse a compact contract signature `(name: Type, ...) -> (name: Type, ...)`.
@@ -3499,8 +3616,17 @@ module IgniterLang
       until peek_type?(:rbrace) || peek_type?(:eof)
         key_tok = peek
         key = name_token!(%i[ident keyword])
-        expect_type!(:colon)
-        val = parse_expr
+        # LANG-DERIVED-RECORD-CONSTRUCTOR-P2: named construction shares record
+        # field punning. `Arm { value }` and constructor-shaped `Name { value }`
+        # both become the existing explicit field->ref representation; no new
+        # expression/SIR node is introduced.
+        val =
+          if peek_type?(:colon)
+            advance
+            parse_expr
+          else
+            { "kind" => "ref", "name" => key }
+          end
         # Named construction shares the record-literal duplicate-field law:
         # record one OOF-P1 while parsing instead of silently keeping the last
         # value. Continuing through the balanced field list avoids a derivative
