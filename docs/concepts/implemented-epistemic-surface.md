@@ -46,7 +46,7 @@ does not become proof merely because it is compiled.
 | `write store <- value evidence [refs]` | What supports this mutation? | live, mandatory refs | live, mandatory refs | write node | execution depends on host/runtime path | stronger compiler fence (`OOF-W1/W2/W3`), runtime proof remains host-owned |
 | Effect Surface `receipt/failure/idempotency/affects/authority/compensation/reversibility` | What does an effect claim about itself? | live | live | unified `effect_surface_v1` | field-by-field; declaration alone proves nothing | dual compiler surface; enforcement varies and must be named separately |
 | profile + service obligations | What policy/operational promises constrain execution? | live | substantial live surface | profile and contract metadata | liveness enforcement is not implied | declaration consistency is live; operational fulfillment is held unless separately proven |
-| runtime receipt / observations | What actually happened? | N/A | N/A | runtime artifact | live on Machine-owned paths | evidence of execution, not evidence that every source declaration was enforced |
+| runtime receipt / observations | What actually happened? | N/A | N/A | runtime artifact | live on Machine-owned paths; `receipt_envelope_v0` normalizes VM/Machine/TBackend outcomes | effect-outcome epistemics are live, but source intent/assumption/evidence refs are not yet connected |
 
 ## Adjacent Epistemic Carriers
 
@@ -97,6 +97,10 @@ treated as aliases.
 - Rust emits a manifest entrypoint, and the VM executes that contract without an
   explicit `--entry` selector (probe result `42`).
 - No `assumption_refs` consumer exists in `igniter-vm` or `igniter-machine`.
+- Machine `receipt_envelope_v0` already preserves effect-outcome knowledge as
+  `epistemic_outcome`, `observation_phase`, `reconcile_obligation`,
+  `retry_posture` and grounded provenance. The missing work is the bridge from
+  compiled declarations to execution context, not another outcome taxonomy.
 
 ## Known Drift and Gaps
 
@@ -127,10 +131,10 @@ The smallest sequence that gives the existing syntax real leverage is:
 2. **Epistemic discovery.** Expose entrypoint, intent, assumptions, evidence
    declarations, Effect Surface, and obligations through one read-only
    compiler/command-center query.
-3. **Execution provenance envelope.** Design an additive runtime envelope that
-   records the selected entrypoint and the declared assumption/evidence refs
-   actually carried into execution. It must distinguish `declared`, `resolved`,
-   `verified`, and `unknown` rather than collapsing them into a boolean.
+3. **Execution epistemic context.** Additively link the selected entrypoint and
+   declared assumption/evidence refs to the existing `receipt_envelope_v0`.
+   It must distinguish `declared`, `resolved`, `verified`, and `unknown` rather
+   than collapsing them into a boolean or replacing outcome normalization.
 4. **Assumption binding only under evidence pressure.** Runtime values,
    freshness, expiry, and cross-module assumptions remain held until a real
    application requires them and a receipt model exists.
