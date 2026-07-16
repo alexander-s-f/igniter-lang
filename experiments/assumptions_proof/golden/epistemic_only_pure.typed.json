@@ -1,0 +1,157 @@
+{
+  "kind": "typed_program",
+  "typechecker_version": "typed-pass-executable-proof-v0",
+  "program_id": "typed_pass/342c9420948809ef",
+  "classified_program_id": "classifier_pass/bcca79e548f70d29",
+  "source_path": "igniter-lang/experiments/assumptions_proof/fixtures/epistemic_only_pure.ig",
+  "source_hash": "sha256:0062b2632b2656b2c910b1b64eebd4c472f1f0ee074a7d303a6f93fde1e3da40",
+  "grammar_version": "assumptions-v0",
+  "module": "Risk.Scoring",
+  "type_env": {
+    "Assumption": {
+      "kind": {
+        "name": "Symbol",
+        "params": []
+      },
+      "statement": {
+        "name": "String",
+        "params": []
+      },
+      "strength": {
+        "name": "Decimal",
+        "params": []
+      },
+      "source": {
+        "name": "String",
+        "params": []
+      }
+    }
+  },
+  "contracts": [
+    {
+      "kind": "typed_contract",
+      "contract_id": "Risk.Scoring.PureEpistemicScore",
+      "name": "PureEpistemicScore",
+      "modifier": "pure",
+      "status": "accepted",
+      "fragment_class": "epistemic",
+      "symbols": [
+        {
+          "name": "calibration_prior",
+          "type": {
+            "name": "Assumption",
+            "params": []
+          },
+          "resolved": true
+        },
+        {
+          "name": "score",
+          "type": {
+            "name": "String",
+            "params": []
+          },
+          "resolved": true
+        },
+        {
+          "name": "signal",
+          "type": {
+            "name": "Signal",
+            "params": []
+          },
+          "resolved": true
+        }
+      ],
+      "declarations": [
+        {
+          "decl_id": "input:signal",
+          "kind": "input",
+          "name": "signal",
+          "fragment_class": "core",
+          "type": {
+            "name": "Signal",
+            "params": []
+          },
+          "deps": []
+        },
+        {
+          "decl_id": "uses_assumptions:calibration_prior",
+          "kind": "uses_assumptions",
+          "name": "calibration_prior",
+          "fragment_class": "epistemic",
+          "type": {
+            "name": "Assumption",
+            "params": []
+          },
+          "deps": []
+        },
+        {
+          "decl_id": "compute:score",
+          "kind": "compute",
+          "name": "score",
+          "fragment_class": "core",
+          "type": {
+            "name": "String",
+            "params": []
+          },
+          "deps": [
+            "calibration_prior"
+          ],
+          "expr": {
+            "kind": "field_access",
+            "object": {
+              "kind": "ref",
+              "name": "calibration_prior",
+              "resolved_type": {
+                "name": "Assumption",
+                "params": []
+              },
+              "deps": [
+                "calibration_prior"
+              ]
+            },
+            "field": "statement",
+            "resolved_type": {
+              "name": "String",
+              "params": []
+            },
+            "deps": [
+              "calibration_prior"
+            ]
+          }
+        },
+        {
+          "decl_id": "output:score",
+          "kind": "output",
+          "name": "score",
+          "fragment_class": "core",
+          "type": {
+            "name": "String",
+            "params": []
+          },
+          "deps": [
+            "score"
+          ]
+        }
+      ],
+      "type_errors": [],
+      "assumption_refs": [
+        "calibration_prior"
+      ]
+    }
+  ],
+  "type_errors": [],
+  "semantic_ir_ref": null,
+  "assumption_registry": [
+    {
+      "kind": "assumption_entry",
+      "name": "calibration_prior",
+      "fields": {
+        "kind": "calibrated",
+        "statement": "The scoring threshold was calibrated from the prior model card.",
+        "strength": 0.82,
+        "source": "model-card://risk-scoring/v1"
+      },
+      "declared_in_module": "Risk.Scoring"
+    }
+  ]
+}

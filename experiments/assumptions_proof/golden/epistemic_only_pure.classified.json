@@ -1,0 +1,119 @@
+{
+  "kind": "classified_program",
+  "classifier_version": "classifier-pass-executable-proof-v0",
+  "program_id": "classifier_pass/bcca79e548f70d29",
+  "source_path": "igniter-lang/experiments/assumptions_proof/fixtures/epistemic_only_pure.ig",
+  "source_hash": "sha256:0062b2632b2656b2c910b1b64eebd4c472f1f0ee074a7d303a6f93fde1e3da40",
+  "grammar_version": "assumptions-v0",
+  "module": "Risk.Scoring",
+  "type_declarations": [],
+  "contracts": [
+    {
+      "kind": "classified_contract",
+      "contract_id": "Risk.Scoring.PureEpistemicScore",
+      "name": "PureEpistemicScore",
+      "modifier": "pure",
+      "fragment_class": "epistemic",
+      "symbols": [
+        {
+          "name": "calibration_prior",
+          "kind": "assumption",
+          "fragment_class": "core"
+        },
+        {
+          "name": "score",
+          "kind": "compute",
+          "fragment_class": "core"
+        },
+        {
+          "name": "signal",
+          "kind": "input",
+          "fragment_class": "core"
+        }
+      ],
+      "declarations": [
+        {
+          "decl_id": "input:signal",
+          "kind": "input",
+          "name": "signal",
+          "fragment_class": "core",
+          "deps": [],
+          "missing_refs": [],
+          "type_annotation": "Signal"
+        },
+        {
+          "decl_id": "uses_assumptions:calibration_prior",
+          "kind": "uses_assumptions",
+          "name": "calibration_prior",
+          "fragment_class": "epistemic",
+          "deps": [],
+          "missing_refs": []
+        },
+        {
+          "decl_id": "compute:score",
+          "kind": "compute",
+          "name": "score",
+          "fragment_class": "core",
+          "deps": [
+            "calibration_prior"
+          ],
+          "missing_refs": [],
+          "expr_kind": "field_access",
+          "expr": {
+            "kind": "field_access",
+            "object": {
+              "kind": "ref",
+              "name": "calibration_prior"
+            },
+            "field": "statement"
+          }
+        },
+        {
+          "decl_id": "output:score",
+          "kind": "output",
+          "name": "score",
+          "fragment_class": "core",
+          "deps": [
+            "score"
+          ],
+          "missing_refs": [],
+          "type_annotation": "String"
+        }
+      ],
+      "dependency_graph": {
+        "nodes": [
+          "input:signal",
+          "uses_assumptions:calibration_prior",
+          "compute:score",
+          "output:score"
+        ],
+        "edges": [
+          {
+            "from": "compute:score",
+            "to": "output:score",
+            "kind": "symbol"
+          }
+        ]
+      },
+      "oof_log": [],
+      "assumption_refs": [
+        "calibration_prior"
+      ]
+    }
+  ],
+  "oof_log": [],
+  "semantic_ir_ref": null,
+  "assumption_registry": [
+    {
+      "kind": "assumption_entry",
+      "name": "calibration_prior",
+      "fields": {
+        "kind": "calibrated",
+        "statement": "The scoring threshold was calibrated from the prior model card.",
+        "strength": 0.82,
+        "source": "model-card://risk-scoring/v1"
+      },
+      "declared_in_module": "Risk.Scoring"
+    }
+  ]
+}

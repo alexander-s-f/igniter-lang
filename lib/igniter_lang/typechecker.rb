@@ -256,6 +256,10 @@ module IgniterLang
       @t2_context    = nil
       @t3_context    = nil  # PROP-042 T3
       @assumption_errors = assumption_errors_by_name(@assumption_registry)
+      # LANG-ASSUMPTION-DECLARATION-VALIDATION-PARITY-P1: one TASSUMP-1 per invalid declaration,
+      # for the whole module registry, regardless of use-sites (see `typecheck_contract`, which no
+      # longer gates this on `assumption_refs`).
+      module_assumption_errors = @assumption_errors.values.flatten
       @olap_env = olap_env(classified_program.fetch("olap_points", []))
       @olap_errors = olap_declaration_errors(@olap_env)
       # LANG-TYPED-CONTRACT-REF-PROP-P3: build same-module contract registry for uses_contract resolution
@@ -338,7 +342,7 @@ module IgniterLang
         "module" => classified_program.fetch("module"),
         "type_env" => @type_shapes,
         "contracts" => typed_contracts,
-        "type_errors" => typed_contracts.flat_map { |contract| contract.fetch("type_errors") } + const_errors + module_reserved_errors + entrypoint_errors + cycle_errors + function_errors + shape_conformance_errors(classified_program),
+        "type_errors" => typed_contracts.flat_map { |contract| contract.fetch("type_errors") } + const_errors + module_reserved_errors + entrypoint_errors + cycle_errors + function_errors + shape_conformance_errors(classified_program) + module_assumption_errors,
         "semantic_ir_ref" => nil
       }
       result["entrypoint"] = resolved_entrypoint if resolved_entrypoint
@@ -542,8 +546,12 @@ module IgniterLang
 
     def typecheck_contract(classified_contract)
       declared_oofs = classified_contract.fetch("oof_log")
+      # LANG-ASSUMPTION-DECLARATION-VALIDATION-PARITY-P1: TASSUMP-1 is validated once for the
+      # whole module assumption registry (see `typecheck`), independent of this contract's own
+      # `assumption_refs` — an invalid declaration is invalid whether or not any contract cites
+      # it, and citing it from several contracts must not multiply the diagnostic.
       assumption_refs = classified_contract.fetch("assumption_refs", [])
-      type_errors = declared_oofs + @olap_errors + assumption_refs.flat_map { |name| @assumption_errors.fetch(name, []) }
+      type_errors = declared_oofs + @olap_errors
       type_warnings = []
       symbol_types = {}
       typed_decls = []

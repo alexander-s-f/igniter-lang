@@ -1,0 +1,26 @@
+{
+  "kind": "compilation_report",
+  "format_version": "0.1.0",
+  "program_id": "compilation_report/8fdf5465f8ac9d6f",
+  "grammar_version": "assumptions-v0",
+  "source_hash": "sha256:8fdf5465f8ac9d6f007e50b81395d580f22b7bb3c90ae0374ee013c540cf6d70",
+  "source_path": "experiments/assumptions_proof/fixtures/oof_a1_undeclared_assumption.ig",
+  "pass_result": "oof",
+  "stages": {
+    "parse": "ok",
+    "classify": "ok",
+    "typecheck": "oof",
+    "emit": "skipped"
+  },
+  "diagnostics": [
+    {
+      "rule": "OOF-A1",
+      "severity": "error",
+      "message": "contract 'BadAssumptionUse' uses assumptions 'undeclared_heuristic' but no assumption named 'undeclared_heuristic' is declared in this module",
+      "node": "uses_assumptions:undeclared_heuristic",
+      "path": null,
+      "line": null
+    }
+  ],
+  "semantic_ir_ref": null
+}

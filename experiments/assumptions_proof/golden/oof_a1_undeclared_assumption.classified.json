@@ -1,0 +1,117 @@
+{
+  "kind": "classified_program",
+  "classifier_version": "classifier-pass-executable-proof-v0",
+  "program_id": "classifier_pass/aa5bf3656b30cf64",
+  "source_path": "igniter-lang/experiments/assumptions_proof/fixtures/oof_a1_undeclared_assumption.ig",
+  "source_hash": "sha256:8fdf5465f8ac9d6f007e50b81395d580f22b7bb3c90ae0374ee013c540cf6d70",
+  "grammar_version": "assumptions-v0",
+  "module": "Risk.Scoring",
+  "type_declarations": [],
+  "contracts": [
+    {
+      "kind": "classified_contract",
+      "contract_id": "Risk.Scoring.BadAssumptionUse",
+      "name": "BadAssumptionUse",
+      "modifier": "pure",
+      "fragment_class": "oof",
+      "symbols": [
+        {
+          "name": "score",
+          "kind": "compute",
+          "fragment_class": "core"
+        },
+        {
+          "name": "signal",
+          "kind": "input",
+          "fragment_class": "core"
+        },
+        {
+          "name": "undeclared_heuristic",
+          "kind": "assumption",
+          "fragment_class": "core"
+        }
+      ],
+      "declarations": [
+        {
+          "decl_id": "input:signal",
+          "kind": "input",
+          "name": "signal",
+          "fragment_class": "core",
+          "deps": [],
+          "missing_refs": [],
+          "type_annotation": "Signal"
+        },
+        {
+          "decl_id": "uses_assumptions:undeclared_heuristic",
+          "kind": "uses_assumptions",
+          "name": "undeclared_heuristic",
+          "fragment_class": "epistemic",
+          "deps": [],
+          "missing_refs": [
+            "undeclared_heuristic"
+          ]
+        },
+        {
+          "decl_id": "compute:score",
+          "kind": "compute",
+          "name": "score",
+          "fragment_class": "core",
+          "deps": [],
+          "missing_refs": [],
+          "expr_kind": "literal",
+          "expr": {
+            "kind": "literal",
+            "value": 1,
+            "type_tag": "Integer"
+          }
+        },
+        {
+          "decl_id": "output:score",
+          "kind": "output",
+          "name": "score",
+          "fragment_class": "core",
+          "deps": [
+            "score"
+          ],
+          "missing_refs": [],
+          "type_annotation": "Integer"
+        }
+      ],
+      "dependency_graph": {
+        "nodes": [
+          "input:signal",
+          "uses_assumptions:undeclared_heuristic",
+          "compute:score",
+          "output:score"
+        ],
+        "edges": [
+          {
+            "from": "compute:score",
+            "to": "output:score",
+            "kind": "symbol"
+          }
+        ]
+      },
+      "oof_log": [
+        {
+          "rule": "OOF-A1",
+          "message": "contract 'BadAssumptionUse' uses assumptions 'undeclared_heuristic' but no assumption named 'undeclared_heuristic' is declared in this module",
+          "node": "uses_assumptions:undeclared_heuristic",
+          "line": null
+        }
+      ],
+      "assumption_refs": [
+        "undeclared_heuristic"
+      ]
+    }
+  ],
+  "oof_log": [
+    {
+      "rule": "OOF-A1",
+      "message": "contract 'BadAssumptionUse' uses assumptions 'undeclared_heuristic' but no assumption named 'undeclared_heuristic' is declared in this module",
+      "node": "uses_assumptions:undeclared_heuristic",
+      "line": null
+    }
+  ],
+  "semantic_ir_ref": null
+}

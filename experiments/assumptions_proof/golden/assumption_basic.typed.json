@@ -1,0 +1,180 @@
+{
+  "kind": "typed_program",
+  "typechecker_version": "typed-pass-executable-proof-v0",
+  "program_id": "typed_pass/4d3677eb9898a6ad",
+  "classified_program_id": "classifier_pass/4f379e123408ea29",
+  "source_path": "igniter-lang/experiments/assumptions_proof/fixtures/assumption_basic.ig",
+  "source_hash": "sha256:c8c6bf2061c23bcdbc5ee47039c0545372603e7689400bd9aaccefec2ce26fd8",
+  "grammar_version": "assumptions-v0",
+  "module": "Risk.Scoring",
+  "type_env": {
+    "Assumption": {
+      "kind": {
+        "name": "Symbol",
+        "params": []
+      },
+      "statement": {
+        "name": "String",
+        "params": []
+      },
+      "strength": {
+        "name": "Decimal",
+        "params": []
+      },
+      "source": {
+        "name": "String",
+        "params": []
+      }
+    }
+  },
+  "contracts": [
+    {
+      "kind": "typed_contract",
+      "contract_id": "Risk.Scoring.ScoreInteraction",
+      "name": "ScoreInteraction",
+      "modifier": "observed",
+      "status": "accepted",
+      "fragment_class": "escape",
+      "symbols": [
+        {
+          "name": "a",
+          "type": {
+            "name": "Signal",
+            "params": []
+          },
+          "resolved": true
+        },
+        {
+          "name": "b",
+          "type": {
+            "name": "Signal",
+            "params": []
+          },
+          "resolved": true
+        },
+        {
+          "name": "homophily",
+          "type": {
+            "name": "Assumption",
+            "params": []
+          },
+          "resolved": true
+        },
+        {
+          "name": "score",
+          "type": {
+            "name": "String",
+            "params": []
+          },
+          "resolved": true
+        }
+      ],
+      "declarations": [
+        {
+          "decl_id": "input:a",
+          "kind": "input",
+          "name": "a",
+          "fragment_class": "core",
+          "type": {
+            "name": "Signal",
+            "params": []
+          },
+          "deps": []
+        },
+        {
+          "decl_id": "input:b",
+          "kind": "input",
+          "name": "b",
+          "fragment_class": "core",
+          "type": {
+            "name": "Signal",
+            "params": []
+          },
+          "deps": []
+        },
+        {
+          "decl_id": "uses_assumptions:homophily",
+          "kind": "uses_assumptions",
+          "name": "homophily",
+          "fragment_class": "epistemic",
+          "type": {
+            "name": "Assumption",
+            "params": []
+          },
+          "deps": []
+        },
+        {
+          "decl_id": "compute:score",
+          "kind": "compute",
+          "name": "score",
+          "fragment_class": "core",
+          "type": {
+            "name": "String",
+            "params": []
+          },
+          "deps": [
+            "homophily"
+          ],
+          "expr": {
+            "kind": "field_access",
+            "object": {
+              "kind": "ref",
+              "name": "homophily",
+              "resolved_type": {
+                "name": "Assumption",
+                "params": []
+              },
+              "deps": [
+                "homophily"
+              ]
+            },
+            "field": "statement",
+            "resolved_type": {
+              "name": "String",
+              "params": []
+            },
+            "deps": [
+              "homophily"
+            ]
+          }
+        },
+        {
+          "decl_id": "output:score",
+          "kind": "output",
+          "name": "score",
+          "fragment_class": "core",
+          "type": {
+            "name": "String",
+            "params": []
+          },
+          "deps": [
+            "score"
+          ],
+          "evidence": [
+            "a",
+            "b",
+            "homophily"
+          ]
+        }
+      ],
+      "type_errors": [],
+      "assumption_refs": [
+        "homophily"
+      ]
+    }
+  ],
+  "type_errors": [],
+  "semantic_ir_ref": null,
+  "assumption_registry": [
+    {
+      "kind": "assumption_entry",
+      "name": "homophily",
+      "fields": {
+        "kind": "heuristic",
+        "statement": "People with similar beliefs interact more often.",
+        "strength": 0.7
+      },
+      "declared_in_module": "Risk.Scoring"
+    }
+  ]
+}

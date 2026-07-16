@@ -1,0 +1,61 @@
+{
+  "kind": "parsed_program",
+  "source_path": "assumptions/epistemic_only_pure.ig",
+  "source_hash": "sha256:epistemic-only-pure",
+  "grammar_version": "igniter-parser-proof-v0",
+  "module": "Risk.Scoring",
+  "assumptions": [
+    {
+      "kind": "assumption_decl",
+      "name": "calibration_prior",
+      "fields": {
+        "kind": "calibrated",
+        "statement": "The scoring threshold was calibrated from the prior model card.",
+        "strength": 0.82,
+        "source": "model-card://risk-scoring/v1"
+      }
+    }
+  ],
+  "types": [],
+  "contracts": [
+    {
+      "kind": "contract",
+      "name": "PureEpistemicScore",
+      "modifier": "pure",
+      "body": [
+        {
+          "kind": "input",
+          "name": "signal",
+          "type_annotation": "Signal"
+        },
+        {
+          "kind": "uses_assumptions",
+          "name": "calibration_prior"
+        },
+        {
+          "kind": "compute",
+          "name": "score",
+          "expr": {
+            "kind": "field_access",
+            "object": {
+              "kind": "ref",
+              "name": "calibration_prior"
+            },
+            "field": "strength"
+          }
+        },
+        {
+          "kind": "output",
+          "name": "score",
+          "type_annotation": "Decimal",
+          "evidence": [
+            "signal",
+            "calibration_prior",
+            "prop033_future_only"
+          ]
+        }
+      ]
+    }
+  ],
+  "parse_errors": []
+}

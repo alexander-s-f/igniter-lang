@@ -1,0 +1,147 @@
+{
+  "kind": "classified_program",
+  "classifier_version": "classifier-pass-executable-proof-v0",
+  "program_id": "classifier_pass/4f379e123408ea29",
+  "source_path": "igniter-lang/experiments/assumptions_proof/fixtures/assumption_basic.ig",
+  "source_hash": "sha256:c8c6bf2061c23bcdbc5ee47039c0545372603e7689400bd9aaccefec2ce26fd8",
+  "grammar_version": "assumptions-v0",
+  "module": "Risk.Scoring",
+  "type_declarations": [],
+  "contracts": [
+    {
+      "kind": "classified_contract",
+      "contract_id": "Risk.Scoring.ScoreInteraction",
+      "name": "ScoreInteraction",
+      "modifier": "observed",
+      "fragment_class": "escape",
+      "symbols": [
+        {
+          "name": "a",
+          "kind": "input",
+          "fragment_class": "core"
+        },
+        {
+          "name": "b",
+          "kind": "input",
+          "fragment_class": "core"
+        },
+        {
+          "name": "homophily",
+          "kind": "assumption",
+          "fragment_class": "core"
+        },
+        {
+          "name": "score",
+          "kind": "compute",
+          "fragment_class": "core"
+        }
+      ],
+      "declarations": [
+        {
+          "decl_id": "input:a",
+          "kind": "input",
+          "name": "a",
+          "fragment_class": "core",
+          "deps": [],
+          "missing_refs": [],
+          "type_annotation": "Signal"
+        },
+        {
+          "decl_id": "input:b",
+          "kind": "input",
+          "name": "b",
+          "fragment_class": "core",
+          "deps": [],
+          "missing_refs": [],
+          "type_annotation": "Signal"
+        },
+        {
+          "decl_id": "uses_assumptions:homophily",
+          "kind": "uses_assumptions",
+          "name": "homophily",
+          "fragment_class": "epistemic",
+          "deps": [],
+          "missing_refs": []
+        },
+        {
+          "decl_id": "escape:profile_source",
+          "kind": "escape",
+          "name": "profile_source",
+          "fragment_class": "escape",
+          "deps": [],
+          "missing_refs": []
+        },
+        {
+          "decl_id": "compute:score",
+          "kind": "compute",
+          "name": "score",
+          "fragment_class": "core",
+          "deps": [
+            "homophily"
+          ],
+          "missing_refs": [],
+          "expr_kind": "field_access",
+          "expr": {
+            "kind": "field_access",
+            "object": {
+              "kind": "ref",
+              "name": "homophily"
+            },
+            "field": "statement"
+          }
+        },
+        {
+          "decl_id": "output:score",
+          "kind": "output",
+          "name": "score",
+          "fragment_class": "core",
+          "deps": [
+            "score"
+          ],
+          "missing_refs": [],
+          "type_annotation": "String",
+          "evidence": [
+            "a",
+            "b",
+            "homophily"
+          ]
+        }
+      ],
+      "dependency_graph": {
+        "nodes": [
+          "input:a",
+          "input:b",
+          "uses_assumptions:homophily",
+          "escape:profile_source",
+          "compute:score",
+          "output:score"
+        ],
+        "edges": [
+          {
+            "from": "compute:score",
+            "to": "output:score",
+            "kind": "symbol"
+          }
+        ]
+      },
+      "oof_log": [],
+      "assumption_refs": [
+        "homophily"
+      ]
+    }
+  ],
+  "oof_log": [],
+  "semantic_ir_ref": null,
+  "assumption_registry": [
+    {
+      "kind": "assumption_entry",
+      "name": "homophily",
+      "fields": {
+        "kind": "heuristic",
+        "statement": "People with similar beliefs interact more often.",
+        "strength": 0.7
+      },
+      "declared_in_module": "Risk.Scoring"
+    }
+  ]
+}

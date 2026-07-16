@@ -1,0 +1,70 @@
+{
+  "kind": "parsed_program",
+  "source_path": "assumptions/assumption_basic.ig",
+  "source_hash": "sha256:assumption-basic",
+  "grammar_version": "igniter-parser-proof-v0",
+  "module": "Risk.Scoring",
+  "assumptions": [
+    {
+      "kind": "assumption_decl",
+      "name": "homophily",
+      "fields": {
+        "kind": "heuristic",
+        "statement": "People with similar beliefs interact more often.",
+        "strength": 0.7,
+        "source": null
+      }
+    }
+  ],
+  "types": [],
+  "contracts": [
+    {
+      "kind": "contract",
+      "name": "ScoreInteraction",
+      "modifier": "observed",
+      "body": [
+        {
+          "kind": "input",
+          "name": "a",
+          "type_annotation": "Signal"
+        },
+        {
+          "kind": "input",
+          "name": "b",
+          "type_annotation": "Signal"
+        },
+        {
+          "kind": "uses_assumptions",
+          "name": "homophily"
+        },
+        {
+          "kind": "escape",
+          "name": "profile_source"
+        },
+        {
+          "kind": "compute",
+          "name": "score",
+          "expr": {
+            "kind": "field_access",
+            "object": {
+              "kind": "ref",
+              "name": "homophily"
+            },
+            "field": "strength"
+          }
+        },
+        {
+          "kind": "output",
+          "name": "score",
+          "type_annotation": "Decimal",
+          "evidence": [
+            "a",
+            "b",
+            "homophily"
+          ]
+        }
+      ]
+    }
+  ],
+  "parse_errors": []
+}

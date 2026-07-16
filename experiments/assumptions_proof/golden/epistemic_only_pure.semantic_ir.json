@@ -1,0 +1,98 @@
+{
+  "kind": "semantic_ir_program",
+  "format_version": "0.1.0",
+  "program_id": "semanticir/0062b2632b2656b2",
+  "grammar_version": "assumptions-v0",
+  "source_hash": "sha256:0062b2632b2656b2c910b1b64eebd4c472f1f0ee074a7d303a6f93fde1e3da40",
+  "source_path": "experiments/assumptions_proof/fixtures/epistemic_only_pure.ig",
+  "module": "Risk.Scoring",
+  "compilation_report_ref": "compilation_report/0062b2632b2656b2",
+  "contracts": [
+    {
+      "kind": "contract_ir",
+      "contract_ref": "contract/PureEpistemicScore/sha256:6875e600539cb71ac4083d31",
+      "contract_name": "PureEpistemicScore",
+      "modifier": "pure",
+      "specialization_of": null,
+      "type_args": {},
+      "fragment_class": "epistemic",
+      "inputs": [
+        {
+          "name": "signal",
+          "type": {
+            "name": "Signal",
+            "params": []
+          },
+          "lifecycle": "local"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "score",
+          "type": {
+            "name": "String",
+            "params": []
+          },
+          "lifecycle": "session"
+        }
+      ],
+      "nodes": [
+        {
+          "kind": "assumption_ref_node",
+          "name": "calibration_prior",
+          "assumption_ref": "calibration_prior",
+          "type": {
+            "name": "Assumption",
+            "params": []
+          },
+          "fragment": "epistemic"
+        },
+        {
+          "kind": "compute",
+          "name": "score",
+          "expr": {
+            "kind": "field_access",
+            "object": {
+              "kind": "ref",
+              "name": "calibration_prior",
+              "resolved_type": {
+                "name": "Assumption",
+                "params": []
+              }
+            },
+            "field": "statement",
+            "resolved_type": {
+              "name": "String",
+              "params": []
+            }
+          },
+          "type": {
+            "name": "String",
+            "params": []
+          },
+          "deps": [
+            "calibration_prior"
+          ],
+          "fragment": "core"
+        }
+      ],
+      "escape_boundaries": [],
+      "assumption_refs": [
+        "calibration_prior"
+      ]
+    }
+  ],
+  "assumption_registry": [
+    {
+      "kind": "assumption_ir",
+      "name": "calibration_prior",
+      "fields": {
+        "kind": "calibrated",
+        "statement": "The scoring threshold was calibrated from the prior model card.",
+        "strength": 0.82,
+        "source": "model-card://risk-scoring/v1"
+      },
+      "declared_in_module": "Risk.Scoring"
+    }
+  ]
+}

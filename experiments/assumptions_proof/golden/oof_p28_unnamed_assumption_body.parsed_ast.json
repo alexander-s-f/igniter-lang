@@ -1,0 +1,33 @@
+{
+  "kind": "parsed_program",
+  "source_path": "igniter-lang/experiments/assumptions_proof/fixtures/oof_p28_unnamed_assumption_body.ig",
+  "source_hash": "sha256:178d714a3e00eaf2a0e45fbea63820ef79c21c8d7ebc5e6a51a2211bc88614aa",
+  "grammar_version": "0.1.0",
+  "module": "Risk.Scoring",
+  "imports": [],
+  "traits": [],
+  "impls": [],
+  "contract_shapes": [],
+  "contracts": [],
+  "types": [],
+  "variants": [],
+  "functions": [],
+  "consts": [],
+  "pipelines": [],
+  "olap_points": [],
+  "assumptions": [],
+  "profiles": [],
+  "size_relations": [],
+  "entrypoint": null,
+  "intent_text": null,
+  "parse_errors": [
+    {
+      "rule": "OOF-P28",
+      "severity": "error",
+      "message": "assumption declaration requires a name",
+      "token": "{",
+      "line": 4,
+      "col": 3
+    }
+  ]
+}

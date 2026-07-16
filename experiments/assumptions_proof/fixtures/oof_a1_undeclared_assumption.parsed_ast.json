@@ -1,0 +1,42 @@
+{
+  "kind": "parsed_program",
+  "source_path": "assumptions/oof_a1_undeclared_assumption.ig",
+  "source_hash": "sha256:oof-a1-undeclared-assumption",
+  "grammar_version": "igniter-parser-proof-v0",
+  "module": "Risk.Scoring",
+  "assumptions": [],
+  "types": [],
+  "contracts": [
+    {
+      "kind": "contract",
+      "name": "BadAssumptionUse",
+      "modifier": "pure",
+      "body": [
+        {
+          "kind": "input",
+          "name": "signal",
+          "type_annotation": "Signal"
+        },
+        {
+          "kind": "uses_assumptions",
+          "name": "undeclared_heuristic"
+        },
+        {
+          "kind": "compute",
+          "name": "score",
+          "expr": {
+            "kind": "literal",
+            "type_tag": "Integer",
+            "value": 1
+          }
+        },
+        {
+          "kind": "output",
+          "name": "score",
+          "type_annotation": "Integer"
+        }
+      ]
+    }
+  ],
+  "parse_errors": []
+}
