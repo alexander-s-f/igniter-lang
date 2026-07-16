@@ -2,6 +2,7 @@
 
 require "json"
 require "pathname"
+require "digest"
 
 require_relative "../igniter_lang"
 
@@ -14,7 +15,14 @@ module IgniterLang
     RUN_USAGE = "Usage: igc run ARTIFACT.igapp --passport PATH.json " \
                 "--input PATH.json --runtime SELECTOR " \
                 "--out PATH.json --experimental"
-    USAGE = "#{COMPILE_USAGE}\n#{RUN_USAGE}"
+    CHECK_USAGE = "Usage: igc check SOURCE [SOURCE ...] [--json]"
+    USAGE = "#{COMPILE_USAGE}\n#{CHECK_USAGE}\n#{RUN_USAGE}"
+
+    def exit_code(argv)
+      return run_check(argv.drop(1)) if argv.first == "check"
+
+      run(argv) ? 0 : 1
+    end
 
     def run(argv)
       if argv.empty? || %w[-h --help help].include?(argv.first)
@@ -48,6 +56,77 @@ module IgniterLang
       require_relative "experimental_igc_run"
 
       ExperimentalIgcRun.run(argv)
+    end
+
+    def run_check(argv)
+      json_mode = argv.include?("--json")
+      source_paths = parse_check_args(argv)
+      executable_sha256 =
+        if File.file?($PROGRAM_NAME)
+          "sha256:#{Digest::SHA256.file($PROGRAM_NAME).hexdigest}"
+        end
+      receipt = CompilerOrchestrator.new.check_sources(
+        source_paths: source_paths,
+        executable_sha256: executable_sha256
+      )
+      if json_mode
+        puts JSON.pretty_generate(receipt)
+      else
+        diagnostics = receipt.fetch("diagnostics", [])
+        puts "Canon source check: #{receipt.fetch("status")} " \
+             "(#{receipt.dig("source_set", "resolved_units").length} units, " \
+             "#{receipt.fetch("contract_ids").length} contracts, #{diagnostics.length} diagnostics)"
+        diagnostics.each do |diagnostic|
+          puts "  #{diagnostic.fetch("rule", "unknown")}: #{diagnostic.fetch("message", "")}"
+        end
+        puts "  #{receipt.fetch("message")}" if receipt.key?("message")
+      end
+      receipt.fetch("exit_code")
+    rescue ArgumentError => e
+      if json_mode
+        puts JSON.pretty_generate(
+          "kind" => "igniter_native_source_check_receipt",
+          "format_version" => "0.1.0",
+          "command" => "igc check",
+          "toolchain" => "ruby_canon",
+          "status" => "usage_error",
+          "exit_code" => 2,
+          "message" => e.message,
+          "writes" => { "source" => [], "artifacts" => [], "reports" => [], "temporary" => [] }
+        )
+      else
+        puts e.message
+      end
+      2
+    rescue => e
+      if json_mode
+        puts JSON.pretty_generate(
+          "kind" => "igniter_native_source_check_receipt",
+          "format_version" => "0.1.0",
+          "command" => "igc check",
+          "toolchain" => "ruby_canon",
+          "status" => "internal_error",
+          "exit_code" => 3,
+          "message" => "#{e.class}: #{e.message}",
+          "writes" => { "source" => [], "artifacts" => [], "reports" => [], "temporary" => [] }
+        )
+      else
+        puts "Canon source check: internal_error: #{e.class}: #{e.message}"
+      end
+      3
+    end
+
+    def parse_check_args(argv)
+      raise ArgumentError, CHECK_USAGE if argv.empty?
+      raise ArgumentError, CHECK_USAGE if argv.count("--json") > 1
+
+      sources = argv.reject { |arg| arg == "--json" }
+      raise ArgumentError, CHECK_USAGE if sources.empty? || sources.any? { |arg| arg.start_with?("-") }
+      sources.each do |source|
+        path = Pathname.new(source)
+        raise ArgumentError, "igc check: source is not a regular file: #{source}" unless path.file?
+      end
+      sources.map { |source| Pathname.new(source) }
     end
 
     def parse_compile_args(argv)

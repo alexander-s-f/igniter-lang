@@ -3,5 +3,4 @@
 
 require "igniter_lang/cli"
 
-success = IgniterLang::CLI.run(ARGV)
-exit(success ? 0 : 1)
+exit(IgniterLang::CLI.exit_code(ARGV))

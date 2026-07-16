@@ -17,6 +17,7 @@ require_relative "multifile_resolver"
 require_relative "parser"
 require_relative "semanticir_emitter"
 require_relative "typechecker"
+require_relative "version"
 
 module IgniterLang
   class CompilerOrchestrator
@@ -172,7 +173,238 @@ module IgniterLang
       refusal(report, source_path || Pathname.new("multifile:error"), out_path, status: "error")
     end
 
+    # LAB-IGNITER-SOURCE-CHECK-HARNESS-P2: native, no-write validation of an
+    # explicit source set through the same resolver, constructor/call-sugar,
+    # classifier and typechecker order as compilation. Emitter and assembler
+    # are intentionally not referenced by this path.
+    def check_sources(source_paths:, executable_sha256: nil)
+      source_paths = Array(source_paths).map { |path| Pathname.new(path) }
+      if source_paths.empty?
+        return source_check_error_receipt(
+          requested_order: [],
+          status: "input_error",
+          exit_code: 2,
+          message: "check_sources requires at least one source",
+          executable_sha256: executable_sha256
+        )
+      end
+
+      requested_order = source_paths.map(&:to_s)
+      if source_paths.length == 1
+        source_path = source_paths.fetch(0)
+        source = source_path.read(encoding: "utf-8")
+        parsed = ParsedProgram.parse(source, source_path: source_path.to_s).to_h
+        parsed["parse_errors"].concat(ConstResolver.resolve_single!(parsed)) if parsed.fetch("parse_errors").empty?
+        source_units = [
+          {
+            "source_path" => source_path.to_s,
+            "module" => parsed.fetch("module", nil),
+            "source_hash" => parsed.fetch("source_hash")
+          }
+        ]
+        unless parsed.fetch("parse_errors").empty?
+          return source_check_receipt(
+            requested_order: requested_order,
+            source_units: source_units,
+            source_hash: parsed.fetch("source_hash"),
+            status: "refused",
+            exit_code: 1,
+            stages: source_check_stages("error", "not_run", "not_run"),
+            diagnostics: Diagnostics.from_parse_errors(parsed.fetch("parse_errors")),
+            executable_sha256: executable_sha256
+          )
+        end
+        stdlib_import_diags = MultifileResolver.new.flat_stdlib_import_diagnostics(parsed)
+        unless stdlib_import_diags.empty?
+          return source_check_receipt(
+            requested_order: requested_order,
+            source_units: source_units,
+            source_hash: parsed.fetch("source_hash"),
+            status: "refused",
+            exit_code: 1,
+            stages: source_check_stages("ok", "not_run", "not_run"),
+            diagnostics: stdlib_import_diags,
+            executable_sha256: executable_sha256
+          )
+        end
+        resolution_context = {}
+      else
+        resolved = MultifileResolver.new.resolve(source_paths)
+        unless resolved.fetch("ok")
+          return source_check_receipt(
+            requested_order: requested_order,
+            source_units: resolved.fetch("source_units"),
+            source_hash: resolved.fetch("source_hash"),
+            status: "refused",
+            exit_code: 1,
+            stages: source_check_stages("ok", "not_run", "not_run"),
+            diagnostics: resolved.fetch("diagnostics"),
+            executable_sha256: executable_sha256
+          )
+        end
+        parsed = resolved.fetch("parsed_program")
+        source_units = resolved.fetch("source_units")
+        resolution_context = {
+          cross_module_registry: resolved.fetch("cross_module_registry", {}),
+          per_module_imports: resolved.fetch("per_module_imports", {}),
+          per_contract_module: resolved.fetch("per_contract_module", {})
+        }
+      end
+
+      check_parsed_sources(
+        parsed: parsed,
+        requested_order: requested_order,
+        source_units: source_units,
+        resolution_context: resolution_context,
+        executable_sha256: executable_sha256
+      )
+    rescue Errno::ENOENT, Errno::EACCES => e
+      source_check_error_receipt(
+        requested_order: Array(source_paths).map(&:to_s),
+        status: "input_error",
+        exit_code: 2,
+        message: e.message,
+        executable_sha256: executable_sha256
+      )
+    rescue => e
+      source_check_error_receipt(
+        requested_order: Array(source_paths).map(&:to_s),
+        status: "internal_error",
+        exit_code: 3,
+        message: "#{e.class}: #{e.message}",
+        executable_sha256: executable_sha256
+      )
+    end
+
     private
+
+    def check_parsed_sources(parsed:, requested_order:, source_units:, resolution_context:, executable_sha256:)
+      DerivedConstructorSugar.lower!(parsed)
+      unless parsed.fetch("parse_errors").empty?
+        return source_check_receipt(
+          requested_order: requested_order,
+          source_units: source_units,
+          source_hash: parsed.fetch("source_hash"),
+          status: "refused",
+          exit_code: 1,
+          stages: source_check_stages("error", "not_run", "not_run"),
+          diagnostics: Diagnostics.from_parse_errors(parsed.fetch("parse_errors")),
+          executable_sha256: executable_sha256
+        )
+      end
+
+      resolved_sample_input = resolve_sample_input(parsed, nil)
+      ContractCallSugar.lower!(parsed)
+      classified = @classifier.classify(parsed, sample_input: resolved_sample_input)
+      typed = @typechecker.typecheck(classified, **resolution_context)
+      diagnostics = typed.fetch("type_errors", [])
+      clean = classified.fetch("oof_log", []).empty? && diagnostics.empty?
+      source_check_receipt(
+        requested_order: requested_order,
+        source_units: source_units,
+        source_hash: parsed.fetch("source_hash"),
+        status: clean ? "clean" : "refused",
+        exit_code: clean ? 0 : 1,
+        stages: source_check_stages("ok", "ok", clean ? "ok" : "refused"),
+        contract_ids: typed.fetch("contracts", []).map { |contract| contract.fetch("contract_id") },
+        diagnostics: diagnostics,
+        executable_sha256: executable_sha256
+      )
+    end
+
+    def source_check_receipt(
+      requested_order:,
+      source_units:,
+      source_hash:,
+      status:,
+      exit_code:,
+      stages:,
+      diagnostics:,
+      executable_sha256:,
+      contract_ids: []
+    )
+      {
+        "kind" => "igniter_native_source_check_receipt",
+        "format_version" => "0.1.0",
+        "command" => "igc check",
+        "toolchain" => "ruby_canon",
+        "toolchain_identity" => {
+          "version" => IgniterLang::VERSION,
+          "revision" => ENV.fetch("IGNITER_LANG_GIT_REVISION", nil),
+          "executable_sha256" => executable_sha256
+        },
+        "status" => status,
+        "exit_code" => exit_code,
+        "source_set" => {
+          "requested_order" => requested_order,
+          "resolved_units" => source_units.map do |unit|
+            {
+              "path" => unit.fetch("source_path", nil),
+              "module" => unit.fetch("module", nil),
+              "sha256" => unit.fetch("source_hash", nil)
+            }
+          end,
+          "composite_sha256" => source_hash
+        },
+        "source_hash" => source_hash,
+        "stages" => stages,
+        "claim_scope" => "parse_classify_typecheck_only",
+        "contract_ids" => contract_ids,
+        "diagnostics" => diagnostics.map { |entry| source_check_diagnostic(entry) },
+        "writes" => { "source" => [], "artifacts" => [], "reports" => [], "temporary" => [] }
+      }
+    end
+
+    def source_check_error_receipt(requested_order:, status:, exit_code:, message:, executable_sha256:)
+      {
+        "kind" => "igniter_native_source_check_receipt",
+        "format_version" => "0.1.0",
+        "command" => "igc check",
+        "toolchain" => "ruby_canon",
+        "toolchain_identity" => {
+          "version" => IgniterLang::VERSION,
+          "revision" => ENV.fetch("IGNITER_LANG_GIT_REVISION", nil),
+          "executable_sha256" => executable_sha256
+        },
+        "status" => status,
+        "exit_code" => exit_code,
+        "source_set" => {
+          "requested_order" => requested_order,
+          "resolved_units" => [],
+          "composite_sha256" => nil
+        },
+        "source_hash" => nil,
+        "stages" => source_check_stages("not_run", "not_run", "not_run"),
+        "claim_scope" => "parse_classify_typecheck_only",
+        "contract_ids" => [],
+        "diagnostics" => [],
+        "message" => message,
+        "writes" => { "source" => [], "artifacts" => [], "reports" => [], "temporary" => [] }
+      }
+    end
+
+    def source_check_stages(parse, classify, typecheck)
+      {
+        "parse" => parse,
+        "classify" => classify,
+        "typecheck" => typecheck,
+        "emit" => "not_run",
+        "assemble" => "not_run"
+      }
+    end
+
+    def source_check_diagnostic(entry)
+      diagnostic = Diagnostics.stringify_keys(entry)
+      diagnostic["severity"] ||= "error"
+      diagnostic["source_path"] = nil unless diagnostic.key?("source_path")
+      diagnostic["line"] = nil unless diagnostic.key?("line")
+      diagnostic["col"] = nil unless diagnostic.key?("col")
+      diagnostic["help_ref"] =
+        if diagnostic.fetch("rule", nil) == "TASSUMP-1"
+          "canon:ch2-source-surface#assumption-blocks-prop-032"
+        end
+      diagnostic
+    end
 
     def compile_parsed(
       parsed:,
