@@ -197,6 +197,48 @@ module IgniterLang
       "stdlib.bytes.unpack_i16_le" => { args: %w[B],     ret: %w[Integer BytesError] },
     }.freeze
 
+    # ── LANG-TYPE-REF-UNRESOLVED-FAIL-CLOSED-P1: contract port type-reference registry ──
+    #
+    # Registry decision, derived from LIVE typechecker behavior (both toolchains) and a
+    # whole-corpus scan for `.ig` `input`/`output` annotations naming a type with NO local or
+    # imported declaration (`igniter-lab` apps/, server/, igniter-compiler/fixtures/):
+    #
+    #   * true language scalars — always resolvable, no further recursion.
+    PORT_SCALAR_BUILTIN_TYPES = %w[Integer Float Bool Text String Unit Bytes].freeze
+    #
+    #   * compiler-minted, structurally OPAQUE nominal types the stdlib call machinery already
+    #     returns/expects (IO_STDLIB_FNS above) or checks against (DateTime, via history_at/
+    #     bihistory_at + SparkCRM.DateTimeExtensions). Each name here is proven LOAD-BEARING by
+    #     an actual corpus port declaration OR a dedicated Rust test that authors it as a bare,
+    #     undeclared port type and asserts a clean/specific compile (not merely "some diagnostic
+    #     appeared"): WriteReceipt (igdb/persist.ig, igbeat/song_io.ig), WriteAtReceipt
+    #     (igdb/page_io.ig), AppendReceipt (igdb/wal_io.ig, igmesh/mesh_io.ig,
+    #     igmesh/membership_io.ig), ReplaceReceipt (igmesh/mesh_io.ig), IoError (all of the
+    #     above), DateTime (protein_fold/provenance.ig `as_of`, igniter-compiler conformance
+    #     fixture `datetime_extension.ig`), SecretRef (LANG-SECRET-REF-NATIVE-P2 —
+    #     igniter-compiler/tests/secret_ref_tests.rs authors `output r : SecretRef` and a record
+    #     field `cred : SecretRef` directly; this is the FEATURE, not a placeholder). These carry
+    #     NO checked field structure — P1 closes only the UNDECLARED half of the historic defect;
+    #     a field access on one of these still produces the pre-existing OOF-P1 structureless
+    #     symptom, unchanged by this card. Sibling minted names (BytesError, JsonValue,
+    #     PathEntry, NetRequest, NetResponse, NetError, FrameDecode, Pair, IO.Capability) are
+    #     deliberately NOT admitted here: every live corpus/test site that types a PORT with one
+    #     of those names either declares it locally (e.g. ignet/net_probe.ig, igcall/call_net.ig,
+    #     igmesh/mesh_net_io.ig all locally declare their own NetRequest/NetResponse) or is
+    #     exercised only by an assertion loose enough that admitting the bare name is not
+    #     actually required to keep it green — admitting them anyway would be an unproven,
+    #     speculative widening of the escape hatch this card exists to close.
+    PORT_OPAQUE_BUILTIN_TYPES = %w[
+      DateTime IoError SecretRef WriteReceipt AppendReceipt ReplaceReceipt WriteAtReceipt
+    ].freeze
+    #
+    #   * recognized parametric constructors — params are recursively validated as nominal type
+    #     references. `Decimal` is intentionally EXCLUDED from this bucket (and separately from
+    #     both lists above): `Decimal[N]`'s param is an integer scale literal, never a type
+    #     reference (Resolution Law explicit carve-out) — `Decimal` itself resolves via a direct
+    #     name check, no param recursion.
+    PORT_PARAMETRIC_CONSTRUCTORS = %w[Collection Option Result Map History].freeze
+
     # LANG-SUMTYPE-CONSTRUCT-MATCH-P3: sealed built-in sumtypes.
     # Registry shape mirrors the 3-level user variant_shapes (variant→arm→field→type)
     # but is held SEPARATELY from @variant_shapes so it is NOT emitted into the
@@ -249,6 +291,14 @@ module IgniterLang
     def typecheck(classified_program, cross_module_registry: {}, per_module_imports: {}, per_contract_module: {})
       @type_shapes    = type_shapes(classified_program)
       @variant_shapes = variant_shapes(classified_program)  # PROP-044 P5
+      # LANG-TYPE-REF-UNRESOLVED-FAIL-CLOSED-P1: a SEPARATE, un-mutated snapshot of the
+      # declared-record registry for port-type resolution. `@type_shapes` below gains a
+      # synthetic "Assumption" entry when the module declares assumptions (next line) — that
+      # entry exists so `uses assumptions` typing works, not to make `Assumption` an
+      # author-writable port type. Recomputing here keeps port resolution byte-parity with the
+      # Rust `type_shapes` param (`build_type_shapes`), which never carries that synthetic
+      # entry.
+      @port_type_registry = type_shapes(classified_program)
       @assumption_registry = classified_program.fetch("assumption_registry", [])
       @type_shapes["Assumption"] = assumption_shape if assumptions_present?(classified_program)
       # PROP-041: build T2 size-relation registry (stdlib + user-declared)
@@ -661,6 +711,41 @@ module IgniterLang
         )
       end
       type_errors.concat(map_annotation_errors)
+
+      # LANG-TYPE-REF-UNRESOLVED-FAIL-CLOSED-P1: every declared input/output port type must
+      # resolve — recursively — to a scalar/opaque builtin, a declared record/variant
+      # (@port_type_registry/@variant_shapes already include cross-module imports by classify
+      # time, so "declared locally" and "package-visible" collapse into one lookup), or a
+      # recognized parametric constructor. An unresolved leaf fails closed BEFORE emit/assemble,
+      # once per (contract, port, type_ref), in stable source order. Runs before the OOF-BY1
+      # Bytes seal so a wholly undeclared port type is reported as unresolved rather than
+      # silently passed through to a downstream structural check (and does not touch OOF-M10,
+      # which stays the receipt/failure-only law).
+      all_decls.each do |decl|
+        kind = decl.fetch("kind", "")
+        next unless %w[input output].include?(kind)
+        ann = decl.fetch("type_annotation", nil)
+        next unless ann
+        port_ir = type_ir(ann)
+        invalid_port_type_arities(port_ir, []).uniq.each do |constructor, expected, actual|
+          type_errors << oof(
+            "OOF-TY0",
+            "Type constructor '#{constructor}' expects #{expected} parameter(s), got #{actual} in #{kind} '#{decl.fetch("name")}' of contract '#{contract_name_str}'",
+            "#{kind}:#{decl.fetch("name")}"
+          )
+        end
+        # `Unknown` must never resolve as the PORT'S OWN directly-authored type — that would be
+        # a universal escape hatch from this whole law. See `unresolved_type_refs` for why
+        # nested `Unknown` (inside a param or a declared record/variant field) stays admissible.
+        unresolved = port_ir.fetch("name", "") == "Unknown" ? ["Unknown"] : unresolved_type_refs(port_ir, [])
+        unresolved.uniq.each do |leaf|
+          type_errors << oof(
+            "OOF-TY0",
+            "Unresolved type reference '#{leaf}' in #{kind} '#{decl.fetch("name")}' of contract '#{contract_name_str}'",
+            "#{kind}:#{decl.fetch("name")}"
+          )
+        end
+      end
 
       # LANG-STDLIB-BYTES-CANON-ADMISSION-P7 Stage 1 (seal): a contract INPUT or OUTPUT whose
       # declared type contains `Bytes` — directly or nested in Result/Collection/Option params or a
@@ -4577,6 +4662,72 @@ module IgniterLang
         end
       end
       false
+    end
+
+    # LANG-TYPE-REF-UNRESOLVED-FAIL-CLOSED-P1: the ordered, possibly-duplicated list of
+    # unresolved leaf type-reference names inside `ir` (a type_ir Hash). Mirrors the shape of
+    # `type_ir_contains_bytes?` (same visited-set recursion-termination discipline), but
+    # collects names instead of testing membership, and resolves against the port registry
+    # (@port_type_registry / @variant_shapes / the three PORT_* constants) instead of testing
+    # for "Bytes". Callers `.uniq` the result to get "once per (contract, port, type_ref)".
+    def unresolved_type_refs(ir, visiting)
+      return [] unless ir.is_a?(Hash)
+      name = ir.fetch("name", "")
+      return [] if name.empty?
+      return [] if PORT_SCALAR_BUILTIN_TYPES.include?(name) || PORT_OPAQUE_BUILTIN_TYPES.include?(name)
+      # `Unknown` is resolvable ONLY once already inside a parametric param or a declared
+      # record/variant field (the pre-existing "untyped JSON value" idiom — Map[String,Unknown]
+      # on IgWebPrelude's Request.body_json/query; Decision's InvokeEffect/RespondJson/ReadThen
+      # arms). The caller (typecheck_contract) separately refuses `Unknown` as the port's own
+      # direct, outermost annotation before ever calling this method.
+      return [] if name == "Unknown"
+      return [] if name == "Decimal" # scale param is a literal, not a nominal type reference
+      if PORT_PARAMETRIC_CONSTRUCTORS.include?(name)
+        return ir.fetch("params", []).flat_map { |p| unresolved_type_refs(type_ir(p), visiting) }
+      end
+      if @port_type_registry.key?(name)
+        return [] if visiting.include?(name)
+        return @port_type_registry.fetch(name).values.flat_map do |f|
+          unresolved_type_refs(type_ir(f), visiting + [name])
+        end
+      end
+      if @variant_shapes.key?(name)
+        return [] if visiting.include?(name)
+        return @variant_shapes.fetch(name).values.flat_map do |arm_fields|
+          arm_fields.values.flat_map { |f| unresolved_type_refs(type_ir(f), visiting + [name]) }
+        end
+      end
+      [name]
+    end
+
+    def invalid_port_type_arities(ir, visiting)
+      return [] unless ir.is_a?(Hash)
+      name = ir.fetch("name", "")
+      return [] if name.empty?
+      params = ir.fetch("params", [])
+      expected = case name
+                 when "Collection", "Option" then 1
+                 when "History" then params.length <= 1 ? nil : 1
+                 when "Result", "Map" then 2
+                 when "Decimal" then nil # parser owns Decimal's integer scale shape
+                 else
+                   0 if PORT_SCALAR_BUILTIN_TYPES.include?(name) ||
+                        PORT_OPAQUE_BUILTIN_TYPES.include?(name) || name == "Unknown"
+                 end
+      out = expected && params.length != expected ? [[name, expected, params.length]] : []
+      params.each { |param| out.concat(invalid_port_type_arities(type_ir(param), visiting)) }
+      if @port_type_registry.key?(name) && !visiting.include?(name)
+        @port_type_registry.fetch(name).each_value do |field|
+          out.concat(invalid_port_type_arities(type_ir(field), visiting + [name]))
+        end
+      elsif @variant_shapes.key?(name) && !visiting.include?(name)
+        @variant_shapes.fetch(name).each_value do |fields|
+          fields.each_value do |field|
+            out.concat(invalid_port_type_arities(type_ir(field), visiting + [name]))
+          end
+        end
+      end
+      out
     end
 
     def infer_collection_first_last_call(fn, args, symbol_types, type_errors, type_warnings, node_name)

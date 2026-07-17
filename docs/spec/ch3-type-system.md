@@ -129,6 +129,39 @@ OperatorEnv — stdlib operator signatures
 
 ---
 
+## 3.5a Contract Port Type Resolution (LANG-TYPE-REF-UNRESOLVED-FAIL-CLOSED-P1)
+
+Every declared contract `input` and `output` type annotation is **closed over builtins and
+project-visible declarations**: it must resolve, recursively through parametric constructors
+(`Collection`, `Option`, `Result`, `Map`, `History`) and through the field shapes of any declared
+record or variant it names, to one of —
+
+1. a language scalar or a small, closed set of compiler-known opaque nominal builtins
+   (`Integer`, `Float`, `Decimal[N]`, `Bool`, `Text`, `String`, `Unit`, `Bytes`, `DateTime`,
+   `IoError`, `SecretRef`, `WriteReceipt`, `AppendReceipt`, `ReplaceReceipt`, `WriteAtReceipt`);
+2. a `type` or `variant` declared in the compiling module; or
+3. a `type` or `variant` made visible by the multifile/package import resolver.
+
+An undeclared nominal name — including a dotted spelling that resembles a package path (e.g.
+`Foo.Bar`) or a variant arm (e.g. `Evidence.Observed`, which does not become a standalone type) —
+fails closed with `OOF-TY0: Unresolved type reference '<name>' in <input|output> '<port>' of
+contract '<contract>'`, once per `(contract, port, type_ref)`, before emit/assemble; the refused
+source produces no artifact. The bare inference sentinel `Unknown` is refused as a port's own
+direct annotation, but stays admissible where it already appears nested inside a resolved
+parametric param or declared field (the pre-existing "untyped JSON value" idiom, e.g.
+`Map[String, Unknown]`) — nested `Unknown` is not itself an unresolved *reference*.
+Malformed builtin constructor arity also fails with `OOF-TY0` at the owning port.
+The existing bare `History` read envelope and typed `History[T]` form are both admitted.
+
+This closes only the reference-resolution half of the defect: an admitted opaque builtin (item 1
+above) still carries no checked field structure, so a field access on one still produces the
+pre-existing `OOF-P1: Unresolved field` symptom. Effect Surface `receipt`/`failure` metadata keeps
+its own, separate builtin-scalar-only law (`OOF-M10`); this section governs `input`/`output` ports
+only. This section documents the resolution law only — it introduces no arm-refined types, no
+external/opaque type syntax, and no package-resolver change.
+
+---
+
 ## 3.6 Type-Level OOF Rules (PROP-021 §Part 6)
 
 ```
