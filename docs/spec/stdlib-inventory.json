@@ -1,7 +1,7 @@
 {
   "kind": "stdlib_inventory",
   "format_version": "v0",
-  "stdlib_surface_digest": "413f6dd6826fd0b1507dbea83bc7822231c0dd5334301e10d3b476e649cc2423",
+  "stdlib_surface_digest": "e50989e5ef3f9014266e316afbe13305ea4984789674c85664cfafd808074559",
   "note": "Normatively referenced by Ch8. Digest is computed from canonical re-serialization of entries sorted by canonical_name with entry_digest fields stripped — never from raw file bytes. P3 proof verifies determinism. P5 adds stdlib.collection.map + stdlib.collection.filter entries and updates stdlib.collection.count proof_lineage. CONSTRUCT-P1 adds stdlib.decimal.decimal (explicit Decimal constructor) and recomputes the digest. FLATMAP-P5 adds stdlib.collection.flat_map and recomputes the digest. PREDICATE-OPS-P4 adds stdlib.collection.find/any/all and recomputes the digest. LANG-STDLIB-NUMERIC-TEXT-CONVERSION-P1 adds stdlib.integer.parse_int/int_to_text/modulo (category numeric) and recomputes the digest. LANG-STDLIB-TEXT-ESCAPE-DELIMITED-P2 adds stdlib.text.encode_delimited/decode_delimited (escape-aware delimited row codec; decode -> Option[Collection[Text]]) and recomputes the digest. LANG-STDLIB-COLLECTION-AT-INVENTORY-P5 adds stdlib.collection.at (Collection[T] x Integer -> Option[T], zero-based, total) and recomputes the digest. LANG-STDLIB-TEXT-JOIN-P1 adds stdlib.text.join (Collection[Text] x Text -> Text, inverse of split) and recomputes the digest. LANG-STDLIB-WIRE-FRAME-CODEC-P2 adds stdlib.text.encode_frame (Text -> Text) and stdlib.text.decode_frame (Text -> Option[FrameDecode], length-prefixed netstring frame codec) and recomputes the digest. LANG-STDLIB-COLLECTION-SORT-BY-P3 adds stdlib.collection.sort_by (Collection[T] x (T -> K) -> Collection[T], stable ascending, K in {Integer, Text, Decimal}, OOF-COL11 fail-closed on Float and every other key shape) and recomputes the digest. LANG-STDLIB-MAP-RUNTIME-P1 makes stdlib.map.empty/stdlib.map.from_pairs ACTUALLY EXECUTABLE in the VM (bytecode OP_CALL + eval_ast HOF-dispatch, shared pair-validation/last-input-wins helper) — both entries previously claimed `production-implemented` with no live VM constructor arm (readers only); reconciles their signatures to Map[String, V] (v0 keys are exactly String, never a generic K), fixes stdlib.map.get's stale Option[V]/totality/diagnostics fields, and documents the LAST-INPUT-WINS duplicate-key law and Pair{first,second} shape; recomputes the digest. LANG-STDLIB-INVENTORY-QUALIFIED-IMPORT-SURFACE-P2 adds the additive import_surface field (absent/default = bare_alias, preserving every existing row's behavior) and registers the 13 canon Ch8 §8.11 stdlib.bytes.* pure operations as qualified_only — discoverable via inventory/help/MCP, callable only through qualified names, bare/named import refused (OOF-IMP3), compat aliases text_to_bytes/bytes_to_text recorded but not importable; capability/effect modules (stdlib.IO.*, stdlib.net.*) deliberately stay OUT of this canon inventory; recomputes the digest. LANG-STDLIB-COLLECTION-TAKE-CANON-P5 adds stdlib.collection.take (Collection[T] x Integer -> Collection[T], prefix-bounded reader, n<=0 -> [], n>=count(xs) -> all input, OOF-COL12 fail-closed on a non-Integer/non-lambda second argument) and recomputes the digest.",
   "entries": [
     {
@@ -2005,13 +2005,14 @@
         "LANG-UNARY-OPERATORS-P1 proposal authored",
         "LANG-UNARY-OPERATORS-P2 implementation planning closed",
         "LANG-UNARY-OPERATORS-P3 Ruby TC implemented",
-        "LANG-UNARY-OPERATORS-P4 Rust parity implemented"
+        "LANG-UNARY-OPERATORS-P4 Rust parity implemented",
+        "LAB-VM-PRIMITIVE-NOT-PARITY-P1 VM canonical-call execution 10/10 PASS"
       ],
       "examples": [
         "!true -> false",
         "!false -> true"
       ],
-      "compatibility_note": "Unary logical negation: Bool -> Bool. SIR fn = stdlib.primitive.not. OOF-TY0 for non-Bool operand; Bool returned on all paths. Unknown permissive. Dual-toolchain (Ruby P3 + Rust P4).",
+      "compatibility_note": "Unary logical negation: Bool -> Bool. SIR fn = stdlib.primitive.not. OOF-TY0 for non-Bool operand; Bool returned on all paths. Unknown permissive. Dual-toolchain (Ruby P3 + Rust P4). VM executes the canonical call via one shared owner (eval_primitive_call) on bytecode OP_CALL, OP_NOT, and eval-AST unary/HOF paths; strict arity-1, Bool-only, no truthiness (LAB-VM-PRIMITIVE-NOT-PARITY-P1).",
       "owner_surface": "LANG-UNARY-OPERATORS-P1",
       "entry_digest": null
     },
