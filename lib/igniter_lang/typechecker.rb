@@ -984,6 +984,21 @@ module IgniterLang
           end
           validate_declared_olap_type(decl, typed_expr, type_errors)
 
+          # LANG-EMPTY-COLLECTION-TYPE-PARITY-P1: `compute xs : Collection[T] = []` —
+          # the binding annotation is the immediate, unambiguous expected type, so the
+          # empty literal node adopts Collection[T] (the SIR previously kept
+          # Collection[Unknown] even though the binding resolved via the annotation).
+          # An UNANNOTATED compute whose OUTPUT declares Collection[T] is the same
+          # seam (@collection_output_hints; Rust twin: LAB-TC-ARRAY-P1) — without it
+          # the binding stays Collection[Unknown] and the output boundary refuses
+          # what Rust accepts. Non-empty literals and every other expression are
+          # untouched (the helper only retypes a literal empty array_literal node).
+          if decl["type_annotation"]
+            contextualize_empty_collection_node!(typed_expr, type_ir(decl["type_annotation"]))
+          elsif (ctx_elem = @collection_output_hints&.fetch(name, nil))
+            contextualize_empty_collection_node!(typed_expr, collection_type_ir_from(ctx_elem))
+          end
+
           inferred_type = typed_expr.fetch("resolved_type")
           bind_type = if decl["type_annotation"]
             expected_type = type_ir(decl["type_annotation"])
@@ -1350,6 +1365,11 @@ module IgniterLang
           break unless actual_arg
 
           expected = type_ir(expected_raw)
+          # LANG-EMPTY-COLLECTION-TYPE-PARITY-P1: the callee's declared input type is
+          # the immediate expected type of the argument — an empty literal argument
+          # adopts Collection[T] so the typed arg carries the contextual element type
+          # (it previously slid through the Unknown-bearing skip as Collection[Unknown]).
+          contextualize_empty_collection_node!(actual_arg, expected)
           actual = actual_arg.fetch("resolved_type")
           next if unknown_or_unknown_bearing?(expected) || unknown_or_unknown_bearing?(actual)
           next if structurally_assignable?(actual, expected)
@@ -2765,6 +2785,30 @@ module IgniterLang
       ep = expected.fetch("params", [])
       return false unless ap.length == ep.length && !ap.empty?
       ap.all? { |p| type_name(p) == "Unknown" }
+    end
+
+    # LANG-EMPTY-COLLECTION-TYPE-PARITY-P1: contextualize an EMPTY collection literal
+    # typed node under an exact, unambiguous expected Collection[T]. The literal never
+    # invents a type — when (and only when) the immediate expected type is a concrete
+    # Collection[T], the empty array_literal node adopts it IN PLACE so the emitted
+    # SIR carries the contextual element type instead of Collection[Unknown].
+    # Guards (all fail-closed to "no retype, current behavior"):
+    #   * only a literal empty `array_literal` node — a Collection[Unknown]-typed REF
+    #     or call result is never retyped (that would erase real inference evidence);
+    #   * only when the expected type is Collection with NO Unknown-bearing params
+    #     (an ambiguous/unknown expected context keeps Collection[Unknown]);
+    #   * arity must match (empty_collection_assignable?, the existing seam).
+    # Returns true when the node was contextualized.
+    def contextualize_empty_collection_node!(typed_node, expected_type)
+      return false unless typed_node.is_a?(Hash)
+      return false unless typed_node["kind"] == "array_literal"
+      return false unless typed_node.fetch("items", nil) == []
+      return false unless expected_type.is_a?(Hash)
+      normalized_expected = type_ir(expected_type)
+      return false if unknown_or_unknown_bearing?(normalized_expected)
+      return false unless empty_collection_assignable?(typed_node.fetch("resolved_type"), normalized_expected)
+      typed_node["resolved_type"] = normalized_expected
+      true
     end
 
     def structural_mismatch(expected, actual, node)
@@ -5591,6 +5635,15 @@ module IgniterLang
 
         expected_fields.each do |fname, expected_type|
           if typed_fields.key?(fname)
+            # LANG-EMPTY-COLLECTION-TYPE-PARITY-P1: a required Collection[T] field is
+            # an exact expected type — contextualize an empty literal BEFORE the strict
+            # structural check so `field: []` passes AND the typed field carries T
+            # (previously refused as "expected Collection, got Collection").
+            # Declared-optional fields keep P3 semantics untouched (their branch below
+            # already admits the empty literal via empty_collection_assignable?).
+            unless optional_shape_field?(expected_type)
+              contextualize_empty_collection_node!(typed_fields[fname], expected_type)
+            end
             actual_type = typed_fields[fname].fetch("resolved_type")
             # LANG-OPTIONAL-FIELD-PARTIAL-RECORD-P3 (flag present only when the
             # gate is ON): present Option[T] → passthrough; present raw T →
@@ -5617,10 +5670,13 @@ module IgniterLang
             else
               unless type_name(actual_type) == "Unknown" ||
                      structurally_assignable?(actual_type, expected_type)
+                # LANG-EMPTY-COLLECTION-TYPE-PARITY-P1: display FULL parameterised
+                # types — the outer-name-only rendering produced the misleading
+                # "expected Collection, got Collection" for element mismatches.
                 field_errors << oof(
                   "OOF-TY0",
-                  "record literal field '#{fname}': expected #{type_name(expected_type)}, " \
-                  "got #{type_name(actual_type)}",
+                  "record literal field '#{fname}': expected #{type_display(expected_type)}, " \
+                  "got #{type_display(actual_type)}",
                   node_name
                 )
               end
@@ -5674,6 +5730,16 @@ module IgniterLang
         # P3: rectangular lowering for the structurally-matched shape too —
         # inject None for omitted optional fields, auto-wrap present raw-T values.
         apply_optional_construction!(typed_fields, matched_fields) if @optional_fields
+        # LANG-EMPTY-COLLECTION-TYPE-PARITY-P1: the uniquely-matched shape's
+        # Collection[T] fields are exact expected types — an empty literal admitted
+        # by empty_collection_assignable? above now also CARRIES T in the typed
+        # field (previously it stayed Collection[Unknown] in the emitted SIR).
+        # Declared-optional fields keep P3 semantics untouched.
+        matched_fields.each do |fname, exp_type|
+          next if optional_shape_field?(exp_type)
+          next unless typed_fields.key?(fname)
+          contextualize_empty_collection_node!(typed_fields[fname], exp_type)
+        end
         return typed_expr("record_literal", type_ir(matched_name), deps, "fields" => typed_fields)
       elsif candidates.length > 1
         type_errors << oof(
