@@ -5816,9 +5816,38 @@ module IgniterLang
       field_deps   = []
 
       fields.each do |fname, fexpr|
-        typed_f = infer_expr(fexpr, symbol_types, type_errors, type_warnings, node_name)
-        if arm_fields.key?(fname)
-          expected = arm_fields[fname]
+        expected = arm_fields[fname]
+        # LANG-VARIANT-PAYLOAD-EXPECTED-TYPE-PROPAGATION-P1: the arm field
+        # declaration is the immediate expected-type authority. A nested record
+        # literal must be inferred with the same nominal hint used by typed record
+        # boundaries; without it the literal stays Unknown and its inner fields
+        # evade structural validation. The hint is scoped to this one expression.
+        if expected &&
+           fexpr.is_a?(Hash) &&
+           fexpr.fetch("kind", nil) == "record_literal" &&
+           @type_shapes.key?(type_name(expected))
+          had_previous_hint = @output_type_hints.key?(node_name)
+          previous_hint = @output_type_hints[node_name]
+          @output_type_hints[node_name] = expected
+          begin
+            typed_f = infer_expr(fexpr, symbol_types, type_errors, type_warnings, node_name)
+          ensure
+            if had_previous_hint
+              @output_type_hints[node_name] = previous_hint
+            else
+              @output_type_hints.delete(node_name)
+            end
+          end
+        else
+          typed_f = infer_expr(fexpr, symbol_types, type_errors, type_warnings, node_name)
+        end
+
+        if expected
+          # Reuse the exact empty-literal contextualization law from
+          # LANG-EMPTY-COLLECTION-TYPE-PARITY-P1. Only a literal [] under a
+          # concrete Collection[T] adopts T; refs/calls and Unknown-bearing
+          # expected types remain untouched.
+          contextualize_empty_collection_node!(typed_f, expected)
           actual   = typed_f.fetch("resolved_type")
           # LANG-RUBY-UNKNOWN-FIELD-ASSIGNABILITY-PARITY-P1: a variant field declared `Unknown`
           # is an OPEN wildcard position (e.g. `Decision::RespondJson.body`) — it accepts any
@@ -5829,12 +5858,16 @@ module IgniterLang
           # The pre-existing `type_name(actual) == "Unknown"` arm (an Unknown-typed VALUE flowing
           # into a concrete-typed slot) is untouched — Rust already treats that direction the same
           # way at this site, so no loosening is needed there.
-          unless type_name(actual) == type_name(expected) ||
-                 type_name(actual) == "Unknown" ||
-                 type_name(expected) == "Unknown"
+          # Concrete fields validate through the shared structural law, so
+          # Collection[String] cannot cross Collection[Integer] merely because
+          # their outer names match. Either literal Unknown direction retains
+          # the established open-boundary behavior at this call site.
+          unless type_name(actual) == "Unknown" ||
+                 type_name(expected) == "Unknown" ||
+                 structurally_assignable?(actual, expected)
             type_errors << oof("OOF-KIND2",
               "#{variant_name}::#{arm_name} field '#{fname}': " \
-              "expected #{type_name(expected)}, got #{type_name(actual)}",
+              "expected #{type_display(expected)}, got #{type_display(actual)}",
               node_name)
           end
         else

@@ -19,8 +19,8 @@
 #       keeps Collection[Unknown]; a NON-literal Collection[Unknown] value is
 #       never retyped
 #   D — Diagnostic quality: record-field mismatch now displays parameterised types
-#   E — Variant payload row: current name-only behavior documented (follow-up
-#       LANG-VARIANT-PAYLOAD-EXPECTED-TYPE-PROPAGATION-P1; never silently changed)
+#   E — Variant payload row: expected-type propagation + mismatch refusal
+#       (implemented by LANG-VARIANT-PAYLOAD-EXPECTED-TYPE-PROPAGATION-P1)
 #   F — Optional-field P3 semantics unchanged (gate ON: empty literal in a
 #       declared-optional Collection field keeps the P3 Some-wrap behavior)
 
@@ -249,7 +249,7 @@ check("D-02 the misleading same-name rendering is gone for this case",
       messages(neg_field).inspect)
 
 puts
-puts "── E: variant payload row (documented HOLD) ────────────────────────────"
+puts "── E: variant payload expected-type propagation ───────────────────────"
 
 variant = typecheck(<<~IG)
   module VariantProbe
@@ -265,13 +265,31 @@ variant = typecheck(<<~IG)
     output result : Integer
   }
 IG
-check("E-01 variant payload `ids: []` is accepted (current name-only compare)",
+check("E-01 variant payload `ids: []` is accepted",
       clean?(variant), messages(variant).inspect)
 vids = decl(variant, "Demo", "p").dig("expr", "typed_fields", "ids")
-check("E-02 payload evidence is STILL Collection[Unknown] — expected-type propagation " \
-      "is the named follow-up LANG-VARIANT-PAYLOAD-EXPECTED-TYPE-PROPAGATION-P1",
-      vids && type_str(vids["resolved_type"]) == "Collection[Unknown]",
+check("E-02 payload evidence carries Collection[Integer] under the arm-field expected type",
+      vids && type_str(vids["resolved_type"]) == COLLECTION_INTEGER,
       vids && type_str(vids["resolved_type"]))
+
+variant_mismatch = typecheck(<<~IG)
+  module VariantMismatch
+
+  variant Payload {
+    Batch { ids: Collection[Integer] }
+  }
+
+  pure contract Demo {
+    compute p : Payload = Batch { ids: ["wrong"] }
+    compute result = 1
+    output result : Integer
+  }
+IG
+check("E-03 concrete variant payload mismatch refuses with full parameterised types",
+      errors(variant_mismatch).any? do |e|
+        e["rule"] == "OOF-KIND2" &&
+          e["message"].include?("expected Collection[Integer], got Collection[String]")
+      end, messages(variant_mismatch).inspect)
 
 puts
 puts "── F: optional-field P3 semantics unchanged (gate ON) ─────────────────"
