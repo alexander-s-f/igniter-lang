@@ -99,6 +99,11 @@ module SecretRefNativeProof
     ), tag: "equality")
     check.call("equality → OOF-SR1", rules(eq).include?("OOF-SR1"))
 
+    ne = compile(CONTRACT.call(
+      "  compute r : SecretRef = secret_ref(\"sparkcrm.api_token\")\n  compute b : Bool = r != r\n  output b : Bool"
+    ), tag: "inequality")
+    check.call("inequality → OOF-SR1", rules(ne).include?("OOF-SR1"))
+
     puts(failures.empty? ? "\nSecretRef Ruby parity: ALL PASS" : "\nSecretRef Ruby parity: FAILED #{failures.inspect}")
     exit(failures.empty? ? 0 : 1)
   end

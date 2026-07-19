@@ -145,7 +145,7 @@ Stage 1/2 evidence proves:
 integer add/sub/mul/div/comparison
 float add/mul
 decimal add/sub/mul/rescale
-bool and/or/not
+bool `&&`/`||`/`!` (the source word forms `and`/`or` are not aliases)
 string concat
 collection map/filter/fold/count
 option or_else

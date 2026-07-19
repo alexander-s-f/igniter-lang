@@ -2448,6 +2448,14 @@ module IgniterLang
       (p.is_a?(Hash) ? p.fetch("name", "0") : p).to_s
     end
 
+    # LANG-CANON-BINARY-OPERATOR-PARITY-P1: one exact-comparison law owns both
+    # == and != so future family admissions cannot drift between the operators.
+    def equality_compatible?(left_name, right_name)
+      left_name == "Unknown" || right_name == "Unknown" ||
+        %w[String Text].include?(left_name) && %w[String Text].include?(right_name) ||
+        left_name == right_name && %w[Integer Bool Float Decimal].include?(left_name)
+    end
+
     def operator_type(op, left, right, type_errors, node_name)
       left_name = type_name(left)
       right_name = type_name(right)
@@ -2478,7 +2486,8 @@ module IgniterLang
       #     nominal stdlib.integer.* fn name is fine. Heterogeneous numeric (e.g. Integer
       #     + Float) and Decimal scale mismatch stay rejected by the fall-through below.
       #     Decimal +/-/* are handled in (a); this covers Float (all ops), Decimal (/ and
-      #     comparisons and ==), and Integer.
+      #     comparisons), and Integer. Equality is owned by the shared ==/!=
+      #     compatibility arm below.
       if left_name == right_name && %w[Integer Float Decimal].include?(left_name)
         case op
         when "+"  then return ["stdlib.integer.add", left.dup]
@@ -2489,7 +2498,6 @@ module IgniterLang
         when "<=" then return ["stdlib.integer.lte", type_ir("Bool")]
         when ">"  then return ["stdlib.integer.gt",  type_ir("Bool")]
         when ">=" then return ["stdlib.integer.gte", type_ir("Bool")]
-        when "==" then return ["stdlib.primitive.eq", type_ir("Bool")]
         end
       end
 
@@ -2560,12 +2568,14 @@ module IgniterLang
       when "&&"
         type_errors << type_mismatch(type_ir("Bool"), type_ir("#{left_name}+#{right_name}"), node_name) unless unknown?(left, right) || left_name == "Bool" && right_name == "Bool"
         ["stdlib.bool.and", type_ir("Bool")]
-      when "=="
-        compatible = unknown?(left, right) ||
-                     %w[Text String].include?(left_name) && %w[Text String].include?(right_name) ||
-                     left_name == right_name && %w[Integer Bool].include?(left_name)
-        type_errors << oof("OOF-TY0", "Type mismatch for ==: cannot compare #{left_name} with #{right_name}", node_name) unless compatible
-        ["stdlib.primitive.eq", type_ir("Bool")]
+      when "||"
+        type_errors << type_mismatch(type_ir("Bool"), type_ir("#{left_name}+#{right_name}"), node_name) unless unknown?(left, right) || left_name == "Bool" && right_name == "Bool"
+        ["stdlib.bool.or", type_ir("Bool")]
+      when "==", "!="
+        unless equality_compatible?(left_name, right_name)
+          type_errors << oof("OOF-TY0", "Type mismatch for #{op}: cannot compare #{left_name} with #{right_name}", node_name)
+        end
+        [op == "==" ? "stdlib.primitive.eq" : "stdlib.primitive.ne", type_ir("Bool")]
       else
         type_errors << oof("OOF-TY0", "Unsupported operator: #{op}", node_name)
         ["stdlib.unsupported.#{op}", type_ir("Unknown")]

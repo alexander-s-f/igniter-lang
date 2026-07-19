@@ -1254,6 +1254,16 @@ module IgniterLang
           diagnostics << oof("OOF-TY0", "Boolean and requires Bool operands", node_name)
         end
         ["stdlib.bool.and", "Bool"]
+      when "||"
+        unless unknown_type?(left_type, right_type) || (left_type == "Bool" && right_type == "Bool")
+          diagnostics << oof("OOF-TY0", "Boolean or requires Bool operands", node_name)
+        end
+        ["stdlib.bool.or", "Bool"]
+      when "==", "!="
+        unless equality_type_names_compatible?(left_type, right_type)
+          diagnostics << oof("OOF-TY0", "Type mismatch for #{op}: cannot compare #{left_type} with #{right_type}", node_name)
+        end
+        [op == "==" ? "stdlib.primitive.eq" : "stdlib.primitive.ne", "Bool"]
       else
         diagnostics << oof("OOF-P0", "Unsupported operator: #{op}", node_name)
         ["stdlib.unsupported.#{op}", "Unknown"]
@@ -1262,6 +1272,12 @@ module IgniterLang
 
     def unknown_type?(*types)
       types.any? { |type| type == "Unknown" }
+    end
+
+    def equality_type_names_compatible?(left, right)
+      unknown_type?(left, right) ||
+        %w[String Text].include?(left) && %w[String Text].include?(right) ||
+        left == right && %w[Integer Bool Float Decimal].include?(left)
     end
 
     def eval_expr(expr, env)
@@ -1281,7 +1297,10 @@ module IgniterLang
         case expr.fetch("op")
         when "+" then left + right
         when ">" then left > right
+        when "==" then left == right
+        when "!=" then left != right
         when "&&" then left && right
+        when "||" then left || right
         else nil
         end
       else

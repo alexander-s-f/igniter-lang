@@ -160,6 +160,21 @@ in both toolchains (named `concat(Text, Text)` remains the Text route — the
 alias seam is tracked by the String/Text alias policy, not by `++`).
 Landed by LANG-CONCAT-OPERATOR-DUAL-PARITY-P1 (2026-07-14).
 
+**Canonical equality and Boolean operators**: `==` and `!=` share one exact
+operand-compatibility law and both return `Bool`; `!=` is strict inequality,
+implemented by negating the same strict equality relation used by `==`. The
+accepted equality families are the existing homogeneous exact scalar families
+(`Integer`, `Bool`, `Float`, `Decimal`), `String`/`Text` compatible pairs, and
+`Unknown`-deferred operands. Known incompatible types fail closed with
+`OOF-TY0`; records, collections and other structured values are not granted
+structural equality by these operators, and `SecretRef` remains unobservable.
+
+`&&` and `||` require `Bool` operands (or existing `Unknown`-deferred values),
+return `Bool`, and have precedence `&&` above `||`. They do not introduce
+truthiness or short-circuit-effect semantics. The word forms `and` and `or` are
+not expression aliases; diagnostics direct authors to `&&` and `||` instead.
+Landed by LANG-CANON-BINARY-OPERATOR-PARITY-P1 (2026-07-19).
+
 ## 2.2.1 Entrypoint (Implemented) and Section (Candidate)
 
 `entrypoint ContractName` is a top-level contextual declaration with cardinality

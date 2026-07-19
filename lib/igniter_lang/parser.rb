@@ -1851,6 +1851,17 @@ module IgniterLang
       end
       expect_type!(:assign)
       expr = parse_expr
+      # LANG-CANON-BINARY-OPERATOR-PARITY-P1: keep word aliases closed while
+      # pointing authors at the accepted symbolic source form.
+      if peek_value?("and") || peek_value?("or")
+        tok = peek
+        add_parse_error(
+          rule: "OOF-P0",
+          message: "Word-form Boolean operator '#{tok.value}' is not supported; use '#{tok.value == "and" ? "&&" : "||"}'",
+          token: tok.value, line: tok.line, col: tok.col
+        )
+        skip_until_body_boundary
+      end
       bound = parse_optional_stream_bound if expr.fetch("kind", nil) == "call" && expr.fetch("fn", nil) == "fold_stream"
       if bound
         node = { "kind" => "fold_stream", "name" => name, "expr" => expr }
