@@ -1,8 +1,8 @@
 {
   "kind": "stdlib_inventory",
   "format_version": "v0",
-  "stdlib_surface_digest": "e50989e5ef3f9014266e316afbe13305ea4984789674c85664cfafd808074559",
-  "note": "Normatively referenced by Ch8. Digest is computed from canonical re-serialization of entries sorted by canonical_name with entry_digest fields stripped — never from raw file bytes. P3 proof verifies determinism. P5 adds stdlib.collection.map + stdlib.collection.filter entries and updates stdlib.collection.count proof_lineage. CONSTRUCT-P1 adds stdlib.decimal.decimal (explicit Decimal constructor) and recomputes the digest. FLATMAP-P5 adds stdlib.collection.flat_map and recomputes the digest. PREDICATE-OPS-P4 adds stdlib.collection.find/any/all and recomputes the digest. LANG-STDLIB-NUMERIC-TEXT-CONVERSION-P1 adds stdlib.integer.parse_int/int_to_text/modulo (category numeric) and recomputes the digest. LANG-STDLIB-TEXT-ESCAPE-DELIMITED-P2 adds stdlib.text.encode_delimited/decode_delimited (escape-aware delimited row codec; decode -> Option[Collection[Text]]) and recomputes the digest. LANG-STDLIB-COLLECTION-AT-INVENTORY-P5 adds stdlib.collection.at (Collection[T] x Integer -> Option[T], zero-based, total) and recomputes the digest. LANG-STDLIB-TEXT-JOIN-P1 adds stdlib.text.join (Collection[Text] x Text -> Text, inverse of split) and recomputes the digest. LANG-STDLIB-WIRE-FRAME-CODEC-P2 adds stdlib.text.encode_frame (Text -> Text) and stdlib.text.decode_frame (Text -> Option[FrameDecode], length-prefixed netstring frame codec) and recomputes the digest. LANG-STDLIB-COLLECTION-SORT-BY-P3 adds stdlib.collection.sort_by (Collection[T] x (T -> K) -> Collection[T], stable ascending, K in {Integer, Text, Decimal}, OOF-COL11 fail-closed on Float and every other key shape) and recomputes the digest. LANG-STDLIB-MAP-RUNTIME-P1 makes stdlib.map.empty/stdlib.map.from_pairs ACTUALLY EXECUTABLE in the VM (bytecode OP_CALL + eval_ast HOF-dispatch, shared pair-validation/last-input-wins helper) — both entries previously claimed `production-implemented` with no live VM constructor arm (readers only); reconciles their signatures to Map[String, V] (v0 keys are exactly String, never a generic K), fixes stdlib.map.get's stale Option[V]/totality/diagnostics fields, and documents the LAST-INPUT-WINS duplicate-key law and Pair{first,second} shape; recomputes the digest. LANG-STDLIB-INVENTORY-QUALIFIED-IMPORT-SURFACE-P2 adds the additive import_surface field (absent/default = bare_alias, preserving every existing row's behavior) and registers the 13 canon Ch8 §8.11 stdlib.bytes.* pure operations as qualified_only — discoverable via inventory/help/MCP, callable only through qualified names, bare/named import refused (OOF-IMP3), compat aliases text_to_bytes/bytes_to_text recorded but not importable; capability/effect modules (stdlib.IO.*, stdlib.net.*) deliberately stay OUT of this canon inventory; recomputes the digest. LANG-STDLIB-COLLECTION-TAKE-CANON-P5 adds stdlib.collection.take (Collection[T] x Integer -> Collection[T], prefix-bounded reader, n<=0 -> [], n>=count(xs) -> all input, OOF-COL12 fail-closed on a non-Integer/non-lambda second argument) and recomputes the digest.",
+  "stdlib_surface_digest": "46c49b2ffe77560b9219eef0f964cdb0e0cdff521be45d781fa186a0fddbc21a",
+  "note": "Normatively referenced by Ch8. Digest is computed from canonical re-serialization of entries sorted by canonical_name with entry_digest fields stripped — never from raw file bytes. P3 proof verifies determinism. P5 adds stdlib.collection.map + stdlib.collection.filter entries and updates stdlib.collection.count proof_lineage. CONSTRUCT-P1 adds stdlib.decimal.decimal (explicit Decimal constructor) and recomputes the digest. FLATMAP-P5 adds stdlib.collection.flat_map and recomputes the digest. PREDICATE-OPS-P4 adds stdlib.collection.find/any/all and recomputes the digest. LANG-STDLIB-NUMERIC-TEXT-CONVERSION-P1 adds stdlib.integer.parse_int/int_to_text/modulo (category numeric) and recomputes the digest. LANG-STDLIB-TEXT-ESCAPE-DELIMITED-P2 adds stdlib.text.encode_delimited/decode_delimited (escape-aware delimited row codec; decode -> Option[Collection[Text]]) and recomputes the digest. LANG-STDLIB-COLLECTION-AT-INVENTORY-P5 adds stdlib.collection.at (Collection[T] x Integer -> Option[T], zero-based, total) and recomputes the digest. LANG-STDLIB-TEXT-JOIN-P1 adds stdlib.text.join (Collection[Text] x Text -> Text, inverse of split) and recomputes the digest. LANG-STDLIB-WIRE-FRAME-CODEC-P2 adds stdlib.text.encode_frame (Text -> Text) and stdlib.text.decode_frame (Text -> Option[FrameDecode], length-prefixed netstring frame codec) and recomputes the digest. LANG-STDLIB-COLLECTION-SORT-BY-P3 adds stdlib.collection.sort_by (Collection[T] x (T -> K) -> Collection[T], stable ascending, K in {Integer, Text, Decimal}, OOF-COL11 fail-closed on Float and every other key shape) and recomputes the digest. LANG-STDLIB-MAP-RUNTIME-P1 makes stdlib.map.empty/stdlib.map.from_pairs ACTUALLY EXECUTABLE in the VM (bytecode OP_CALL + eval_ast HOF-dispatch, shared pair-validation/last-input-wins helper) — both entries previously claimed `production-implemented` with no live VM constructor arm (readers only); reconciles their signatures to Map[String, V] (v0 keys are exactly String, never a generic K), fixes stdlib.map.get's stale Option[V]/totality/diagnostics fields, and documents the LAST-INPUT-WINS duplicate-key law and Pair{first,second} shape; recomputes the digest. LANG-STDLIB-INVENTORY-QUALIFIED-IMPORT-SURFACE-P2 adds the additive import_surface field (absent/default = bare_alias, preserving every existing row's behavior) and registers the 13 canon Ch8 §8.11 stdlib.bytes.* pure operations as qualified_only — discoverable via inventory/help/MCP, callable only through qualified names, bare/named import refused (OOF-IMP3), compat aliases text_to_bytes/bytes_to_text recorded but not importable; capability/effect modules (stdlib.IO.*, stdlib.net.*) deliberately stay OUT of this canon inventory; recomputes the digest. LANG-STDLIB-COLLECTION-TAKE-CANON-P5 adds stdlib.collection.take (Collection[T] x Integer -> Collection[T], prefix-bounded reader, n<=0 -> [], n>=count(xs) -> all input, OOF-COL12 fail-closed on a non-Integer/non-lambda second argument) and recomputes the digest. LANG-STDLIB-MAP-PUT-P2 adds stdlib.map.put (immutable Map[String,V] update, absent insert/existing overwrite, last-write-wins, sorted-key JSON, O(n) carrier copy) and recomputes the digest.",
   "entries": [
     {
       "canonical_name": "stdlib.text.byte_length",
@@ -774,6 +774,51 @@
       ],
       "compatibility_note": null,
       "owner_surface": "PROP-043",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.map.put",
+      "semantic_ir_name": "stdlib.map.put",
+      "legacy_sir": null,
+      "aliases": [
+        {
+          "kind": "source_alias",
+          "name": "map_put"
+        }
+      ],
+      "category": "map",
+      "lifecycle_status": "production-implemented",
+      "semantic_stability": "design-locked",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "total",
+      "type_params": [
+        "V"
+      ],
+      "input_signature": [
+        "Map[String, V]",
+        "String",
+        "V"
+      ],
+      "output_signature": "Map[String, V]",
+      "diagnostics": [
+        "OOF-TY0"
+      ],
+      "failure_behavior": "Well-typed calls are total. An absent key is inserted; an existing key is overwritten (deterministic LAST-WRITE-WINS). Crafted/legacy SIR with wrong arity, a non-Record map carrier or a non-String key fails closed with a bounded operational error and never panics. Growing past MAX_COLLECTION_ELEMENTS fails through OOF-VM-COLLECTION-BUDGET.",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "LANG-STDLIB-MAP-PUT-READINESS-P1",
+        "LANG-STDLIB-MAP-PUT-P2 — Ruby/Rust type parity, immutable Map update/overwrite, shared bytecode/eval-AST VM helper, immutable input and deterministic JSON proofs"
+      ],
+      "examples": [
+        "map_put(map_empty(), \"a\", 1) -> {a: 1}",
+        "map_put(map_from_pairs([{first: \"a\", second: 1}]), \"a\", 2) -> {a: 2}"
+      ],
+      "compatibility_note": "v0 keys are exactly String; Text-typed key arguments use the existing String/Text scalar-alias law. The runtime carrier remains Value::Record(Arc<BTreeMap<String,Value>>): the input map is never mutated, the output is sorted-by-key for iteration/JSON, and each immutable update copies O(n) entries before one O(log n) insert (O(n) time/space overall; repeated fold updates are O(n^2) worst-case). Map[String,Unknown] stays Unknown after insertion; use an explicitly typed map_empty seed for a concrete fold accumulator. Authored source uses map_put; the VM accepts both map_put and stdlib.map.put across the established Rust-bare/Ruby-qualified SIR seam.",
+      "owner_surface": "LANG-STDLIB-MAP-PUT-P2",
       "entry_digest": null
     },
     {

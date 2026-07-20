@@ -82,6 +82,7 @@ module IgniterLang
       "map_get_string" => { qualified_name: "stdlib.map.get_string", arity: 2 },
       "map_from_pairs" => { qualified_name: "stdlib.map.from_pairs", arity: 1 },
       "map_empty"      => { qualified_name: "stdlib.map.empty",      arity: 0 },
+      "map_put"        => { qualified_name: "stdlib.map.put",        arity: 3 },
     }.freeze
 
     # LANG-STDLIB-NUMERIC-TEXT-CONVERSION-P1: integer numeric/text conversion registry (v0 — exhaustive,
@@ -4038,6 +4039,8 @@ module IgniterLang
         infer_map_from_pairs(args, symbol_types, type_errors, type_warnings, node_name)
       when "map_empty"
         infer_map_empty(args, symbol_types, type_errors, type_warnings, node_name)
+      when "map_put"
+        infer_map_put(args, symbol_types, type_errors, type_warnings, node_name)
       else
         type_errors << oof("OOF-TY0", "Unknown map function: #{fn}", node_name)
         typed_expr("call", type_ir("Unknown"), [], "fn" => fn, "args" => [])
@@ -4212,6 +4215,88 @@ module IgniterLang
       typed_expr("call", map_type_ir("String", "Unknown"), [],
                  "fn" => "stdlib.map.empty", "args" => [],
                  "note" => "empty-type-context-inference-deferred-v1")
+    end
+
+    # LANG-STDLIB-MAP-PUT-P2:
+    # map_put(Map[String,V], String, V) -> Map[String,V].
+    # The first argument owns V. Map[String,Unknown] remains Unknown after insertion:
+    # one value never proves the type of every pre-existing entry.
+    def infer_map_put(args, symbol_types, type_errors, type_warnings, node_name)
+      qualified = "stdlib.map.put"
+      unless args.length == 3
+        type_errors << oof(
+          "OOF-TY0",
+          "#{qualified}: expected 3 arguments (map, key, value), got #{args.length}",
+          node_name
+        )
+        return typed_expr("call", type_ir("Unknown"), [], "fn" => qualified, "args" => [])
+      end
+
+      map_arg = infer_expr(args[0], symbol_types, type_errors, type_warnings, node_name)
+      key_arg = infer_expr(args[1], symbol_types, type_errors, type_warnings, node_name)
+      val_arg = infer_expr(args[2], symbol_types, type_errors, type_warnings, node_name)
+      typed_args = [map_arg, key_arg, val_arg]
+      map_type = map_arg.fetch("resolved_type")
+      map_name = type_name(map_type)
+
+      unless map_name == "Map" || map_name == "Unknown"
+        type_errors << oof(
+          "OOF-TY0",
+          "#{qualified} arg 1: expected Map[String, V], got #{map_name}",
+          node_name
+        )
+        deps = typed_args.flat_map { |arg| arg.fetch("deps", []) }.uniq
+        return typed_expr("call", type_ir("Unknown"), deps, "fn" => qualified, "args" => typed_args)
+      end
+
+      result_type = if map_name == "Map"
+        map_type
+      else
+        map_type_ir("String", "Unknown")
+      end
+
+      if map_name == "Map"
+        key_param = map_type.fetch("params", [])[0]
+        key_param_name = key_param ? type_name(type_ir(key_param)) : "Unknown"
+        unless key_param_name == "String" || key_param_name == "Unknown"
+          type_errors << oof(
+            "OOF-TY0",
+            "#{qualified} arg 1: expected Map[String, V], got #{type_display(map_type)}",
+            node_name
+          )
+          deps = typed_args.flat_map { |arg| arg.fetch("deps", []) }.uniq
+          return typed_expr("call", type_ir("Unknown"), deps, "fn" => qualified, "args" => typed_args)
+        end
+      end
+
+      key_name = type_name(key_arg.fetch("resolved_type"))
+      unless %w[String Text Unknown].include?(key_name)
+        type_errors << oof(
+          "OOF-TY0",
+          "#{qualified} arg 2: expected String key, got #{key_name}",
+          node_name
+        )
+      end
+
+      value_type = if map_name == "Map"
+        params = map_type.fetch("params", [])
+        params.length >= 2 ? type_ir(params[1]) : type_ir("Unknown")
+      else
+        type_ir("Unknown")
+      end
+      actual_value_type = val_arg.fetch("resolved_type")
+      unless unknown_or_unknown_bearing?(value_type) ||
+             unknown_or_unknown_bearing?(actual_value_type) ||
+             structurally_assignable?(actual_value_type, value_type)
+        type_errors << oof(
+          "OOF-TY0",
+          "#{qualified} arg 3: expected #{type_display(value_type)}, got #{type_display(actual_value_type)}",
+          node_name
+        )
+      end
+
+      deps = typed_args.flat_map { |arg| arg.fetch("deps", []) }.uniq
+      typed_expr("call", result_type, deps, "fn" => qualified, "args" => typed_args)
     end
 
     # ── LANG-STDLIB-OUTCOME-PROP-P3: stdlib.outcome helpers ─────────────────────
