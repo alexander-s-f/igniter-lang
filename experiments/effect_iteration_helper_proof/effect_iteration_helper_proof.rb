@@ -46,7 +46,7 @@ end
 
 def all_rules(src) = all_diags(src).map { |d| d["rule"] }
 def uniq_rules(src) = all_rules(src).sort.uniq
-def ec6_messages(src) = all_diags(src).select { |d| d["rule"] == "OOF-EC6" }.map { |d| d["message"] }.uniq
+def ec6_messages(src) = all_diags(src).select { |d| d["rule"] == "OOF-EC6" }.map { |d| d["message"] }
 
 RESULTS = []
 def check(label, &b)
@@ -70,8 +70,11 @@ def helper_msg(name, locus)
   "perform ONE declaration-position invoke outside the iteration (PROP-050)"
 end
 
+# LANG-TYPE-REF-UNRESOLVED-FAIL-CLOSED-P1: use the actual structural return
+# type of stdlib.IO.write_text. The retired IoWriteResult placeholder only
+# stayed quiet before contract port references became fail-closed.
 WRITE_DEF = <<~IG
-  def write_one(path: Text, body: Text, io_write: IO.Capability) -> IoWriteResult {
+  def write_one(path: Text, body: Text, io_write: IO.Capability) -> Result[WriteReceipt, IoError] {
     return stdlib.IO.write_text(path, body, io_write)
   }
 IG
@@ -85,10 +88,10 @@ MAP_HELPER = m(WRITE_DEF + <<~IG)
     effect write_file using io_write
     input rows: Collection[Text]
     compute receipts = map(rows, (row) -> write_one("rows.log", row, io_write))
-    output receipts: Collection[IoWriteResult]
+    output receipts: Collection[Result[WriteReceipt, IoError]]
   }
 IG
-check("one-hop helper in map lambda => [OOF-EC6]") { uniq_rules(MAP_HELPER) == ["OOF-EC6"] }
+check("one-hop helper in map lambda => exactly [OOF-EC6]") { all_rules(MAP_HELPER) == ["OOF-EC6"] }
 check("  wording names helper + locus + host IO + rewrite (byte-identical to Rust)") do
   ec6_messages(MAP_HELPER) == [helper_msg("write_one", "a lambda body in compute 'receipts'")]
 end
@@ -167,7 +170,19 @@ check("  called through non-IO SCC member 'pong', still refused (shared summary)
 end
 check("  deterministic across runs") { uniq_rules(CYCLIC) == uniq_rules(CYCLIC) }
 
-NET_HELPER = m(<<~IG)
+NET_TYPES = <<~IG
+  type NetHeader { name: Text, value: Text }
+  type NetRequest { method: Text, url: Text, headers: Collection[NetHeader], body: Text }
+  type NetResponse { status: Integer, headers: Collection[NetHeader], body: Text, truncated: Bool }
+  variant NetError {
+    Refused { reason: Text }
+    TooLarge { limit: Integer }
+    Failed { reason: Text }
+    Unknown { reason: Text }
+  }
+IG
+
+NET_HELPER = m(NET_TYPES + <<~IG)
   def hit(req: NetRequest, net_cap: IO.NetworkCapability) -> Result[NetResponse, NetError] {
     return stdlib.net.request(req, net_cap)
   }
@@ -179,7 +194,10 @@ NET_HELPER = m(<<~IG)
     output rs: Collection[Result[NetResponse, NetError]]
   }
 IG
-check("net.request through helper in map lambda => [OOF-EC6]") { uniq_rules(NET_HELPER) == ["OOF-EC6"] }
+check("net.request through helper in map lambda => [OOF-EC6], exact Rust-parity wording") do
+  all_rules(NET_HELPER) == ["OOF-EC6"] &&
+    ec6_messages(NET_HELPER) == [helper_msg("hit", "a lambda body in compute 'rs'")]
+end
 
 # ── Controls / ownership boundaries ──────────────────────────────────────────
 section "Controls and preserved ownership"
@@ -197,7 +215,7 @@ PURE_LOOP_HELPER = m(<<~IG)
     output xs: Collection[Integer]
   }
 IG
-check("pure helper in LOOP body stays green (no OOF-EC6)") { !uniq_rules(PURE_LOOP_HELPER).include?("OOF-EC6") }
+check("pure helper in LOOP body stays green") { uniq_rules(PURE_LOOP_HELPER).empty? }
 
 TOP_LEVEL = m(WRITE_DEF + <<~IG)
   observed contract Flush {
@@ -205,7 +223,7 @@ TOP_LEVEL = m(WRITE_DEF + <<~IG)
     effect write_file using io_write
     input row: Text
     compute r = write_one("rows.log", row, io_write)
-    output r: IoWriteResult
+    output r: Result[WriteReceipt, IoError]
   }
 IG
 check("top-level IO-helper call does NOT receive OOF-EC6") { !uniq_rules(TOP_LEVEL).include?("OOF-EC6") }
@@ -217,9 +235,26 @@ UNKNOWN_HELPER = m(<<~IG)
     output ys: Collection[Integer]
   }
 IG
-check("unknown helper keeps OOF-TY0 (unknown-function) root, not OOF-EC6") do
+INDEPENDENT_PORT_ERROR = m(WRITE_DEF + <<~IG)
+  observed contract Flush {
+    capability io_write: IO.Capability
+    effect write_file using io_write
+    input rows: Collection[Text]
+    input bad: MissingType
+    compute receipts = map(rows, (row) -> write_one("rows.log", row, io_write))
+    output receipts: Collection[Result[WriteReceipt, IoError]]
+  }
+IG
+check("unknown helper keeps OOF-TY0; EC6 does not suppress an independent port OOF-TY0") do
   rs = uniq_rules(UNKNOWN_HELPER)
-  rs.include?("OOF-TY0") && !rs.include?("OOF-EC6")
+  independent = all_diags(INDEPENDENT_PORT_ERROR)
+  missing_type = {
+    "rule" => "OOF-TY0",
+    "message" => "Unresolved type reference 'MissingType' in input 'bad' of contract 'Flush'"
+  }
+  rs.include?("OOF-TY0") && !rs.include?("OOF-EC6") &&
+    independent.count { |d| d["rule"] == "OOF-EC6" } == 1 &&
+    independent.count { |d| d == missing_type } == 1 && independent.size == 2
 end
 
 # ── P2 direct-IO regressions remain green ────────────────────────────────────
