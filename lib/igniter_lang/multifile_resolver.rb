@@ -49,11 +49,12 @@ module IgniterLang
 
       source_hash = composite_source_hash(sorted)
       merged = merge_units(sorted, source_hash)
+      constructor_scope = build_constructor_scope(sorted)
       # LANG-DERIVED-RECORD-CONSTRUCTOR-P2: sibling-file TypeDecls are visible
       # only after merge. Lower the merged program before deriving the imported
       # contract registry so constructor signatures expose their real ordered
       # inputs/one output rather than the parser placeholder's output-only body.
-      DerivedConstructorSugar.lower!(merged, scope: build_constructor_scope(sorted))
+      DerivedConstructorSugar.lower!(merged, scope: constructor_scope)
       {
         "ok" => true,
         "parsed_program" => merged,
@@ -62,7 +63,11 @@ module IgniterLang
         "source_path" => merged.fetch("source_path"),
         "cross_module_registry" => build_cross_module_registry(sorted, merged.fetch("contracts", [])),
         "per_module_imports" => build_per_module_imports(sorted),
-        "per_contract_module" => build_per_contract_module(sorted)
+        "per_contract_module" => build_per_contract_module(sorted),
+        # LANG-VARIANT-ARM-QUALIFIED-CONSTRUCT-P1: private compile context for
+        # visibility-filtered arm-owner resolution. This does not enter parsed
+        # source-unit evidence, TypedProgram, SemanticIR, or runtime carriers.
+        "variant_arm_owners" => constructor_scope.fetch("variant_arm_owners", {})
       }
     end
 

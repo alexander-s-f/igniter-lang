@@ -148,7 +148,8 @@ module IgniterLang
         source_units: resolved.fetch("source_units"),
         cross_module_registry: resolved.fetch("cross_module_registry", {}),
         per_module_imports: resolved.fetch("per_module_imports", {}),
-        per_contract_module: resolved.fetch("per_contract_module", {})
+        per_contract_module: resolved.fetch("per_contract_module", {}),
+        variant_arm_owners: resolved.fetch("variant_arm_owners", {})
       )
       # CR-004 anti-drift: surface ONE non-fatal advisory that a multi-file flat
       # unit was compiled without package-policy checks. Additive only — verdict,
@@ -247,7 +248,8 @@ module IgniterLang
         resolution_context = {
           cross_module_registry: resolved.fetch("cross_module_registry", {}),
           per_module_imports: resolved.fetch("per_module_imports", {}),
-          per_contract_module: resolved.fetch("per_contract_module", {})
+          per_contract_module: resolved.fetch("per_contract_module", {}),
+          variant_arm_owners: resolved.fetch("variant_arm_owners", {})
         }
       end
 
@@ -417,7 +419,8 @@ module IgniterLang
       source_units:,
       cross_module_registry: {},
       per_module_imports: {},
-      per_contract_module: {}
+      per_contract_module: {},
+      variant_arm_owners: {}
     )
       # LANG-DERIVED-RECORD-CONSTRUCTOR-P2: constructor declarations and named
       # invocations are whole-program syntax sugar. Lower after single-file parse
@@ -435,7 +438,8 @@ module IgniterLang
       typed = @typechecker.typecheck(classified,
         cross_module_registry: cross_module_registry,
         per_module_imports: per_module_imports,
-        per_contract_module: per_contract_module
+        per_contract_module: per_contract_module,
+        variant_arm_owners: variant_arm_owners
       )
       compilation = @emitter.emit_typed(typed)
       attach_source_units!(compilation, source_units)

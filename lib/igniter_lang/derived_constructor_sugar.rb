@@ -248,6 +248,11 @@ module IgniterLang
     end
 
     def lower_named_invocation(node, constructor_infos, variant_arm_names, errors, scope, current_module)
+      # LANG-VARIANT-ARM-QUALIFIED-CONSTRUCT-P1: `Variant::Arm { ... }` is
+      # unambiguously a variant construction. Constructor arbitration remains
+      # byte-identical for the bare `Arm { ... }` compatibility spelling only.
+      return if node.key?("qualifier")
+
       name = node["arm"]
       candidates = visible_constructors(constructor_infos[name], scope, current_module)
       return if candidates.empty?

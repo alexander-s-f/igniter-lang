@@ -1,8 +1,8 @@
 # Canonical Semantic Model (CSM)
 
 Status: index (living document)
-Date: 2026-07-15
-Author: `[Igniter-Lang Meta Expert]`
+Date: 2026-07-20
+Author: `[Igniter-Lang Meta Expert]` + `[Igniter-Lang Implementation Agent]`
 Source: S3-R29-C2-P (R28 meta-card) + S3-R29-C5-P (R29 bootstrap) + S3-R34-C3-S (PROP-036 placeholder sync)
 
 > The CSM is a verifiable index, not a design document.
@@ -64,6 +64,17 @@ SIR node, VM value, opcode, host capability, or runtime authority.
 | Record type (struct-shaped: `type Foo { fields }`) | implemented | Parser | `core` | `source_to_semanticir_fixture/golden/claim_evidence.semantic_ir.json` | PROP-003, PROP-004 | P2 |
 | `History[T]` type annotation | experiment-pass | Parser | `temporal` (node-level) | `temporal_semanticir_access_node/golden/history_valid.semantic_ir.json` | PROP-022, PROP-028 | P3 |
 | `BiHistory[T]` type annotation | experiment-pass | Parser | `temporal` (node-level) | `temporal_semanticir_access_node/golden/bihistory_valid.semantic_ir.json` | PROP-022, PROP-028 | P3 |
+
+### Variant Arm Identity
+
+| entity | status | pipeline_entry_point | classifier_fragment | golden_anchor | PROP | Covenant |
+|--------|--------|---------------------|---------------------|---------------|------|----------|
+| Qualified variant arm `Variant::Arm` in construction and patterns | experiment-pass | Parser → TypeChecker; qualifier erased before SemanticIR | enclosing contract unchanged | `variant_arm_qualified_construct_proof/verify_variant_arm_qualified_construct_p1.rb` (30/30) | LANG-VARIANT-ARM-QUALIFIED-CONSTRUCT-P1 | P27, P28 |
+
+Accepted construction retains the existing `variant_construct` carrier
+`{arm, variant, resolved_type}`. Bare `Arm { ... }` is compatibility sugar only
+when exactly one visible user variant owns the arm; qualification and owner
+selection introduce no VM carrier or runtime authority.
 
 ### Module Constant
 
@@ -147,9 +158,9 @@ into live runtime receipts and source `intent` is not Rust-parity.
 
 ## OOF Code Registry
 
-All active OOF codes are detected in the **Classifier** stage. Each produces a
-`fragment_class: "oof"` on the containing contract and propagates to `type_errors`
-via the TypeChecker.
+Active OOF codes may originate in the Parser, Classifier, or TypeChecker. They
+are emitted through the compiler's diagnostic envelope; classifier-owned codes
+also produce `fragment_class: "oof"` on the containing contract.
 
 | code | triggers when | golden_anchor | PROP | Covenant |
 |------|--------------|---------------|------|----------|
@@ -159,6 +170,8 @@ via the TypeChecker.
 | OOF-S4 | Stream value used directly (must use `fold_stream`) | `classifier_pass_proof/golden/negative_stream_direct_use.classified.json` | PROP-023 | P14 |
 | OOF-CE4 | `ConfidenceLabel` value used where `Bool` is expected | `classifier_pass_proof/golden/negative_confidence_bool.classified.json` | PROP-025 | P11 |
 | OOF-OS2 | `EvidenceLinkedAlert` output missing `signal_refs` or `claim_refs` | `classifier_pass_proof/golden/negative_evidence_less_alert.classified.json` | PROP-025 | P22 |
+| OOF-KIND8 | A qualified arm is not a visible declared arm, or a bare user arm has zero or multiple visible owners | `variant_arm_qualified_construct_proof/verify_variant_arm_qualified_construct_p1.rb` | LANG-VARIANT-ARM-QUALIFIED-CONSTRUCT-P1 | P27, P28 |
+| OOF-KIND9 | A qualified match pattern names a variant other than the known subject variant | `variant_arm_qualified_construct_proof/verify_variant_arm_qualified_construct_p1.rb` | LANG-VARIANT-ARM-QUALIFIED-CONSTRUCT-P1 | P27, P28 |
 | OOF-I1 | `@bitemporal` invariant on non-bitemporal type (deferred) | — | PROP-025 (deferred) | P14 |
 | OOF-I3 | `~T` invariant shape violation (deferred) | — | PROP-025 (deferred) | P14 |
 | OOF-I5 | (deferred invariant OOF, exact condition TBD) | — | PROP-025 (deferred) | P14 |

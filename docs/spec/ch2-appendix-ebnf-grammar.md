@@ -27,6 +27,7 @@ TopDecl         ::= AssumptionsDecl
                   | ContractDecl
                   | ConstructorDecl
                   | TypeDecl
+                  | VariantDecl
                   | ConstDecl
                   | FunctionDecl
                   | ExternalDecl
@@ -183,6 +184,11 @@ InvariantAttr     ::= "predicate" ":" Name
 ## 5. Types & Signatures
 
 ```ebnf
+TypeDecl          ::= "type" Name "{" FieldDecl* "}"
+FieldDecl         ::= Name ":" TypeRef "?"?
+VariantDecl       ::= "variant" Name "{" VariantArmDecl* "}"
+VariantArmDecl    ::= Name ("{" FieldDecl* "}")? ","?
+
 TypeRef           ::= "Integer" | "Float" | "String" | "Bool" | "Timestamp" | "Date" | "Symbol"
                     | Name
                     | "Collection[" TypeRef "]"
@@ -201,6 +207,7 @@ Expr              ::= Literal
                     | BinOp
                     | Call
                     | NamedConstruct
+                    | MatchExpr
                     | IfExpr
                     | BlockExpr
                     | FieldAccess
@@ -217,6 +224,7 @@ Op                ::= "+" | "-" | "*" | "/" | "==" | "!=" | "<" | ">" | "<=" | "
                     | "&&" | "||" | "++"
 Call              ::= Name "(" (Expr ("," Expr)*)? ")"
 NamedConstruct    ::= Name "{" (NamedField ("," NamedField)*)? "}"
+                    | Name "::" Name "{" (NamedField ("," NamedField)*)? "}"
 NamedField        ::= Name (":" Expr)?
                       -- For a visible ConstructorDecl, this is an exact-field,
                       -- order-independent invocation. Punned and explicit fields
@@ -226,8 +234,13 @@ NamedField        ::= Name (":" Expr)?
                       -- remain OOF-P1; constructor/variant ambiguity is OOF-CTOR5.
                       -- Positional natural Call to a constructor is OOF-CTOR4;
                       -- literal call_contract remains the explicit escape hatch.
-                      -- Dotted `Module.Name { ... }` is held in v0; qualification
-                      -- remains available to entrypoint and literal call_contract.
+                      -- `Variant::Arm { ... }` is explicit variant identity and
+                      -- bypasses constructor arbitration. Dotted
+                      -- `Module.Variant::Arm { ... }` and `Module.Name { ... }`
+                      -- remain held in v0.
+MatchExpr         ::= "match" Expr "{" (MatchArm ","?)* "}"
+MatchArm          ::= MatchPattern "=>" Expr
+MatchPattern      ::= "_" | (Name "::")? Name ("{" (Name ("," Name)*)? "}")?
 IfExpr            ::= "if" Expr BlockExpr ("else" (IfExpr | BlockExpr))?
                       -- `else if` is surface sugar desugaring to `else { if ... }`; see ch2 §2.2.3.1
 BlockExpr         ::= "{" Stmt* Expr "}"

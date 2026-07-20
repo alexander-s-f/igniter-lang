@@ -35,7 +35,8 @@ ModuleDecl    := "module" ModPath
 ImportDecl    := "import" ModPath ("." "{" Name ("," Name)* "}")?
 ModPath       := Name ("." Name)*
 
-TopDecl       := AssumptionsDecl | ContractDecl | ConstructorDecl | TypeDecl | ConstDecl | FunctionDecl | ExternalDecl
+TopDecl       := AssumptionsDecl | ContractDecl | ConstructorDecl | TypeDecl | VariantDecl
+               | ConstDecl | FunctionDecl | ExternalDecl
 
 AssumptionsDecl := "assumptions" "{" AssumptionDecl* "}"
 AssumptionDecl  := "assumption" Name "{" AssumptionField* "}"
@@ -65,6 +66,8 @@ LifecycleClass:= ":local"|":session"|":window"|":durable"|":audit"
 
 TypeDecl      := "type" Name "{" FieldDecl* "}"
 FieldDecl     := Name ":" TypeRef "?"?
+VariantDecl   := "variant" Name "{" VariantArmDecl* "}"
+VariantArmDecl:= Name ("{" FieldDecl* "}")? ","?
 
 ConstDecl     := "const" Name ":" TypeRef "=" ConstExpr
 ConstExpr     := ScalarLiteral | ConstRef | ConstArray | ConstRecord
@@ -89,7 +92,7 @@ TypeRef       := "Integer"|"Float"|"String"|"Bool"|"Text"|"Timestamp"|"Date"|"Sy
                | "Result["     TypeRef "," TypeRef "]"
                | "Map["        TypeRef "," TypeRef "]"
 
-Expr          := Literal | Ref | BinOp | Call | NamedConstruct | IfExpr | BlockExpr
+Expr          := Literal | Ref | BinOp | Call | NamedConstruct | MatchExpr | IfExpr | BlockExpr
                | FieldAccess | IndexAccess | Lambda | ArrayLit | RecordLit
                | LetExpr
 
@@ -99,7 +102,11 @@ Op            := "+" | "-" | "*" | "/" | "==" | "!=" | "<" | ">" | "<=" | ">="
                | "&&" | "||" | "++"
 Call          := Name "(" (Expr ("," Expr)*)? ")"
 NamedConstruct:= Name "{" (NamedField ("," NamedField)*)? "}"
+               | Name "::" Name "{" (NamedField ("," NamedField)*)? "}"
 NamedField    := Name (":" Expr)?
+MatchExpr     := "match" Expr "{" (MatchArm ","?)* "}"
+MatchArm      := MatchPattern "=>" Expr
+MatchPattern  := "_" | (Name "::")? Name ("{" (Name ("," Name)*)? "}")?
 IfExpr        := "if" Expr "{" Expr "}" ("else" "{" Expr "}")?
   -- Note: the parser accepts the tolerant shape above. V0 accepted semantics
   -- require else; a missing else produces OOF-IF2, not a parse error.
@@ -455,6 +462,39 @@ No evolution silently widens construction.
 Ruby canon and Rust lab must use equivalent actionable messages. There is no
 `OOF-CTOR6`: duplicate named fields remain owned by parser-level `OOF-P1`.
 Landed by LANG-DERIVED-RECORD-CONSTRUCTOR-P2 (2026-07-15).
+
+### 2.2.6 Qualified variant-arm construction and patterns
+
+`Variant::Arm` is the canonical explicit identity of a variant arm in source.
+The same spelling is admitted in construction and match-pattern positions:
+
+```igniter
+compute held : SeatState = SeatState::Held { seat_id, expires_at }
+
+compute label = match held {
+  SeatState::Held { seat_id } => seat_id,
+  SeatState::Open => "open"
+}
+```
+
+Only one identifier may precede `::` in v0: it names the variant, not a module
+or package. `Module.Variant::Arm` is not admitted. A qualified construction is
+always a variant construction and therefore bypasses derived-record-constructor
+arbitration. Bare `Arm { ... }` remains compatibility sugar and continues to
+participate in the existing constructor-versus-variant `OOF-CTOR5` gate.
+
+The parser carries the optional variant qualifier only until type resolution.
+It introduces no new SemanticIR node: an accepted qualified and bare spelling
+of the same arm both lower to the existing `variant_construct` carrier with
+`arm`, resolved `variant`, and `resolved_type`. Match patterns likewise retain
+their existing emitted representation after the qualifier has been checked.
+
+`::` is contextual to these two PascalCase arm positions. It does not widen
+ordinary references, calls, type references, import paths, or constructor
+names. Bare construction is accepted only under the visibility and uniqueness
+law in Ch3 §3.3a.
+
+Landed by LANG-VARIANT-ARM-QUALIFIED-CONSTRUCT-P1 (2026-07-20).
 
 ## 2.2.2 Assumptions Surface (PROP-032 Experiment-Pass)
 

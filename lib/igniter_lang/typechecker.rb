@@ -294,7 +294,8 @@ module IgniterLang
       @declared_secret_refs = declared_secret_refs.nil? ? nil : declared_secret_refs.to_a
     end
 
-    def typecheck(classified_program, cross_module_registry: {}, per_module_imports: {}, per_contract_module: {})
+    def typecheck(classified_program, cross_module_registry: {}, per_module_imports: {}, per_contract_module: {},
+                  variant_arm_owners: {})
       @type_shapes    = type_shapes(classified_program)
       @variant_shapes = variant_shapes(classified_program)  # PROP-044 P5
       # LANG-TYPE-REF-UNRESOLVED-FAIL-CLOSED-P1: a SEPARATE, un-mutated snapshot of the
@@ -323,6 +324,14 @@ module IgniterLang
       # LAB-RUBY-CALL-CONTRACT-PARITY-P3: build call_contract dispatch registry (separate from same_module_registry)
       @call_contract_registry = build_call_contract_registry(classified_program)
       @classified_module = classified_program.fetch("module", nil)
+      # LANG-VARIANT-ARM-QUALIFIED-CONSTRUCT-P1: multifile resolution supplies
+      # declaration ownership without exposing it in ParsedProgram/SIR. Direct
+      # and single-file TypeChecker calls derive the equivalent all-local set.
+      @variant_arm_owners = if variant_arm_owners.empty?
+                              local_variant_arm_owners(classified_program)
+                            else
+                              variant_arm_owners
+                            end
       # LANG-TYPED-CONTRACT-REF-PROP-P5: cross-module resolution state (per-call, not constructor)
       @cross_module_registry = cross_module_registry
       @per_module_imports = per_module_imports
@@ -595,9 +604,97 @@ module IgniterLang
       SEALED_VARIANT_SHAPES.fetch(name, {})
     end
 
-    def find_variant_for_arm(arm_name)
-      @variant_shapes.each { |vname, arms| return vname if arms.key?(arm_name) }
-      nil
+    def local_variant_arm_owners(classified_program)
+      owner_module = classified_program.fetch("module", nil)
+      classified_program.fetch("variant_declarations", []).each_with_object(
+        Hash.new { |hash, arm| hash[arm] = [] }
+      ) do |variant, owners|
+        variant.fetch("arms", []).each do |arm|
+          owners[arm.fetch("name")] << {
+            "module" => owner_module,
+            "variant_name" => variant.fetch("name")
+          }
+        end
+      end
+    end
+
+    def visible_variant_owners(arm_name)
+      Array(@variant_arm_owners.fetch(arm_name, [])).select do |owner|
+        variant_owner_visible?(owner)
+      end.map { |owner| owner.fetch("variant_name") }.uniq.sort
+    end
+
+    def variant_owner_visible?(owner)
+      owner_module = owner.fetch("module", nil)
+      return true if owner_module == @current_contract_module
+
+      Array(@per_module_imports.fetch(@current_contract_module, [])).any? do |import|
+        next false unless import.fetch("module_path", nil) == owner_module
+
+        names = import.fetch("names", nil)
+        names.nil? || names.include?(owner.fetch("variant_name"))
+      end
+    end
+
+    def variant_owner_list(names)
+      case names.length
+      when 0 then ""
+      when 1 then names.first
+      when 2 then "#{names[0]} and #{names[1]}"
+      else "#{names[0...-1].join(', ')}, and #{names[-1]}"
+      end
+    end
+
+    def resolve_variant_construct_owner(expr, type_errors, node_name)
+      arm_name = expr.fetch("arm")
+      qualifier = expr.fetch("qualifier", nil)
+      owners = visible_variant_owners(arm_name)
+
+      if qualifier
+        return qualifier if owners.include?(qualifier)
+
+        type_errors << oof(
+          "OOF-KIND8",
+          "qualified arm '#{qualifier}::#{arm_name}' does not name a visible variant arm",
+          node_name
+        )
+        return nil
+      end
+
+      case owners.length
+      when 0
+        # LANG-SUMTYPE-CONSTRUCT-MATCH-P3 stays closed: PascalCase
+        # `Some { ... }` / `None { ... }` / `Ok { ... }` / `Err { ... }` are
+        # not the admitted function-form sealed constructors. Preserve their
+        # existing KIND2 refusal instead of treating them as user-variant
+        # visibility misses under the new KIND8 owner law.
+        if SEALED_VARIANT_SHAPES.values.any? { |arms| arms.key?(arm_name) }
+          type_errors << oof(
+            "OOF-KIND2",
+            "variant_construct arm '#{arm_name}' is not declared in any variant",
+            node_name
+          )
+          return nil
+        end
+
+        type_errors << oof(
+          "OOF-KIND8",
+          "no visible variant declares arm '#{arm_name}'; import the owning variant",
+          node_name
+        )
+        nil
+      when 1
+        owners.first
+      else
+        spellings = owners.map { |owner| "#{owner}::#{arm_name} { ... }" }
+        type_errors << oof(
+          "OOF-KIND8",
+          "arm '#{arm_name}' is declared by visible variants #{variant_owner_list(owners)}; " \
+          "write #{spellings.join(' or ')}",
+          node_name
+        )
+        nil
+      end
     end
 
     def typecheck_contract(classified_contract)
@@ -617,6 +714,13 @@ module IgniterLang
       contract_modifier = classified_contract.fetch("modifier", "pure")
       contract_name_str = classified_contract.fetch("name")
       @current_contract_name = contract_name_str  # LAB-RUBY-CALL-CONTRACT-PARITY-P3: self-recursion guard
+      contract_id = classified_contract.fetch("contract_id", contract_name_str)
+      module_suffix = ".#{contract_name_str}"
+      @current_contract_module = if contract_id.end_with?(module_suffix)
+                                   contract_id.delete_suffix(module_suffix)
+                                 else
+                                   @per_contract_module.fetch(contract_name_str, @classified_module)
+                                 end
       # LANG-EFFECT-CALL-NATURAL-SUGAR-P1: the caller's declared capability slot names, so
       # OOF-EC7 can print the actual capability when the mapping is unique.
       @current_contract_capabilities = classified_contract.fetch("declarations", [])
@@ -1028,7 +1132,9 @@ module IgniterLang
         when "output"
           expected = type_ir(decl.fetch("type_annotation"))
           actual = symbol_types.fetch(decl.fetch("name"), type_ir("Unknown"))
-          unless structurally_assignable?(actual, expected) || blocking_rule_present?(type_errors)
+          unless structurally_assignable?(actual, expected) ||
+              blocking_rule_present?(type_errors) ||
+              kind8_refused_binding?(type_errors, decl.fetch("name"), actual)
             type_errors << structural_mismatch(expected, actual, decl.fetch("name"))
           end
           # TINV-4: propagate invariant output effects to output nodes
@@ -3142,6 +3248,14 @@ module IgniterLang
       # placement refusal is the root cause; derivative Unknown/output-type noise on the same
       # refused compute is suppressed.
       %w[OOF-P1 OOF-CE4 OOF-OS2 OOF-H1 OOF-BT1 OOF-BT2 OOF-BT3 OOF-BT4 OOF-TM1 OOF-TM3 OOF-TM4 OOF-TM5 OOF-TM6 OOF-S3 OOF-O3 OOF-O4 OOF-O5 OOF-IV3 OOF-EC6 OOF-EC7 OOF-RET1 OOF-R15].any? { |rule| rule_present?(errors, rule) }
+    end
+
+    def kind8_refused_binding?(errors, binding_name, actual_type)
+      return false unless type_name(actual_type) == "Unknown"
+
+      errors.any? do |entry|
+        entry.fetch("rule") == "OOF-KIND8" && entry.fetch("node", nil) == binding_name
+      end
     end
 
     # OOF-IV helpers -------------------------------------------------------
@@ -5896,18 +6010,17 @@ module IgniterLang
     end
 
     # PROP-044 P5: infer a variant_construct expression.
-    # Resolves the variant by searching @variant_shapes for the arm name.
+    # Resolves a qualified owner directly or a bare arm through the unique
+    # visible-owner law. Declaration/hash order and expected types never decide.
     # Validates all supplied fields against the arm's declared field types.
-    # Returns type_ir(variant_name) on success; type_ir("Unknown") with OOF-KIND2 on failure.
+    # Returns type_ir(variant_name) on success; type_ir("Unknown") with the
+    # owner-resolution KIND8 (or an inherited payload KIND2) on failure.
     def infer_variant_construct(expr, symbol_types, type_errors, type_warnings, node_name)
       arm_name = expr.fetch("arm")
       fields   = expr.fetch("fields", {})
 
-      variant_name = find_variant_for_arm(arm_name)
+      variant_name = resolve_variant_construct_owner(expr, type_errors, node_name)
       if variant_name.nil?
-        type_errors << oof("OOF-KIND2",
-          "variant_construct arm '#{arm_name}' is not declared in any variant",
-          node_name)
         return typed_expr("variant_construct", type_ir("Unknown"), [],
                           "arm" => arm_name, "variant" => nil, "typed_fields" => {})
       end
@@ -6037,6 +6150,16 @@ module IgniterLang
 
         arm_name = pattern.fetch("arm")
         bindings = pattern.fetch("bindings", [])
+        typed_pattern = pattern.reject { |key, _value| key == "qualifier" }
+
+        qualifier = pattern.fetch("qualifier", nil)
+        if qualifier && qualifier != subject_type
+          type_errors << oof(
+            "OOF-KIND9",
+            "qualified pattern '#{qualifier}::#{arm_name}' does not agree with match subject variant '#{subject_type}'",
+            node_name
+          )
+        end
 
         # OOF-KIND3: already covered (unreachable arm)
         if covered_arms.key?(arm_name)
@@ -6056,7 +6179,7 @@ module IgniterLang
           typed_body = infer_expr(arm.fetch("body"), symbol_types,
                                   type_errors, type_warnings, node_name)
           arm_types  << typed_body.fetch("resolved_type")
-          typed_arms << { "pattern" => pattern, "body" => typed_body }
+          typed_arms << { "pattern" => typed_pattern, "body" => typed_body }
           next
         end
 
@@ -6080,7 +6203,7 @@ module IgniterLang
         typed_body = infer_expr(arm.fetch("body"), arm_scope,
                                 type_errors, type_warnings, node_name)
         arm_types  << typed_body.fetch("resolved_type")
-        typed_arms << { "pattern" => pattern, "body" => typed_body }
+        typed_arms << { "pattern" => typed_pattern, "body" => typed_body }
       end
 
       # OOF-KIND1: non-exhaustive match (missing arms, no wildcard)

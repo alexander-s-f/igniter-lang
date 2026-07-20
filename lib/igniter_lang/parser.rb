@@ -3445,8 +3445,15 @@ module IgniterLang
         end
       when :ident
         advance
+        # LANG-VARIANT-ARM-QUALIFIED-CONSTRUCT-P1: the existing lexer represents
+        # `Variant::Arm` as `ident`, `colon`, `symbol_lit`. Interpret that token
+        # triplet only here (variant construction) and in match patterns; `::`
+        # remains closed for every other source position. A dotted qualifier is
+        # one lexer ident (`Module.Variant`) and is explicitly refused below.
+        if tok.value[0] =~ /[A-Z]/ && qualified_variant_arm_ahead?(requires_fields: true)
+          parse_qualified_variant_construct(tok)
         # PROP-044-P3: PascalCase ident immediately followed by { → variant construct
-        if tok.value[0] =~ /[A-Z]/ && peek_type?(:lbrace)
+        elsif tok.value[0] =~ /[A-Z]/ && peek_type?(:lbrace)
           parse_variant_construct(tok.value)
         elsif form_invocation_start?
           parse_form_invocation(tok.value)
@@ -3621,7 +3628,33 @@ module IgniterLang
 
     # ── PROP-044-P3: variant construct expression ──────────────────────────
 
-    def parse_variant_construct(arm_name)
+    def qualified_variant_arm_ahead?(requires_fields: false)
+      return false unless peek_type?(:colon) && peek(1)&.type == :symbol_lit
+
+      !requires_fields || peek(2)&.type == :lbrace
+    end
+
+    def parse_qualified_variant_construct(qualifier_token)
+      advance # first ':'; lexer has folded the second ':' into the symbol token
+      arm_token = advance
+      reject_dotted_variant_qualifier(qualifier_token, arm_token)
+      parse_variant_construct(arm_token.value, qualifier: qualifier_token.value)
+    end
+
+    def reject_dotted_variant_qualifier(qualifier_token, arm_token)
+      return unless qualifier_token.value.include?(".")
+
+      spelling = "#{qualifier_token.value}::#{arm_token.value}"
+      add_parse_error(
+        rule: "OOF-P1",
+        message: "module-qualified variant arm '#{spelling}' is not admitted; use Variant::Arm",
+        token: spelling,
+        line: qualifier_token.line,
+        col: qualifier_token.col
+      )
+    end
+
+    def parse_variant_construct(arm_name, qualifier: nil)
       expect_type!(:lbrace)
       fields = {}
       until peek_type?(:rbrace) || peek_type?(:eof)
@@ -3656,7 +3689,9 @@ module IgniterLang
         advance if peek_type?(:comma)
       end
       expect_type!(:rbrace)
-      { "kind" => "variant_construct", "arm" => arm_name, "fields" => fields }
+      result = { "kind" => "variant_construct", "arm" => arm_name, "fields" => fields }
+      result["qualifier"] = qualifier if qualifier
+      result
     end
 
     # ── PROP-044-P3: match expression ─────────────────────────────────────
@@ -3776,7 +3811,17 @@ module IgniterLang
         return { "wildcard" => true, "arm" => "_", "bindings" => [] }
       end
       if tok.type == :ident || tok.type == :keyword
-        arm_name = name_token!(%i[ident keyword])
+        qualifier_token = nil
+        first_name = name_token!(%i[ident keyword])
+        if tok.type == :ident && qualified_variant_arm_ahead?
+          qualifier_token = tok
+          advance # first ':'; second ':' belongs to the following symbol token
+          arm_token = advance
+          reject_dotted_variant_qualifier(qualifier_token, arm_token)
+          arm_name = arm_token.value
+        else
+          arm_name = first_name
+        end
         bindings = []
         if peek_type?(:lbrace)
           advance # consume {
@@ -3787,7 +3832,9 @@ module IgniterLang
           end
           expect_type!(:rbrace)
         end
-        return { "wildcard" => false, "arm" => arm_name, "bindings" => bindings }
+        result = { "wildcard" => false, "arm" => arm_name, "bindings" => bindings }
+        result["qualifier"] = qualifier_token.value if qualifier_token
+        return result
       end
       @errors << { "message" => "Expected match arm pattern, got #{tok.type}(#{tok.value})", "line" => tok.line }
       advance

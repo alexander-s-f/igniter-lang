@@ -71,6 +71,57 @@ Rule 6 Temporal:       e : Store[T]  Tt : TemporalCtx
                        ⊢  e.at(Tt) : T
 ```
 
+### 3.3a Variant-arm identity and visible-owner resolution
+
+Variant arms have variant-qualified identity. For a construction
+`Q::A { ... }`, `Q` must name a visible variant and that variant must declare
+arm `A`; when it does, `Q` is the construction's resolved variant. A qualified
+construction never consults an expected output or binding type.
+
+For compatibility sugar `A { ... }`, let `owners(A)` be the set of variants
+that are visible at the lexical use site and declare `A`. Visibility is the
+ordinary module/import visibility of the variant declaration; arms are not
+separate import units. Resolution is exact:
+
+```text
+|owners(A)| = 1  => resolve to that variant
+|owners(A)| = 0  => refuse OOF-KIND8
+|owners(A)| > 1  => refuse OOF-KIND8
+```
+
+Expected types, declaration order, and map iteration order never narrow this
+set. Candidate variant names and their `Variant::Arm` spellings are sorted
+lexicographically before diagnostics are formed. The ambiguity diagnostic is:
+
+```text
+arm 'A' is declared by visible variants V1 and V2; write V1::A { ... } or V2::A { ... }
+```
+
+For three or more owners, the variant-name list uses comma separation plus
+Oxford `and` before the final name (`V1, V2, and V3`); the qualified spelling
+list uses ` or ` between every item. Both lists retain the same sorted order.
+The zero-owner diagnostic is `no visible variant declares arm 'A';
+import the owning variant`. A qualified spelling that does not name a visible
+declared arm is refused as `qualified arm 'Q::A' does not name a visible
+variant arm`. None of these diagnostics may enumerate or otherwise reveal a
+declaration that is outside the use site's visibility set.
+
+This owner-set law applies to user-declared variant arms. The non-admitted
+PascalCase spellings `Some { ... }`, `None { ... }`, `Ok { ... }`, and
+`Err { ... }` remain governed by their existing sealed-constructor refusal;
+the admitted Option/Result source constructors remain `some`, `none`, `ok`,
+and `err`.
+
+A match subject remains the pattern-resolution authority. A bare pattern arm
+uses the subject variant exactly as before. For a qualified pattern `Q::A`,
+`Q` must equal the known subject variant; otherwise typechecking refuses
+`OOF-KIND9: qualified pattern 'Q::A' does not agree with match subject variant
+'S'`. After agreement, the existing arm-membership, binding, duplicate-arm,
+and exhaustiveness rules apply unchanged.
+
+This law changes no variant, match, SemanticIR, or VM carrier. It is landed by
+LANG-VARIANT-ARM-QUALIFIED-CONSTRUCT-P1 (2026-07-20).
+
 ### Rule IF-v0: Expression-Level if_expr (R190 Internal Compiler Support)
 
 ```
