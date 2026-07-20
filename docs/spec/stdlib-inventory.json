@@ -1,8 +1,8 @@
 {
   "kind": "stdlib_inventory",
   "format_version": "v0",
-  "stdlib_surface_digest": "46c49b2ffe77560b9219eef0f964cdb0e0cdff521be45d781fa186a0fddbc21a",
-  "note": "Normatively referenced by Ch8. Digest is computed from canonical re-serialization of entries sorted by canonical_name with entry_digest fields stripped — never from raw file bytes. P3 proof verifies determinism. P5 adds stdlib.collection.map + stdlib.collection.filter entries and updates stdlib.collection.count proof_lineage. CONSTRUCT-P1 adds stdlib.decimal.decimal (explicit Decimal constructor) and recomputes the digest. FLATMAP-P5 adds stdlib.collection.flat_map and recomputes the digest. PREDICATE-OPS-P4 adds stdlib.collection.find/any/all and recomputes the digest. LANG-STDLIB-NUMERIC-TEXT-CONVERSION-P1 adds stdlib.integer.parse_int/int_to_text/modulo (category numeric) and recomputes the digest. LANG-STDLIB-TEXT-ESCAPE-DELIMITED-P2 adds stdlib.text.encode_delimited/decode_delimited (escape-aware delimited row codec; decode -> Option[Collection[Text]]) and recomputes the digest. LANG-STDLIB-COLLECTION-AT-INVENTORY-P5 adds stdlib.collection.at (Collection[T] x Integer -> Option[T], zero-based, total) and recomputes the digest. LANG-STDLIB-TEXT-JOIN-P1 adds stdlib.text.join (Collection[Text] x Text -> Text, inverse of split) and recomputes the digest. LANG-STDLIB-WIRE-FRAME-CODEC-P2 adds stdlib.text.encode_frame (Text -> Text) and stdlib.text.decode_frame (Text -> Option[FrameDecode], length-prefixed netstring frame codec) and recomputes the digest. LANG-STDLIB-COLLECTION-SORT-BY-P3 adds stdlib.collection.sort_by (Collection[T] x (T -> K) -> Collection[T], stable ascending, K in {Integer, Text, Decimal}, OOF-COL11 fail-closed on Float and every other key shape) and recomputes the digest. LANG-STDLIB-MAP-RUNTIME-P1 makes stdlib.map.empty/stdlib.map.from_pairs ACTUALLY EXECUTABLE in the VM (bytecode OP_CALL + eval_ast HOF-dispatch, shared pair-validation/last-input-wins helper) — both entries previously claimed `production-implemented` with no live VM constructor arm (readers only); reconciles their signatures to Map[String, V] (v0 keys are exactly String, never a generic K), fixes stdlib.map.get's stale Option[V]/totality/diagnostics fields, and documents the LAST-INPUT-WINS duplicate-key law and Pair{first,second} shape; recomputes the digest. LANG-STDLIB-INVENTORY-QUALIFIED-IMPORT-SURFACE-P2 adds the additive import_surface field (absent/default = bare_alias, preserving every existing row's behavior) and registers the 13 canon Ch8 §8.11 stdlib.bytes.* pure operations as qualified_only — discoverable via inventory/help/MCP, callable only through qualified names, bare/named import refused (OOF-IMP3), compat aliases text_to_bytes/bytes_to_text recorded but not importable; capability/effect modules (stdlib.IO.*, stdlib.net.*) deliberately stay OUT of this canon inventory; recomputes the digest. LANG-STDLIB-COLLECTION-TAKE-CANON-P5 adds stdlib.collection.take (Collection[T] x Integer -> Collection[T], prefix-bounded reader, n<=0 -> [], n>=count(xs) -> all input, OOF-COL12 fail-closed on a non-Integer/non-lambda second argument) and recomputes the digest. LANG-STDLIB-MAP-PUT-P2 adds stdlib.map.put (immutable Map[String,V] update, absent insert/existing overwrite, last-write-wins, sorted-key JSON, O(n) carrier copy) and recomputes the digest.",
+  "stdlib_surface_digest": "cb2280208aa8bf25112e155b6cbd33dddd85dfacbda214df822cbeade2c4fb4e",
+  "note": "Normatively referenced by Ch8. Digest is computed from canonical re-serialization of entries sorted by canonical_name with entry_digest fields stripped — never from raw file bytes. P3 proof verifies determinism. P5 adds stdlib.collection.map + stdlib.collection.filter entries and updates stdlib.collection.count proof_lineage. CONSTRUCT-P1 adds stdlib.decimal.decimal (explicit Decimal constructor) and recomputes the digest. FLATMAP-P5 adds stdlib.collection.flat_map and recomputes the digest. PREDICATE-OPS-P4 adds stdlib.collection.find/any/all and recomputes the digest. LANG-STDLIB-NUMERIC-TEXT-CONVERSION-P1 adds stdlib.integer.parse_int/int_to_text/modulo (category numeric) and recomputes the digest. LANG-STDLIB-TEXT-ESCAPE-DELIMITED-P2 adds stdlib.text.encode_delimited/decode_delimited (escape-aware delimited row codec; decode -> Option[Collection[Text]]) and recomputes the digest. LANG-STDLIB-COLLECTION-AT-INVENTORY-P5 adds stdlib.collection.at (Collection[T] x Integer -> Option[T], zero-based, total) and recomputes the digest. LANG-STDLIB-TEXT-JOIN-P1 adds stdlib.text.join (Collection[Text] x Text -> Text, inverse of split) and recomputes the digest. LANG-STDLIB-WIRE-FRAME-CODEC-P2 adds stdlib.text.encode_frame (Text -> Text) and stdlib.text.decode_frame (Text -> Option[FrameDecode], length-prefixed netstring frame codec) and recomputes the digest. LANG-STDLIB-COLLECTION-SORT-BY-P3 adds stdlib.collection.sort_by (Collection[T] x (T -> K) -> Collection[T], stable ascending, K in {Integer, Text, Decimal}, OOF-COL11 fail-closed on Float and every other key shape) and recomputes the digest. LANG-STDLIB-MAP-RUNTIME-P1 makes stdlib.map.empty/stdlib.map.from_pairs ACTUALLY EXECUTABLE in the VM (bytecode OP_CALL + eval_ast HOF-dispatch, shared pair-validation/last-input-wins helper) — both entries previously claimed `production-implemented` with no live VM constructor arm (readers only); reconciles their signatures to Map[String, V] (v0 keys are exactly String, never a generic K), fixes stdlib.map.get's stale Option[V]/totality/diagnostics fields, and documents the LAST-INPUT-WINS duplicate-key law and Pair{first,second} shape; recomputes the digest. LANG-STDLIB-INVENTORY-QUALIFIED-IMPORT-SURFACE-P2 adds the additive import_surface field (absent/default = bare_alias, preserving every existing row's behavior) and registers the 13 canon Ch8 §8.11 stdlib.bytes.* pure operations as qualified_only — discoverable via inventory/help/MCP, callable only through qualified names, bare/named import refused (OOF-IMP3), compat aliases text_to_bytes/bytes_to_text recorded but not importable; capability/effect modules (stdlib.IO.*, stdlib.net.*) deliberately stay OUT of this canon inventory; recomputes the digest. LANG-STDLIB-COLLECTION-TAKE-CANON-P5 adds stdlib.collection.take (Collection[T] x Integer -> Collection[T], prefix-bounded reader, n<=0 -> [], n>=count(xs) -> all input, OOF-COL12 fail-closed on a non-Integer/non-lambda second argument) and recomputes the digest. LANG-STDLIB-MAP-PUT-P2 adds stdlib.map.put (immutable Map[String,V] update, absent insert/existing overwrite, last-write-wins, sorted-key JSON, O(n) carrier copy) and recomputes the digest. LANG-STDLIB-BYTES-HEX-CODEC-P1 adds stdlib.bytes.encode_hex (Bytes -> Text, total, canonical lower-case hex) and stdlib.bytes.decode_hex (Text -> Result[Bytes, BytesError], even-length 0-9/a-f/A-F only; invalid_length/invalid_hex fail-closed as data) as the explicit application-level crossing named by OOF-BY1/§8.11.4; both qualified_only, both production-implemented; base64 remains deferred; recomputes the digest.",
   "entries": [
     {
       "canonical_name": "stdlib.text.byte_length",
@@ -3094,6 +3094,85 @@
         "stdlib.bytes.unpack_i16_le(<FF FF>) -> ok(-1)"
       ],
       "compatibility_note": "Qualified-only module surface (Ch8 §8.11.6): callable ONLY as the qualified name; bare/named import is refused (OOF-IMP3); the two compat aliases type-and-emit as their canonical ops but are not importable. Carrier-invariant: no operation exposes the internal byte representation; implicit Bytes at contract ports is refused by OOF-BY1 — cross the host boundary via explicit codecs or the versioned $bytes v1 host envelope. Endian/width naming law as pack_u16_le.",
+      "owner_surface": "Ch8 §8.11",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.bytes.encode_hex",
+      "semantic_ir_name": "stdlib.bytes.encode_hex",
+      "legacy_sir": null,
+      "aliases": [],
+      "category": "bytes",
+      "lifecycle_status": "production-implemented",
+      "semantic_stability": "design-locked",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "total",
+      "type_params": [],
+      "input_signature": [
+        "Bytes"
+      ],
+      "output_signature": "Text",
+      "diagnostics": [
+        "OOF-TM1",
+        "OOF-TY0",
+        "OOF-BY1"
+      ],
+      "failure_behavior": "arity OOF-TM1; non-Bytes argument OOF-TY0 at typecheck; TOTAL at runtime — emits canonical lower-case ASCII hex, exactly two digits per octet, empty Bytes encodes to empty Text",
+      "authority_surface": "none",
+      "import_surface": "qualified_only",
+      "proof_lineage": [
+        "LANG-STDLIB-BYTES-CANON-ADMISSION-P7 — prior canon admission of the 13-op qualified Bytes algebra this codec pair extends",
+        "LANG-STDLIB-BYTES-HEX-CODEC-P1 — explicit Bytes<->Text hex codec: Ch8 §8.11.2 normative signature, Ruby/Rust typing+SIR parity, shared VM helper (bytecode + eval_ast/HOF identical), replaces the stale OOF-BY1/§8.11.4 base64-only crossing promise"
+      ],
+      "examples": [
+        "stdlib.bytes.encode_hex(stdlib.bytes.from_octets([0, 1, 15, 16, 127, 128, 254, 255]).ok) -> \"00010f107f80feff\"",
+        "stdlib.bytes.encode_hex(stdlib.bytes.from_text(\"\")) -> \"\""
+      ],
+      "compatibility_note": "Qualified-only module surface (Ch8 §8.11.6): callable ONLY as the qualified name; bare/named import is refused (OOF-IMP3); no compat alias. Carrier-invariant: does not expose the internal byte representation, only its canonical hex Text rendering. Paired with stdlib.bytes.decode_hex as the explicit application-level crossing named by OOF-BY1/§8.11.4 — re-encoding any decode_hex-accepted input reproduces this canonical lower-case form. Base64 remains deferred (Ch8 §8.11.6 held boundary).",
+      "owner_surface": "Ch8 §8.11",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.bytes.decode_hex",
+      "semantic_ir_name": "stdlib.bytes.decode_hex",
+      "legacy_sir": null,
+      "aliases": [],
+      "category": "bytes",
+      "lifecycle_status": "production-implemented",
+      "semantic_stability": "design-locked",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "total",
+      "type_params": [],
+      "input_signature": [
+        "Text"
+      ],
+      "output_signature": "Result[Bytes, BytesError]",
+      "diagnostics": [
+        "OOF-TM1",
+        "OOF-TY0",
+        "OOF-BY1"
+      ],
+      "failure_behavior": "operational failure is err DATA carrying a sealed BytesError {error_type, message} — never a VM abort; odd-length input returns err {error_type: \"invalid_length\"}; a non-hex character, `0x` prefix, whitespace, or separator returns err {error_type: \"invalid_hex\"}; malformed input never partially succeeds; accepts both lower- and upper-case 0-9/a-f/A-F, byte-identical either way",
+      "authority_surface": "none",
+      "import_surface": "qualified_only",
+      "proof_lineage": [
+        "LANG-STDLIB-BYTES-CANON-ADMISSION-P7 — prior canon admission of the 13-op qualified Bytes algebra this codec pair extends",
+        "LANG-STDLIB-BYTES-HEX-CODEC-P1 — explicit Bytes<->Text hex codec: Ch8 §8.11.2 normative signature, Ruby/Rust typing+SIR parity, shared VM helper (bytecode + eval_ast/HOF identical), replaces the stale OOF-BY1/§8.11.4 base64-only crossing promise"
+      ],
+      "examples": [
+        "stdlib.bytes.decode_hex(\"00010f107f80feff\") -> ok(<00 01 0f 10 7f 80 fe ff>)",
+        "stdlib.bytes.decode_hex(\"0\") -> err invalid_length",
+        "stdlib.bytes.decode_hex(\"0x00\") -> err invalid_hex"
+      ],
+      "compatibility_note": "Qualified-only module surface (Ch8 §8.11.6): callable ONLY as the qualified name; bare/named import is refused (OOF-IMP3); no compat alias. Carrier-invariant: no operation exposes the internal byte representation; implicit Bytes at contract ports is refused by OOF-BY1 — this op IS the explicit host-boundary crossing named by §8.11.4. Strict grammar: even-length ASCII hex using 0-9/a-f/A-F only — no `0x` prefix, no whitespace, no separators; re-encoding via encode_hex always yields the canonical lower-case form.",
       "owner_surface": "Ch8 §8.11",
       "entry_digest": null
     }

@@ -196,6 +196,11 @@ module IgniterLang
       "stdlib.bytes.unpack_u16_le" => { args: %w[B],     ret: %w[Integer BytesError] },
       "stdlib.bytes.unpack_u32_le" => { args: %w[B],     ret: %w[Integer BytesError] },
       "stdlib.bytes.unpack_i16_le" => { args: %w[B],     ret: %w[Integer BytesError] },
+      # LANG-STDLIB-BYTES-HEX-CODEC-P1: explicit Bytes<->Text hex codec — the application-level
+      # crossing named by OOF-BY1/Ch8 §8.11.4. encode_hex is total; decode_hex is Result-shaped
+      # (invalid_length/invalid_hex fail-closed as BytesError data, never a VM abort).
+      "stdlib.bytes.encode_hex"    => { args: %w[B],     ret: "Text" },
+      "stdlib.bytes.decode_hex"    => { args: %w[S],     ret: %w[Bytes BytesError] },
     }.freeze
 
     # ── LANG-TYPE-REF-UNRESOLVED-FAIL-CLOSED-P1: contract port type-reference registry ──
@@ -751,7 +756,8 @@ module IgniterLang
       # LANG-STDLIB-BYTES-CANON-ADMISSION-P7 Stage 1 (seal): a contract INPUT or OUTPUT whose
       # declared type contains `Bytes` — directly or nested in Result/Collection/Option params or a
       # named record's fields — is refused. Bytes may not cross the host boundary implicitly; the
-      # fix is an explicit codec (encode_hex/encode_base64 -> Text) or the versioned `$bytes` host
+      # fix is an explicit codec (LANG-STDLIB-BYTES-HEX-CODEC-P1: stdlib.bytes.encode_hex /
+      # stdlib.bytes.decode_hex -> Text; base64 remains deferred) or the versioned `$bytes` host
       # envelope. Mirrors the live Rust seal exactly (same rule id + message); intermediate
       # computes keep the full Bytes algebra — only the ports are sealed.
       all_decls.each do |decl|

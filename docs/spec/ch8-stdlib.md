@@ -347,7 +347,7 @@ depend on the internal carrier; every admitted operation is carrier-invariant.
 ### 8.11.2 Qualified pure algebra (exact signatures)
 
 `stdlib.bytes.*` is a qualified language module: qualified names, never bare-imported.
-Since LANG-STDLIB-INVENTORY-QUALIFIED-IMPORT-SURFACE-P2 the 13 operations ARE canon inventory
+Since LANG-STDLIB-INVENTORY-QUALIFIED-IMPORT-SURFACE-P2 the 15 operations ARE canon inventory
 entries with `import_surface: "qualified_only"` — discoverable via inventory/help/MCP, callable
 only through their qualified names; a bare/named import is refused (OOF-IMP3). Capability/effect
 modules (`stdlib.IO.*`, `stdlib.net.*`) remain OUT of the inventory (see 8.11.6):
@@ -366,11 +366,13 @@ stdlib.bytes.pack_i16_le(Integer)              -> Result[Bytes, BytesError]    -
 stdlib.bytes.unpack_u16_le(Bytes)              -> Result[Integer, BytesError]  -- exactly 2 bytes
 stdlib.bytes.unpack_u32_le(Bytes)              -> Result[Integer, BytesError]  -- exactly 4 bytes
 stdlib.bytes.unpack_i16_le(Bytes)              -> Result[Integer, BytesError]  -- exactly 2 bytes
+stdlib.bytes.encode_hex(Bytes)                 -> Text                        -- total, canonical lower-case hex, 2 digits/octet
+stdlib.bytes.decode_hex(Text)                  -> Result[Bytes, BytesError]   -- even-length 0-9/a-f/A-F only; rejects 0x/whitespace/separators
 ```
 
 `BytesError` is a sealed error record `{ error_type : String, message : String }` (e.g.
-`invalid_range`, `octet_out_of_range`, `invalid_utf8`, `invalid_length`). Operational failures are
-**err data, never a VM abort**.
+`invalid_range`, `octet_out_of_range`, `invalid_utf8`, `invalid_length`, `invalid_hex`).
+Operational failures are **err data, never a VM abort**.
 
 Bare `text_to_bytes` / `bytes_to_text` are thin compat aliases; both toolchains type AND emit them
 as `stdlib.bytes.from_text` / `stdlib.bytes.to_text`.
@@ -407,8 +409,9 @@ This is a **host serialization contract, not language semantics**: default JSON 
 never emits it, default deserialization never decodes it (no silent resurrection), and no
 implicit encoder exists. v1 requires exact outer and inner key sets, `version == 1`,
 `encoding == "base64"`, and canonical base64 data; anything else fails closed.
-Application-level crossings use the explicit text codecs
-(`encode_hex` / `encode_base64` → `Text`) instead.
+Application-level crossings use the explicit text codec — `stdlib.bytes.encode_hex` /
+`stdlib.bytes.decode_hex` (`Bytes <-> Text`, canonical lower-case hex, LANG-STDLIB-BYTES-HEX-CODEC-P1)
+— instead. A base64 text codec remains deferred (8.11.6).
 
 ### 8.11.5 Dual-toolchain responsibilities
 
@@ -422,10 +425,11 @@ seal. **Execution is VM authority** — the canon toolchain has no Bytes runtime
 | Item | Status |
 |------|--------|
 | Positional IO (`read_at`/`write_at`/`file_size`) | NOT admitted — lab capability surface |
-| `stdlib-inventory.json` entries for qualified modules | RESOLVED for pure Bytes (13 rows, `import_surface: "qualified_only"`, LANG-STDLIB-INVENTORY-QUALIFIED-IMPORT-SURFACE-P2); capability/effect modules (`stdlib.IO.*`, `stdlib.net.*`) stay OUT — the separately-owned capability catalog remains a named follow-up |
+| `stdlib-inventory.json` entries for qualified modules | RESOLVED for pure Bytes (15 rows, `import_surface: "qualified_only"`, LANG-STDLIB-INVENTORY-QUALIFIED-IMPORT-SURFACE-P2, LANG-STDLIB-BYTES-HEX-CODEC-P1); capability/effect modules (`stdlib.IO.*`, `stdlib.net.*`) stay OUT — the separately-owned capability catalog remains a named follow-up |
 | `Bytes[N]` fixed-length refinement | absent; future refinement over dynamic `Bytes`, kept compatible, no dependent types pretended |
 | `_be` / native-endian families | closed until demanded; naming law fixed above |
-| hex/base64 as identity or default representation | closed — explicit codecs only |
+| hex as identity or default representation | closed — `encode_hex`/`decode_hex` (LANG-STDLIB-BYTES-HEX-CODEC-P1) are explicit codecs, not a default representation |
+| base64 text codec | deferred — `$bytes` v1 host envelope already uses base64 internally; no `encode_base64`/`decode_base64` language-level codec exists yet |
 | ordering / sorting over Bytes | closed — no total-order claim |
 | streaming / mmap / compression / crypto | closed |
 
