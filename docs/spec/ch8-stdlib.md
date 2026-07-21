@@ -475,10 +475,16 @@ The `Float` variant of the message additionally routes to the fix: convert to `D
 
 ### 8.12.3 Closed (v0)
 
-Comparator lambdas, descending or multi-key ordering, `Float` admission as a key, `Bool`/`Option`/
+Comparator lambdas, multi-key ordering, `Float` admission as a key, `Bool`/`Option`/
 record/variant/`Bytes` keys, `Map` construction, `index_by`, `group_by`, `distinct_by`, relational
 joins, DB/query-engine ordering, locale collation, parallel or lazy collections, mutable
 collections, and any relaxation of the existing collection/step/depth/memory budgets.
+
+> **Narrowed 2026-07-21** (LANG-STDLIB-COLLECTION-SORT-BY-DESC-PROP-P1): this list originally
+> also closed "descending ordering". That single item is narrowed by §8.14 — stable descending
+> ordering is admitted as the separate sibling operation `sort_by_desc`, with its own section.
+> `sort_by` itself is unchanged: it remains ascending-only, and comparator lambdas, runtime
+> direction parameters, and multi-key ordering remain closed for BOTH operations.
 
 ### 8.12.4 Dual-toolchain responsibilities
 
@@ -546,3 +552,98 @@ previously shared a `"filter" | "take"` typechecker arm that gave `take` no arit
 of its own — it now has a dedicated arm, and the emitter's bare-name qualify lists were extended so
 `take` reaches the SIR as `stdlib.collection.take` (mirroring `sort_by`, not `at`'s deliberate bare
 choice).
+
+## 8.14 Collection `sort_by_desc` — stable descending total-scalar ordering (LANG-STDLIB-COLLECTION-SORT-BY-DESC-PROP-P1, 2026-07-21)
+
+Canon-ACCEPTED, spec-first: unlike §8.12/§8.13, this section is written at ADMISSION time, before
+any toolchain implements the operation. Nothing may claim `sort_by_desc` executes until the named
+implementation cards land (§8.14.5); until then the operation's lifecycle is canon-accepted /
+not-yet-implemented, and calling it fails as an unknown function in both toolchains. Second slice
+of the ordering cluster named by `lang-stdlib-collection-order-group-readiness-p2-v0.md`; admitted
+on the measured evidence of `lang-stdlib-collection-reverse-prepend-readiness-p1-v0.md`
+(igniter-lab `lab-docs/lang/`).
+
+### 8.14.1 Signature and laws
+
+```
+sort_by_desc(xs: Collection[T], key_fn: T -> K) -> Collection[T]
+```
+
+- **Stable DESCENDING sort** by the extracted key; equal keys preserve authored/input order
+  exactly — the SAME tie discipline as ascending `sort_by`, NOT its mirror image (§8.14.2).
+- Element type is **unchanged** — the result is `Collection[T]`, the ORIGINAL element type, never
+  `Collection[K]` (sort_by_desc reorders, it does not transform elements).
+- `K` is restricted to **exactly** `Integer`, `Text`, or `Decimal` — the same three total scalar
+  orders as `sort_by` (§8.12.1). Descending is defined as the strict inversion of the SAME order
+  relation: Integer numeric inverted; Text byte/codepoint lexicographic inverted (no locale
+  collation); Decimal `cmp_decimal` scale-normalized comparison inverted. Descending-by-`Text` is
+  therefore a first-class capability, NOT an arithmetic key trick — no `BIG - key` inversion
+  exists for `Text`, which is one of the two measured admission drivers.
+- The key extractor runs **exactly once per input item** (decorate-sort-undecorate); errors from
+  the extractor propagate deterministically in input order (first-in-input-order failure) —
+  identical to `sort_by`.
+- Empty and singleton collections return unchanged with contextual element type preserved.
+- Pure, deterministic, no mutation of the input collection, no authority surface, and the SAME
+  collection/step/depth/memory budget posture as `sort_by` — one stable merge sort with the
+  comparison inverted charges exactly what the ascending sort charges.
+
+### 8.14.2 The tie non-law (normative)
+
+`sort_by_desc(xs, k)` is explicitly **NOT** `reverse-of(sort_by(xs, k))` whenever any tie group
+has two or more members. The measured canonical counterexample (readiness packet §2.1):
+
+```
+items                                = [(k=10,seq=1) (k=5,seq=2) (k=10,seq=3) (k=5,seq=4) (k=7,seq=5)]
+sort_by(items, it -> it.key)         → keys [ 5, 5, 7,10,10]  seq [2,4,5,1,3]   (stable ascending)
+element-reversal of that result      → keys [10,10, 7, 5, 5]  seq [3,1,5,4,2]   (ties ANTI-stable)
+sort_by_desc(items, it -> it.key)    → keys [10,10, 7, 5, 5]  seq [1,3,5,2,4]   (ties stable)
+```
+
+Both descending routes produce IDENTICAL key sequences and DIFFERENT element order — the
+difference is invisible in the key column and only shows in the payload. What IS a law is the
+keys-only duality: `map(sort_by_desc(xs,k), k)` equals the element-reversal of
+`map(sort_by(xs,k), k)`. Implementations MUST realize descending order by inverting the key
+comparison inside the same stable merge (`Less`/`Greater` swapped, `Equal` unchanged) — NEVER by
+reversing an ascending result, which silently violates the tie law behind an identical key column.
+
+### 8.14.3 Diagnostics — `OOF-COL11` reused
+
+Unsupported key shapes (`Float`, `Bool`, `Option`, records, variants, `Map`, `Bytes`, nested
+`Collection`) are refused fail-closed **at typecheck** by the EXISTING diagnostic `OOF-COL11` —
+the key-type law is shared with `sort_by`, so no competing code is minted:
+
+```
+sort_by_desc key must have a total order; expected Integer, Text, or Decimal
+```
+
+The `Float` variant of the message routes to the fix (convert to `Decimal` or `Integer`), exactly
+as in §8.12.2. `OOF-COL1` (arity) and `OOF-COL2` (non-Collection first argument) are shared with
+the rest of the collection HOF family. `OOF-COL10` (`at`) and `OOF-COL12` (`take`) are not reused.
+
+### 8.14.4 Closed (v0)
+
+Comparator lambdas, runtime string/enum direction parameters (a direction-aware `sort_by` may
+later be defined only as sugar OVER this operation), multi-key ordering, `Float` admission as a
+key, any `_asc` alias for `sort_by`, `reverse`, `prepend`, `min_by`/`max_by`, `Map` construction,
+`index_by`, `group_by`, `distinct_by`, locale collation, parallel or lazy collections, mutable
+collections, and any relaxation of the existing collection/step/depth/memory budgets.
+
+### 8.14.5 Dual-toolchain responsibilities and implementation cards
+
+Same ownership boundary as §8.12.4: Ruby/canon owns typechecker parity (a dedicated
+`infer_sort_by_desc_call` mirroring `infer_sort_by_call`, qualified
+`stdlib.collection.sort_by_desc`, `OOF-COL11` message parity, element-type-preserved result
+discipline) and the `stdlib-inventory.json` entry; **execution is Rust VM authority** — the
+bytecode `OP_CALL` arm and BOTH `eval_ast` HOF dispatch sites must share the existing native
+stable merge sort (`compare_sort_by_keys` / `stable_sort_by_key_pairs`) with the comparison
+inverted per §8.14.2. Implementation sequence (named at admission; each gates the next):
+
+```text
+LANG-STDLIB-COLLECTION-SORT-BY-DESC-P2   canon Ruby typing + proof suite (incl. a dedicated
+                                         tie-stability case reproducing §8.14.2)
+LANG-STDLIB-COLLECTION-SORT-BY-DESC-P3   Rust compiler parity + VM execution (bytecode arm +
+                                         both eval_ast sites; eval_ast<->bytecode parity;
+                                         100k-element budget proof mirroring sort_by's)
+LANG-STDLIB-COLLECTION-SORT-BY-DESC-P4   stdlib-inventory.json row + surface-digest recompute +
+                                         runtime_stdlib_op_catalog() census sync
+```
