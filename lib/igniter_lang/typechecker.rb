@@ -2611,15 +2611,30 @@ module IgniterLang
       #     comparisons), and Integer. Equality is owned by the shared ==/!=
       #     compatibility arm below.
       if left_name == right_name && %w[Integer Float Decimal].include?(left_name)
+        # LANG-FLOAT-OPERATOR-FAMILY-P2: ORDERING identity is monomorphic BY OPERAND TYPE
+        # (ch8 §8.5's post-resolution law). The comment above used to say the nominal
+        # stdlib.integer.* name "is fine because the VM dispatches on value type" — that was
+        # true only for the operators Rust never materializes as calls. For comparison the
+        # emitted call reached the VM's Integer-only arm and failed
+        # (`Expected Integer, got: Float(1.5)`, identically for Decimal).
+        #
+        # Arithmetic keeps its existing integer-named identity: it is outside this card's
+        # slice (Fixed Law 5) and changing it here would break Ruby/Rust SIR parity in the
+        # other direction, since Rust leaves `+ - * /` as `binary_op`.
+        numeric_module = case left_name
+                         when "Float"   then "stdlib.float"
+                         when "Decimal" then "stdlib.decimal"
+                         else "stdlib.integer"
+                         end
         case op
         when "+"  then return ["stdlib.integer.add", left.dup]
         when "-"  then return ["stdlib.integer.sub", left.dup]
         when "*"  then return ["stdlib.integer.mul", left.dup]
         when "/"  then return ["stdlib.integer.div", left.dup]
-        when "<"  then return ["stdlib.integer.lt",  type_ir("Bool")]
-        when "<=" then return ["stdlib.integer.lte", type_ir("Bool")]
-        when ">"  then return ["stdlib.integer.gt",  type_ir("Bool")]
-        when ">=" then return ["stdlib.integer.gte", type_ir("Bool")]
+        when "<"  then return ["#{numeric_module}.lt",  type_ir("Bool")]
+        when "<=" then return ["#{numeric_module}.lte", type_ir("Bool")]
+        when ">"  then return ["#{numeric_module}.gt",  type_ir("Bool")]
+        when ">=" then return ["#{numeric_module}.gte", type_ir("Bool")]
         end
       end
 
@@ -6347,12 +6362,26 @@ module IgniterLang
         typed_expr("call", type_ir("Bool"), operand.fetch("deps"),
                    "fn" => "stdlib.primitive.not", "args" => [operand])
       when "-"
-        unless op_type == "Unknown" || op_type == "Integer"
+        # LANG-FLOAT-OPERATOR-FAMILY-P2: unary negation is admitted for the whole homogeneous
+        # numeric family, with a monomorphic identity per operand type. The result type is the
+        # OPERAND's own resolved type, which is what preserves `Decimal[2]`'s scale — a
+        # re-derived bare `type_ir("Decimal")` would drop it.
+        case op_type
+        when "Float"
+          typed_expr("call", operand.fetch("resolved_type"), operand.fetch("deps"),
+                     "fn" => "stdlib.float.neg", "args" => [operand])
+        when "Decimal"
+          typed_expr("call", operand.fetch("resolved_type"), operand.fetch("deps"),
+                     "fn" => "stdlib.decimal.neg", "args" => [operand])
+        when "Integer", "Unknown"
+          typed_expr("call", type_ir("Integer"), operand.fetch("deps"),
+                     "fn" => "stdlib.integer.neg", "args" => [operand])
+        else
           type_errors << oof("OOF-TY0",
             "stdlib.integer.neg: expected Integer operand, got #{op_type}", node_name)
+          typed_expr("call", type_ir("Integer"), operand.fetch("deps"),
+                     "fn" => "stdlib.integer.neg", "args" => [operand])
         end
-        typed_expr("call", type_ir("Integer"), operand.fetch("deps"),
-                   "fn" => "stdlib.integer.neg", "args" => [operand])
       else
         type_errors << oof("OOF-TY0", "Unsupported unary operator: #{op}", node_name)
         typed_expr("call", type_ir("Unknown"), operand.fetch("deps"),
