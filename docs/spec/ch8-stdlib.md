@@ -556,10 +556,11 @@ choice).
 ## 8.14 Collection `sort_by_desc` — stable descending total-scalar ordering (LANG-STDLIB-COLLECTION-SORT-BY-DESC-PROP-P1, 2026-07-21)
 
 Canon-ACCEPTED, spec-first: unlike §8.12/§8.13, this section was written at ADMISSION time, before
-any toolchain implemented the operation. Nothing may claim `sort_by_desc` EXECUTES until the named
-implementation cards land (§8.14.5). Per-toolchain state: canon Ruby types and lowers the call as
-of `LANG-STDLIB-COLLECTION-SORT-BY-DESC-P2` (2026-07-21); the Rust compiler still refuses it as an
-unknown function and NO runtime executes it until P3; the inventory row waits for P4. Second slice
+any toolchain implemented the operation. Per-toolchain state: canon Ruby types and lowers the call
+as of `LANG-STDLIB-COLLECTION-SORT-BY-DESC-P2` (2026-07-21); Rust compiler typing/lowering and VM
+bytecode/eval-AST execution landed in `LANG-STDLIB-COLLECTION-SORT-BY-DESC-P3` (2026-07-22), with
+the normative stable-tie specimen and existing ceilings executable-proven; the inventory row and
+generated Surface Catalog still wait for P4. Second slice
 of the ordering cluster named by `lang-stdlib-collection-order-group-readiness-p2-v0.md`; admitted
 on the measured evidence of `lang-stdlib-collection-reverse-prepend-readiness-p1-v0.md`
 (igniter-lab `lab-docs/lang/`).
@@ -635,7 +636,7 @@ Same ownership boundary as §8.12.4: Ruby/canon owns typechecker parity (a dedic
 `infer_sort_by_desc_call` mirroring `infer_sort_by_call`, qualified
 `stdlib.collection.sort_by_desc`, `OOF-COL11` message parity, element-type-preserved result
 discipline) and the `stdlib-inventory.json` entry; **execution is Rust VM authority** — the
-bytecode `OP_CALL` arm and BOTH `eval_ast` HOF dispatch sites must share the existing native
+bytecode `OP_CALL` arm and the live nested `eval_ast` HOF dispatcher share the existing native
 stable merge sort (`compare_sort_by_keys` / `stable_sort_by_key_pairs`) with the comparison
 inverted per §8.14.2. Implementation sequence (named at admission; each gates the next):
 
