@@ -2621,20 +2621,35 @@ module IgniterLang
         # Arithmetic keeps its existing integer-named identity: it is outside this card's
         # slice (Fixed Law 5) and changing it here would break Ruby/Rust SIR parity in the
         # other direction, since Rust leaves `+ - * /` as `binary_op`.
-        numeric_module = case left_name
-                         when "Float"   then "stdlib.float"
-                         when "Decimal" then "stdlib.decimal"
-                         else "stdlib.integer"
-                         end
+        # LANG-NUMERIC-LAMBDA-OPERATOR-IDENTITY-P3: identities are spelled as LITERALS, not built
+        # by interpolation — the generated Surface Catalog discovers canon support by scanning
+        # this file for the literal identity, so an interpolated name would publish a row the
+        # catalog reports as `not_observed` on the ruby_compiler plane even though canon emits it.
+        ordering_identity =
+          case [left_name, op]
+          when %w[Float <]    then "stdlib.float.lt"
+          when %w[Float <=]   then "stdlib.float.lte"
+          when %w[Float >]    then "stdlib.float.gt"
+          when %w[Float >=]   then "stdlib.float.gte"
+          when %w[Decimal <]  then "stdlib.decimal.lt"
+          when %w[Decimal <=] then "stdlib.decimal.lte"
+          when %w[Decimal >]  then "stdlib.decimal.gt"
+          when %w[Decimal >=] then "stdlib.decimal.gte"
+          else
+            case op
+            when "<"  then "stdlib.integer.lt"
+            when "<=" then "stdlib.integer.lte"
+            when ">"  then "stdlib.integer.gt"
+            when ">=" then "stdlib.integer.gte"
+            end
+          end
+        return [ordering_identity, type_ir("Bool")] if ordering_identity
+
         case op
         when "+"  then return ["stdlib.integer.add", left.dup]
         when "-"  then return ["stdlib.integer.sub", left.dup]
         when "*"  then return ["stdlib.integer.mul", left.dup]
         when "/"  then return ["stdlib.integer.div", left.dup]
-        when "<"  then return ["#{numeric_module}.lt",  type_ir("Bool")]
-        when "<=" then return ["#{numeric_module}.lte", type_ir("Bool")]
-        when ">"  then return ["#{numeric_module}.gt",  type_ir("Bool")]
-        when ">=" then return ["#{numeric_module}.gte", type_ir("Bool")]
         end
       end
 

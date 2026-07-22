@@ -1,8 +1,8 @@
 {
   "kind": "stdlib_inventory",
   "format_version": "v0",
-  "stdlib_surface_digest": "ad7d22a304694722584588b43745612b59a9cb4f7b019b1c4c87076834b91a22",
-  "note": "Normatively referenced by Ch8. Digest is computed from canonical re-serialization of entries sorted by canonical_name with entry_digest fields stripped — never from raw file bytes. P3 proof verifies determinism. P5 adds stdlib.collection.map + stdlib.collection.filter entries and updates stdlib.collection.count proof_lineage. CONSTRUCT-P1 adds stdlib.decimal.decimal (explicit Decimal constructor) and recomputes the digest. FLATMAP-P5 adds stdlib.collection.flat_map and recomputes the digest. PREDICATE-OPS-P4 adds stdlib.collection.find/any/all and recomputes the digest. LANG-STDLIB-NUMERIC-TEXT-CONVERSION-P1 adds stdlib.integer.parse_int/int_to_text/modulo (category numeric) and recomputes the digest. LANG-STDLIB-TEXT-ESCAPE-DELIMITED-P2 adds stdlib.text.encode_delimited/decode_delimited (escape-aware delimited row codec; decode -> Option[Collection[Text]]) and recomputes the digest. LANG-STDLIB-COLLECTION-AT-INVENTORY-P5 adds stdlib.collection.at (Collection[T] x Integer -> Option[T], zero-based, total) and recomputes the digest. LANG-STDLIB-TEXT-JOIN-P1 adds stdlib.text.join (Collection[Text] x Text -> Text, inverse of split) and recomputes the digest. LANG-STDLIB-WIRE-FRAME-CODEC-P2 adds stdlib.text.encode_frame (Text -> Text) and stdlib.text.decode_frame (Text -> Option[FrameDecode], length-prefixed netstring frame codec) and recomputes the digest. LANG-STDLIB-COLLECTION-SORT-BY-P3 adds stdlib.collection.sort_by (Collection[T] x (T -> K) -> Collection[T], stable ascending, K in {Integer, Text, Decimal}, OOF-COL11 fail-closed on Float and every other key shape) and recomputes the digest. LANG-STDLIB-MAP-RUNTIME-P1 makes stdlib.map.empty/stdlib.map.from_pairs ACTUALLY EXECUTABLE in the VM (bytecode OP_CALL + eval_ast HOF-dispatch, shared pair-validation/last-input-wins helper) — both entries previously claimed `production-implemented` with no live VM constructor arm (readers only); reconciles their signatures to Map[String, V] (v0 keys are exactly String, never a generic K), fixes stdlib.map.get's stale Option[V]/totality/diagnostics fields, and documents the LAST-INPUT-WINS duplicate-key law and Pair{first,second} shape; recomputes the digest. LANG-STDLIB-INVENTORY-QUALIFIED-IMPORT-SURFACE-P2 adds the additive import_surface field (absent/default = bare_alias, preserving every existing row's behavior) and registers the 13 canon Ch8 §8.11 stdlib.bytes.* pure operations as qualified_only — discoverable via inventory/help/MCP, callable only through qualified names, bare/named import refused (OOF-IMP3), compat aliases text_to_bytes/bytes_to_text recorded but not importable; capability/effect modules (stdlib.IO.*, stdlib.net.*) deliberately stay OUT of this canon inventory; recomputes the digest. LANG-STDLIB-COLLECTION-TAKE-CANON-P5 adds stdlib.collection.take (Collection[T] x Integer -> Collection[T], prefix-bounded reader, n<=0 -> [], n>=count(xs) -> all input, OOF-COL12 fail-closed on a non-Integer/non-lambda second argument) and recomputes the digest. LANG-STDLIB-MAP-PUT-P2 adds stdlib.map.put (immutable Map[String,V] update, absent insert/existing overwrite, last-write-wins, sorted-key JSON, O(n) carrier copy) and recomputes the digest. LANG-STDLIB-BYTES-HEX-CODEC-P1 adds stdlib.bytes.encode_hex (Bytes -> Text, total, canonical lower-case hex) and stdlib.bytes.decode_hex (Text -> Result[Bytes, BytesError], even-length 0-9/a-f/A-F only; invalid_length/invalid_hex fail-closed as data) as the explicit application-level crossing named by OOF-BY1/§8.11.4; both qualified_only, both production-implemented; base64 remains deferred; recomputes the digest. LANG-STDLIB-COLLECTION-SORT-BY-DESC-P4 adds stdlib.collection.sort_by_desc (Collection[T] x (T -> K) -> Collection[T], stable DESCENDING with equal keys preserving authored order, K in {Integer, Text, Decimal}, OOF-COL11 reused in the sort_by_desc spelling) and recomputes the digest. LANG-FLOAT-OPERATOR-FAMILY-P2 preserves stdlib.integer.neg and records that Float/Decimal negation now lower to their own type-resolved identities; recomputes the digest.",
+  "stdlib_surface_digest": "49196e4d899a2c5873be9eb7bd9bd2ab3317d7796d24599243df97dfe0a892d1",
+  "note": "Normatively referenced by Ch8. Digest is computed from canonical re-serialization of entries sorted by canonical_name with entry_digest fields stripped — never from raw file bytes. P3 proof verifies determinism. P5 adds stdlib.collection.map + stdlib.collection.filter entries and updates stdlib.collection.count proof_lineage. CONSTRUCT-P1 adds stdlib.decimal.decimal (explicit Decimal constructor) and recomputes the digest. FLATMAP-P5 adds stdlib.collection.flat_map and recomputes the digest. PREDICATE-OPS-P4 adds stdlib.collection.find/any/all and recomputes the digest. LANG-STDLIB-NUMERIC-TEXT-CONVERSION-P1 adds stdlib.integer.parse_int/int_to_text/modulo (category numeric) and recomputes the digest. LANG-STDLIB-TEXT-ESCAPE-DELIMITED-P2 adds stdlib.text.encode_delimited/decode_delimited (escape-aware delimited row codec; decode -> Option[Collection[Text]]) and recomputes the digest. LANG-STDLIB-COLLECTION-AT-INVENTORY-P5 adds stdlib.collection.at (Collection[T] x Integer -> Option[T], zero-based, total) and recomputes the digest. LANG-STDLIB-TEXT-JOIN-P1 adds stdlib.text.join (Collection[Text] x Text -> Text, inverse of split) and recomputes the digest. LANG-STDLIB-WIRE-FRAME-CODEC-P2 adds stdlib.text.encode_frame (Text -> Text) and stdlib.text.decode_frame (Text -> Option[FrameDecode], length-prefixed netstring frame codec) and recomputes the digest. LANG-STDLIB-COLLECTION-SORT-BY-P3 adds stdlib.collection.sort_by (Collection[T] x (T -> K) -> Collection[T], stable ascending, K in {Integer, Text, Decimal}, OOF-COL11 fail-closed on Float and every other key shape) and recomputes the digest. LANG-STDLIB-MAP-RUNTIME-P1 makes stdlib.map.empty/stdlib.map.from_pairs ACTUALLY EXECUTABLE in the VM (bytecode OP_CALL + eval_ast HOF-dispatch, shared pair-validation/last-input-wins helper) — both entries previously claimed `production-implemented` with no live VM constructor arm (readers only); reconciles their signatures to Map[String, V] (v0 keys are exactly String, never a generic K), fixes stdlib.map.get's stale Option[V]/totality/diagnostics fields, and documents the LAST-INPUT-WINS duplicate-key law and Pair{first,second} shape; recomputes the digest. LANG-STDLIB-INVENTORY-QUALIFIED-IMPORT-SURFACE-P2 adds the additive import_surface field (absent/default = bare_alias, preserving every existing row's behavior) and registers the 13 canon Ch8 §8.11 stdlib.bytes.* pure operations as qualified_only — discoverable via inventory/help/MCP, callable only through qualified names, bare/named import refused (OOF-IMP3), compat aliases text_to_bytes/bytes_to_text recorded but not importable; capability/effect modules (stdlib.IO.*, stdlib.net.*) deliberately stay OUT of this canon inventory; recomputes the digest. LANG-STDLIB-COLLECTION-TAKE-CANON-P5 adds stdlib.collection.take (Collection[T] x Integer -> Collection[T], prefix-bounded reader, n<=0 -> [], n>=count(xs) -> all input, OOF-COL12 fail-closed on a non-Integer/non-lambda second argument) and recomputes the digest. LANG-STDLIB-MAP-PUT-P2 adds stdlib.map.put (immutable Map[String,V] update, absent insert/existing overwrite, last-write-wins, sorted-key JSON, O(n) carrier copy) and recomputes the digest. LANG-STDLIB-BYTES-HEX-CODEC-P1 adds stdlib.bytes.encode_hex (Bytes -> Text, total, canonical lower-case hex) and stdlib.bytes.decode_hex (Text -> Result[Bytes, BytesError], even-length 0-9/a-f/A-F only; invalid_length/invalid_hex fail-closed as data) as the explicit application-level crossing named by OOF-BY1/§8.11.4; both qualified_only, both production-implemented; base64 remains deferred; recomputes the digest. LANG-STDLIB-COLLECTION-SORT-BY-DESC-P4 adds stdlib.collection.sort_by_desc (Collection[T] x (T -> K) -> Collection[T], stable DESCENDING with equal keys preserving authored order, K in {Integer, Text, Decimal}, OOF-COL11 reused in the sort_by_desc spelling) and recomputes the digest. LANG-FLOAT-OPERATOR-FAMILY-P2 preserves stdlib.integer.neg and records that Float/Decimal negation now lower to their own type-resolved identities; recomputes the digest. LANG-FLOAT-OPERATOR-FAMILY-P2 + LANG-NUMERIC-LAMBDA-OPERATOR-IDENTITY-P3 add the monomorphic Float/Decimal ordering and unary-negation rows (stdlib.float.{lt,lte,gt,gte,neg}, stdlib.decimal.{lt,lte,gt,gte,neg}): homogeneous operands only, identity keyed on operand type in direct AND collection-HOF lambda positions, IEEE signed zero for Float, exact scale-aware comparison and checked minor-unit negation for Decimal; recomputes the digest.",
   "entries": [
     {
       "canonical_name": "stdlib.text.byte_length",
@@ -1455,6 +1455,82 @@
       "entry_digest": null
     },
     {
+      "canonical_name": "stdlib.decimal.gt",
+      "semantic_ir_name": "stdlib.decimal.gt",
+      "legacy_sir": null,
+      "aliases": [],
+      "category": "numeric",
+      "lifecycle_status": "lab-implemented",
+      "semantic_stability": "experiment-pass",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "total",
+      "type_params": [],
+      "input_signature": [
+        "Decimal",
+        "Decimal"
+      ],
+      "output_signature": "Bool",
+      "diagnostics": [
+        "OOF-TY0"
+      ],
+      "failure_behavior": "Homogeneous operands only: a mixed numeric pair (e.g. Integer/Decimal) stays OOF-TY0 at typecheck with no implicit coercion. At runtime the identity is STRICT on every path — an operand that is not Decimal fails closed with `stdlib.decimal.gt expects Decimal operands, got: …`, never a silent comparison. There is no legacy acceptance of these operands under stdlib.integer.*.",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "LANG-FLOAT-OPERATOR-FAMILY-READINESS-P1 — measured that the defect is numeric-family-wide (Decimal fails identically to Float) and selected the monomorphic per-type identity model canon already mandates (ch5 line 216, ch8 §8.5)",
+        "LANG-FLOAT-OPERATOR-FAMILY-P2 — Rust + Ruby resolve ordering/negation identity by operand type; VM gains eval_numeric_ordering_call / eval_numeric_neg_call as the single owners for the bytecode OP_CALL and eval_ast paths (14/14)",
+        "LANG-NUMERIC-LAMBDA-OPERATOR-IDENTITY-P3 — the identity rewrite descends into recognized collection-HOF lambda bodies with a typed lexical environment, so nested bodies emit the same honest identities as direct positions; the eval_ast compatibility bridge that accepted Float/Decimal under an integer identity is REMOVED and crafted legacy SIR now fails closed on both paths (22/22)"
+      ],
+      "examples": [
+        "decimal(150,2) > decimal(225,2) -> false (lowered to stdlib.decimal.gt)",
+        "filter(xs : Collection[Decimal], x -> x > t) -> the LAMBDA BODY lowers to stdlib.decimal.gt as well (P3 typed lexical environment), never the integer name"
+      ],
+      "compatibility_note": "Exact scale-aware comparison through Decimal::cmp_decimal — NEVER a Float conversion. Cross-scale operands are compared after scale normalization (decimal(150,2) < decimal(20,1) is true), and a checked-normalization overflow fails closed as an operational error. Both operands must be Decimal; the identity is monomorphic BY OPERAND TYPE, so Decimal never lowers to stdlib.integer.gt. Direct positions and recognized collection-HOF lambda bodies emit the SAME identity and execute through the same runtime owner (`eval_numeric_ordering_call`), returning byte-identical values and identical error text on the bytecode OP_CALL and eval_ast paths. Ruby canon is typecheck/emit parity only; execution is Rust VM authority.",
+      "owner_surface": "LANG-FLOAT-OPERATOR-FAMILY-READINESS-P1",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.float.gt",
+      "semantic_ir_name": "stdlib.float.gt",
+      "legacy_sir": null,
+      "aliases": [],
+      "category": "numeric",
+      "lifecycle_status": "lab-implemented",
+      "semantic_stability": "experiment-pass",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "total",
+      "type_params": [],
+      "input_signature": [
+        "Float",
+        "Float"
+      ],
+      "output_signature": "Bool",
+      "diagnostics": [
+        "OOF-TY0"
+      ],
+      "failure_behavior": "Homogeneous operands only: a mixed numeric pair (e.g. Integer/Float) stays OOF-TY0 at typecheck with no implicit coercion. At runtime the identity is STRICT on every path — an operand that is not Float fails closed with `stdlib.float.gt expects Float operands, got: …`, never a silent comparison. There is no legacy acceptance of these operands under stdlib.integer.*.",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "LANG-FLOAT-OPERATOR-FAMILY-READINESS-P1 — measured that the defect is numeric-family-wide (Decimal fails identically to Float) and selected the monomorphic per-type identity model canon already mandates (ch5 line 216, ch8 §8.5)",
+        "LANG-FLOAT-OPERATOR-FAMILY-P2 — Rust + Ruby resolve ordering/negation identity by operand type; VM gains eval_numeric_ordering_call / eval_numeric_neg_call as the single owners for the bytecode OP_CALL and eval_ast paths (14/14)",
+        "LANG-NUMERIC-LAMBDA-OPERATOR-IDENTITY-P3 — the identity rewrite descends into recognized collection-HOF lambda bodies with a typed lexical environment, so nested bodies emit the same honest identities as direct positions; the eval_ast compatibility bridge that accepted Float/Decimal under an integer identity is REMOVED and crafted legacy SIR now fails closed on both paths (22/22)"
+      ],
+      "examples": [
+        "1.5 > 2.0 -> false (lowered to stdlib.float.gt)",
+        "filter(xs : Collection[Float], x -> x > t) -> the LAMBDA BODY lowers to stdlib.float.gt as well (P3 typed lexical environment), never the integer name"
+      ],
+      "compatibility_note": "IEEE ordering on f64 via PartialOrd: -0.0 and 0.0 compare EQUAL — neither is less nor greater, and both <= and >= hold. An unordered pair (only reachable with NaN, which is ungeneratable from source today because division by zero fails closed) fails closed rather than asserting a NaN ordering policy this surface does not define. Both operands must be Float; the identity is monomorphic BY OPERAND TYPE, so Float never lowers to stdlib.integer.gt. Direct positions and recognized collection-HOF lambda bodies emit the SAME identity and execute through the same runtime owner (`eval_numeric_ordering_call`), returning byte-identical values and identical error text on the bytecode OP_CALL and eval_ast paths. Ruby canon is typecheck/emit parity only; execution is Rust VM authority.",
+      "owner_surface": "LANG-FLOAT-OPERATOR-FAMILY-READINESS-P1",
+      "entry_digest": null
+    },
+    {
       "canonical_name": "stdlib.integer.lt",
       "semantic_ir_name": "stdlib.integer.lt",
       "legacy_sir": null,
@@ -1490,6 +1566,82 @@
       ],
       "compatibility_note": "Ruby TC: binary_op < lowers to call{fn:stdlib.integer.lt, resolved_type:Bool}. Rust TC: (stdlib.integer.lt, Bool) returned; Rust SIR emitter now emits qualified call{fn:stdlib.integer.lt, resolved_type:Bool, args:[left,right]} — SIR qualification gap closed by P4. OOF-TY0 for non-Integer on both sides unless Unknown permissive. Integer/Integer only.",
       "owner_surface": "LANG-STDLIB-NUMERIC-COMPARISON-P1",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.decimal.lt",
+      "semantic_ir_name": "stdlib.decimal.lt",
+      "legacy_sir": null,
+      "aliases": [],
+      "category": "numeric",
+      "lifecycle_status": "lab-implemented",
+      "semantic_stability": "experiment-pass",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "total",
+      "type_params": [],
+      "input_signature": [
+        "Decimal",
+        "Decimal"
+      ],
+      "output_signature": "Bool",
+      "diagnostics": [
+        "OOF-TY0"
+      ],
+      "failure_behavior": "Homogeneous operands only: a mixed numeric pair (e.g. Integer/Decimal) stays OOF-TY0 at typecheck with no implicit coercion. At runtime the identity is STRICT on every path — an operand that is not Decimal fails closed with `stdlib.decimal.lt expects Decimal operands, got: …`, never a silent comparison. There is no legacy acceptance of these operands under stdlib.integer.*.",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "LANG-FLOAT-OPERATOR-FAMILY-READINESS-P1 — measured that the defect is numeric-family-wide (Decimal fails identically to Float) and selected the monomorphic per-type identity model canon already mandates (ch5 line 216, ch8 §8.5)",
+        "LANG-FLOAT-OPERATOR-FAMILY-P2 — Rust + Ruby resolve ordering/negation identity by operand type; VM gains eval_numeric_ordering_call / eval_numeric_neg_call as the single owners for the bytecode OP_CALL and eval_ast paths (14/14)",
+        "LANG-NUMERIC-LAMBDA-OPERATOR-IDENTITY-P3 — the identity rewrite descends into recognized collection-HOF lambda bodies with a typed lexical environment, so nested bodies emit the same honest identities as direct positions; the eval_ast compatibility bridge that accepted Float/Decimal under an integer identity is REMOVED and crafted legacy SIR now fails closed on both paths (22/22)"
+      ],
+      "examples": [
+        "decimal(150,2) < decimal(225,2) -> true (lowered to stdlib.decimal.lt)",
+        "filter(xs : Collection[Decimal], x -> x < t) -> the LAMBDA BODY lowers to stdlib.decimal.lt as well (P3 typed lexical environment), never the integer name"
+      ],
+      "compatibility_note": "Exact scale-aware comparison through Decimal::cmp_decimal — NEVER a Float conversion. Cross-scale operands are compared after scale normalization (decimal(150,2) < decimal(20,1) is true), and a checked-normalization overflow fails closed as an operational error. Both operands must be Decimal; the identity is monomorphic BY OPERAND TYPE, so Decimal never lowers to stdlib.integer.lt. Direct positions and recognized collection-HOF lambda bodies emit the SAME identity and execute through the same runtime owner (`eval_numeric_ordering_call`), returning byte-identical values and identical error text on the bytecode OP_CALL and eval_ast paths. Ruby canon is typecheck/emit parity only; execution is Rust VM authority.",
+      "owner_surface": "LANG-FLOAT-OPERATOR-FAMILY-READINESS-P1",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.float.lt",
+      "semantic_ir_name": "stdlib.float.lt",
+      "legacy_sir": null,
+      "aliases": [],
+      "category": "numeric",
+      "lifecycle_status": "lab-implemented",
+      "semantic_stability": "experiment-pass",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "total",
+      "type_params": [],
+      "input_signature": [
+        "Float",
+        "Float"
+      ],
+      "output_signature": "Bool",
+      "diagnostics": [
+        "OOF-TY0"
+      ],
+      "failure_behavior": "Homogeneous operands only: a mixed numeric pair (e.g. Integer/Float) stays OOF-TY0 at typecheck with no implicit coercion. At runtime the identity is STRICT on every path — an operand that is not Float fails closed with `stdlib.float.lt expects Float operands, got: …`, never a silent comparison. There is no legacy acceptance of these operands under stdlib.integer.*.",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "LANG-FLOAT-OPERATOR-FAMILY-READINESS-P1 — measured that the defect is numeric-family-wide (Decimal fails identically to Float) and selected the monomorphic per-type identity model canon already mandates (ch5 line 216, ch8 §8.5)",
+        "LANG-FLOAT-OPERATOR-FAMILY-P2 — Rust + Ruby resolve ordering/negation identity by operand type; VM gains eval_numeric_ordering_call / eval_numeric_neg_call as the single owners for the bytecode OP_CALL and eval_ast paths (14/14)",
+        "LANG-NUMERIC-LAMBDA-OPERATOR-IDENTITY-P3 — the identity rewrite descends into recognized collection-HOF lambda bodies with a typed lexical environment, so nested bodies emit the same honest identities as direct positions; the eval_ast compatibility bridge that accepted Float/Decimal under an integer identity is REMOVED and crafted legacy SIR now fails closed on both paths (22/22)"
+      ],
+      "examples": [
+        "1.5 < 2.0 -> true (lowered to stdlib.float.lt)",
+        "filter(xs : Collection[Float], x -> x < t) -> the LAMBDA BODY lowers to stdlib.float.lt as well (P3 typed lexical environment), never the integer name"
+      ],
+      "compatibility_note": "IEEE ordering on f64 via PartialOrd: -0.0 and 0.0 compare EQUAL — neither is less nor greater, and both <= and >= hold. An unordered pair (only reachable with NaN, which is ungeneratable from source today because division by zero fails closed) fails closed rather than asserting a NaN ordering policy this surface does not define. Both operands must be Float; the identity is monomorphic BY OPERAND TYPE, so Float never lowers to stdlib.integer.lt. Direct positions and recognized collection-HOF lambda bodies emit the SAME identity and execute through the same runtime owner (`eval_numeric_ordering_call`), returning byte-identical values and identical error text on the bytecode OP_CALL and eval_ast paths. Ruby canon is typecheck/emit parity only; execution is Rust VM authority.",
+      "owner_surface": "LANG-FLOAT-OPERATOR-FAMILY-READINESS-P1",
       "entry_digest": null
     },
     {
@@ -1530,6 +1682,82 @@
       "entry_digest": null
     },
     {
+      "canonical_name": "stdlib.decimal.lte",
+      "semantic_ir_name": "stdlib.decimal.lte",
+      "legacy_sir": null,
+      "aliases": [],
+      "category": "numeric",
+      "lifecycle_status": "lab-implemented",
+      "semantic_stability": "experiment-pass",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "total",
+      "type_params": [],
+      "input_signature": [
+        "Decimal",
+        "Decimal"
+      ],
+      "output_signature": "Bool",
+      "diagnostics": [
+        "OOF-TY0"
+      ],
+      "failure_behavior": "Homogeneous operands only: a mixed numeric pair (e.g. Integer/Decimal) stays OOF-TY0 at typecheck with no implicit coercion. At runtime the identity is STRICT on every path — an operand that is not Decimal fails closed with `stdlib.decimal.lte expects Decimal operands, got: …`, never a silent comparison. There is no legacy acceptance of these operands under stdlib.integer.*.",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "LANG-FLOAT-OPERATOR-FAMILY-READINESS-P1 — measured that the defect is numeric-family-wide (Decimal fails identically to Float) and selected the monomorphic per-type identity model canon already mandates (ch5 line 216, ch8 §8.5)",
+        "LANG-FLOAT-OPERATOR-FAMILY-P2 — Rust + Ruby resolve ordering/negation identity by operand type; VM gains eval_numeric_ordering_call / eval_numeric_neg_call as the single owners for the bytecode OP_CALL and eval_ast paths (14/14)",
+        "LANG-NUMERIC-LAMBDA-OPERATOR-IDENTITY-P3 — the identity rewrite descends into recognized collection-HOF lambda bodies with a typed lexical environment, so nested bodies emit the same honest identities as direct positions; the eval_ast compatibility bridge that accepted Float/Decimal under an integer identity is REMOVED and crafted legacy SIR now fails closed on both paths (22/22)"
+      ],
+      "examples": [
+        "decimal(150,2) <= decimal(225,2) -> true (lowered to stdlib.decimal.lte)",
+        "filter(xs : Collection[Decimal], x -> x <= t) -> the LAMBDA BODY lowers to stdlib.decimal.lte as well (P3 typed lexical environment), never the integer name"
+      ],
+      "compatibility_note": "Exact scale-aware comparison through Decimal::cmp_decimal — NEVER a Float conversion. Cross-scale operands are compared after scale normalization (decimal(150,2) < decimal(20,1) is true), and a checked-normalization overflow fails closed as an operational error. Both operands must be Decimal; the identity is monomorphic BY OPERAND TYPE, so Decimal never lowers to stdlib.integer.lte. Direct positions and recognized collection-HOF lambda bodies emit the SAME identity and execute through the same runtime owner (`eval_numeric_ordering_call`), returning byte-identical values and identical error text on the bytecode OP_CALL and eval_ast paths. Ruby canon is typecheck/emit parity only; execution is Rust VM authority.",
+      "owner_surface": "LANG-FLOAT-OPERATOR-FAMILY-READINESS-P1",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.float.lte",
+      "semantic_ir_name": "stdlib.float.lte",
+      "legacy_sir": null,
+      "aliases": [],
+      "category": "numeric",
+      "lifecycle_status": "lab-implemented",
+      "semantic_stability": "experiment-pass",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "total",
+      "type_params": [],
+      "input_signature": [
+        "Float",
+        "Float"
+      ],
+      "output_signature": "Bool",
+      "diagnostics": [
+        "OOF-TY0"
+      ],
+      "failure_behavior": "Homogeneous operands only: a mixed numeric pair (e.g. Integer/Float) stays OOF-TY0 at typecheck with no implicit coercion. At runtime the identity is STRICT on every path — an operand that is not Float fails closed with `stdlib.float.lte expects Float operands, got: …`, never a silent comparison. There is no legacy acceptance of these operands under stdlib.integer.*.",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "LANG-FLOAT-OPERATOR-FAMILY-READINESS-P1 — measured that the defect is numeric-family-wide (Decimal fails identically to Float) and selected the monomorphic per-type identity model canon already mandates (ch5 line 216, ch8 §8.5)",
+        "LANG-FLOAT-OPERATOR-FAMILY-P2 — Rust + Ruby resolve ordering/negation identity by operand type; VM gains eval_numeric_ordering_call / eval_numeric_neg_call as the single owners for the bytecode OP_CALL and eval_ast paths (14/14)",
+        "LANG-NUMERIC-LAMBDA-OPERATOR-IDENTITY-P3 — the identity rewrite descends into recognized collection-HOF lambda bodies with a typed lexical environment, so nested bodies emit the same honest identities as direct positions; the eval_ast compatibility bridge that accepted Float/Decimal under an integer identity is REMOVED and crafted legacy SIR now fails closed on both paths (22/22)"
+      ],
+      "examples": [
+        "1.5 <= 2.0 -> true (lowered to stdlib.float.lte)",
+        "filter(xs : Collection[Float], x -> x <= t) -> the LAMBDA BODY lowers to stdlib.float.lte as well (P3 typed lexical environment), never the integer name"
+      ],
+      "compatibility_note": "IEEE ordering on f64 via PartialOrd: -0.0 and 0.0 compare EQUAL — neither is less nor greater, and both <= and >= hold. An unordered pair (only reachable with NaN, which is ungeneratable from source today because division by zero fails closed) fails closed rather than asserting a NaN ordering policy this surface does not define. Both operands must be Float; the identity is monomorphic BY OPERAND TYPE, so Float never lowers to stdlib.integer.lte. Direct positions and recognized collection-HOF lambda bodies emit the SAME identity and execute through the same runtime owner (`eval_numeric_ordering_call`), returning byte-identical values and identical error text on the bytecode OP_CALL and eval_ast paths. Ruby canon is typecheck/emit parity only; execution is Rust VM authority.",
+      "owner_surface": "LANG-FLOAT-OPERATOR-FAMILY-READINESS-P1",
+      "entry_digest": null
+    },
+    {
       "canonical_name": "stdlib.integer.gte",
       "semantic_ir_name": "stdlib.integer.gte",
       "legacy_sir": null,
@@ -1564,6 +1792,82 @@
       ],
       "compatibility_note": "Ruby TC: binary_op >= lowers to call{fn:stdlib.integer.gte, resolved_type:Bool}. Rust TC: (stdlib.integer.gte, Bool) returned; Rust SIR emitter now emits qualified call{fn:stdlib.integer.gte, resolved_type:Bool, args:[left,right]} — SIR qualification gap closed by P4. OOF-TY0 for non-Integer on both sides unless Unknown permissive. Integer/Integer only.",
       "owner_surface": "LANG-STDLIB-NUMERIC-COMPARISON-P2",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.decimal.gte",
+      "semantic_ir_name": "stdlib.decimal.gte",
+      "legacy_sir": null,
+      "aliases": [],
+      "category": "numeric",
+      "lifecycle_status": "lab-implemented",
+      "semantic_stability": "experiment-pass",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "total",
+      "type_params": [],
+      "input_signature": [
+        "Decimal",
+        "Decimal"
+      ],
+      "output_signature": "Bool",
+      "diagnostics": [
+        "OOF-TY0"
+      ],
+      "failure_behavior": "Homogeneous operands only: a mixed numeric pair (e.g. Integer/Decimal) stays OOF-TY0 at typecheck with no implicit coercion. At runtime the identity is STRICT on every path — an operand that is not Decimal fails closed with `stdlib.decimal.gte expects Decimal operands, got: …`, never a silent comparison. There is no legacy acceptance of these operands under stdlib.integer.*.",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "LANG-FLOAT-OPERATOR-FAMILY-READINESS-P1 — measured that the defect is numeric-family-wide (Decimal fails identically to Float) and selected the monomorphic per-type identity model canon already mandates (ch5 line 216, ch8 §8.5)",
+        "LANG-FLOAT-OPERATOR-FAMILY-P2 — Rust + Ruby resolve ordering/negation identity by operand type; VM gains eval_numeric_ordering_call / eval_numeric_neg_call as the single owners for the bytecode OP_CALL and eval_ast paths (14/14)",
+        "LANG-NUMERIC-LAMBDA-OPERATOR-IDENTITY-P3 — the identity rewrite descends into recognized collection-HOF lambda bodies with a typed lexical environment, so nested bodies emit the same honest identities as direct positions; the eval_ast compatibility bridge that accepted Float/Decimal under an integer identity is REMOVED and crafted legacy SIR now fails closed on both paths (22/22)"
+      ],
+      "examples": [
+        "decimal(150,2) >= decimal(225,2) -> false (lowered to stdlib.decimal.gte)",
+        "filter(xs : Collection[Decimal], x -> x >= t) -> the LAMBDA BODY lowers to stdlib.decimal.gte as well (P3 typed lexical environment), never the integer name"
+      ],
+      "compatibility_note": "Exact scale-aware comparison through Decimal::cmp_decimal — NEVER a Float conversion. Cross-scale operands are compared after scale normalization (decimal(150,2) < decimal(20,1) is true), and a checked-normalization overflow fails closed as an operational error. Both operands must be Decimal; the identity is monomorphic BY OPERAND TYPE, so Decimal never lowers to stdlib.integer.gte. Direct positions and recognized collection-HOF lambda bodies emit the SAME identity and execute through the same runtime owner (`eval_numeric_ordering_call`), returning byte-identical values and identical error text on the bytecode OP_CALL and eval_ast paths. Ruby canon is typecheck/emit parity only; execution is Rust VM authority.",
+      "owner_surface": "LANG-FLOAT-OPERATOR-FAMILY-READINESS-P1",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.float.gte",
+      "semantic_ir_name": "stdlib.float.gte",
+      "legacy_sir": null,
+      "aliases": [],
+      "category": "numeric",
+      "lifecycle_status": "lab-implemented",
+      "semantic_stability": "experiment-pass",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "total",
+      "type_params": [],
+      "input_signature": [
+        "Float",
+        "Float"
+      ],
+      "output_signature": "Bool",
+      "diagnostics": [
+        "OOF-TY0"
+      ],
+      "failure_behavior": "Homogeneous operands only: a mixed numeric pair (e.g. Integer/Float) stays OOF-TY0 at typecheck with no implicit coercion. At runtime the identity is STRICT on every path — an operand that is not Float fails closed with `stdlib.float.gte expects Float operands, got: …`, never a silent comparison. There is no legacy acceptance of these operands under stdlib.integer.*.",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "LANG-FLOAT-OPERATOR-FAMILY-READINESS-P1 — measured that the defect is numeric-family-wide (Decimal fails identically to Float) and selected the monomorphic per-type identity model canon already mandates (ch5 line 216, ch8 §8.5)",
+        "LANG-FLOAT-OPERATOR-FAMILY-P2 — Rust + Ruby resolve ordering/negation identity by operand type; VM gains eval_numeric_ordering_call / eval_numeric_neg_call as the single owners for the bytecode OP_CALL and eval_ast paths (14/14)",
+        "LANG-NUMERIC-LAMBDA-OPERATOR-IDENTITY-P3 — the identity rewrite descends into recognized collection-HOF lambda bodies with a typed lexical environment, so nested bodies emit the same honest identities as direct positions; the eval_ast compatibility bridge that accepted Float/Decimal under an integer identity is REMOVED and crafted legacy SIR now fails closed on both paths (22/22)"
+      ],
+      "examples": [
+        "1.5 >= 2.0 -> false (lowered to stdlib.float.gte)",
+        "filter(xs : Collection[Float], x -> x >= t) -> the LAMBDA BODY lowers to stdlib.float.gte as well (P3 typed lexical environment), never the integer name"
+      ],
+      "compatibility_note": "IEEE ordering on f64 via PartialOrd: -0.0 and 0.0 compare EQUAL — neither is less nor greater, and both <= and >= hold. An unordered pair (only reachable with NaN, which is ungeneratable from source today because division by zero fails closed) fails closed rather than asserting a NaN ordering policy this surface does not define. Both operands must be Float; the identity is monomorphic BY OPERAND TYPE, so Float never lowers to stdlib.integer.gte. Direct positions and recognized collection-HOF lambda bodies emit the SAME identity and execute through the same runtime owner (`eval_numeric_ordering_call`), returning byte-identical values and identical error text on the bytecode OP_CALL and eval_ast paths. Ruby canon is typecheck/emit parity only; execution is Rust VM authority.",
+      "owner_surface": "LANG-FLOAT-OPERATOR-FAMILY-READINESS-P1",
       "entry_digest": null
     },
     {
@@ -2156,6 +2460,80 @@
       ],
       "compatibility_note": "Unary integer negation: Integer -> Integer. SIR fn = stdlib.integer.neg. OOF-TY0 for non-numeric operands; Integer returned on the Integer path. LANG-FLOAT-OPERATOR-FAMILY-P2 adds separate stdlib.float.neg and stdlib.decimal.neg post-resolution identities without changing the Integer identity. Dual-toolchain.",
       "owner_surface": "LANG-UNARY-OPERATORS-P1",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.decimal.neg",
+      "semantic_ir_name": "stdlib.decimal.neg",
+      "legacy_sir": null,
+      "aliases": [],
+      "category": "numeric",
+      "lifecycle_status": "lab-implemented",
+      "semantic_stability": "experiment-pass",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "partial",
+      "type_params": [],
+      "input_signature": [
+        "Decimal"
+      ],
+      "output_signature": "Decimal",
+      "diagnostics": [
+        "OOF-TY0"
+      ],
+      "failure_behavior": "PARTIAL: the i64::MIN minor-unit payload has no positive counterpart, so it fails closed with one stable error (`stdlib.decimal.neg: minor-unit overflow negating …`) on every runtime path — never a panic, never a wrap. Every other Decimal negates exactly.",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "LANG-FLOAT-OPERATOR-FAMILY-READINESS-P1 — measured that the defect is numeric-family-wide (Decimal fails identically to Float) and selected the monomorphic per-type identity model canon already mandates (ch5 line 216, ch8 §8.5)",
+        "LANG-FLOAT-OPERATOR-FAMILY-P2 — Rust + Ruby resolve ordering/negation identity by operand type; VM gains eval_numeric_ordering_call / eval_numeric_neg_call as the single owners for the bytecode OP_CALL and eval_ast paths (14/14)",
+        "LANG-NUMERIC-LAMBDA-OPERATOR-IDENTITY-P3 — the identity rewrite descends into recognized collection-HOF lambda bodies with a typed lexical environment, so nested bodies emit the same honest identities as direct positions; the eval_ast compatibility bridge that accepted Float/Decimal under an integer identity is REMOVED and crafted legacy SIR now fails closed on both paths (22/22)"
+      ],
+      "examples": [
+        "-decimal(150,2) -> decimal(-150,2) — SCALE PRESERVED",
+        "map(xs : Collection[Decimal], x -> -x) -> the lambda body lowers to stdlib.decimal.neg"
+      ],
+      "compatibility_note": "Unary `-` on Decimal was REFUSED by both toolchains before LANG-FLOAT-OPERATOR-FAMILY-P2; negation preserves the operand's SCALE (Decimal[2] stays Decimal[2]) and uses checked minor-unit negation. The result type is the operand's own concrete type, never a re-derived bare name. Binary subtraction is a different operator and is NOT part of this family. Direct and nested (collection-HOF lambda) positions emit the same identity and share one runtime owner (`eval_numeric_neg_call`). Ruby canon is typecheck/emit parity only; execution is Rust VM authority.",
+      "owner_surface": "LANG-FLOAT-OPERATOR-FAMILY-READINESS-P1",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.float.neg",
+      "semantic_ir_name": "stdlib.float.neg",
+      "legacy_sir": null,
+      "aliases": [],
+      "category": "numeric",
+      "lifecycle_status": "lab-implemented",
+      "semantic_stability": "experiment-pass",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "total",
+      "type_params": [],
+      "input_signature": [
+        "Float"
+      ],
+      "output_signature": "Float",
+      "diagnostics": [
+        "OOF-TY0"
+      ],
+      "failure_behavior": "Total over every authorable Float. A non-Float operand is OOF-TY0 at typecheck and fails closed at runtime (`stdlib.float.neg expects a Float operand, got: …`).",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "LANG-FLOAT-OPERATOR-FAMILY-READINESS-P1 — measured that the defect is numeric-family-wide (Decimal fails identically to Float) and selected the monomorphic per-type identity model canon already mandates (ch5 line 216, ch8 §8.5)",
+        "LANG-FLOAT-OPERATOR-FAMILY-P2 — Rust + Ruby resolve ordering/negation identity by operand type; VM gains eval_numeric_ordering_call / eval_numeric_neg_call as the single owners for the bytecode OP_CALL and eval_ast paths (14/14)",
+        "LANG-NUMERIC-LAMBDA-OPERATOR-IDENTITY-P3 — the identity rewrite descends into recognized collection-HOF lambda bodies with a typed lexical environment, so nested bodies emit the same honest identities as direct positions; the eval_ast compatibility bridge that accepted Float/Decimal under an integer identity is REMOVED and crafted legacy SIR now fails closed on both paths (22/22)"
+      ],
+      "examples": [
+        "-0.5 -> -0.5 (unary `-`, lowered to stdlib.float.neg)",
+        "map(xs : Collection[Float], x -> -x) -> the lambda body lowers to stdlib.float.neg"
+      ],
+      "compatibility_note": "Unary `-` on Float was REFUSED by both toolchains before LANG-FLOAT-OPERATOR-FAMILY-P2, which means negative Float LITERALS were unauthorable and the negative half-line was reachable only through subtraction. Admitting it also made `-0.0` authorable for the first time; see stdlib.float.lt's note for the IEEE signed-zero ordering law, and float_to_text's existing half_even normalization for its rendering. The result type is the operand's own concrete type, never a re-derived bare name. Binary subtraction is a different operator and is NOT part of this family. Direct and nested (collection-HOF lambda) positions emit the same identity and share one runtime owner (`eval_numeric_neg_call`). Ruby canon is typecheck/emit parity only; execution is Rust VM authority.",
+      "owner_surface": "LANG-FLOAT-OPERATOR-FAMILY-READINESS-P1",
       "entry_digest": null
     },
     {
