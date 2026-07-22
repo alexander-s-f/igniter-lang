@@ -555,10 +555,11 @@ choice).
 
 ## 8.14 Collection `sort_by_desc` — stable descending total-scalar ordering (LANG-STDLIB-COLLECTION-SORT-BY-DESC-PROP-P1, 2026-07-21)
 
-Canon-ACCEPTED, spec-first: unlike §8.12/§8.13, this section is written at ADMISSION time, before
-any toolchain implements the operation. Nothing may claim `sort_by_desc` executes until the named
-implementation cards land (§8.14.5); until then the operation's lifecycle is canon-accepted /
-not-yet-implemented, and calling it fails as an unknown function in both toolchains. Second slice
+Canon-ACCEPTED, spec-first: unlike §8.12/§8.13, this section was written at ADMISSION time, before
+any toolchain implemented the operation. Nothing may claim `sort_by_desc` EXECUTES until the named
+implementation cards land (§8.14.5). Per-toolchain state: canon Ruby types and lowers the call as
+of `LANG-STDLIB-COLLECTION-SORT-BY-DESC-P2` (2026-07-21); the Rust compiler still refuses it as an
+unknown function and NO runtime executes it until P3; the inventory row waits for P4. Second slice
 of the ordering cluster named by `lang-stdlib-collection-order-group-readiness-p2-v0.md`; admitted
 on the measured evidence of `lang-stdlib-collection-reverse-prepend-readiness-p1-v0.md`
 (igniter-lab `lab-docs/lang/`).

@@ -2227,6 +2227,15 @@ module IgniterLang
         # Stable ascending sort by a total-scalar key (Integer|Text|Decimal); OOF-COL11 refuses
         # Float and every other key shape. Element type is UNCHANGED (not a `map`-shaped transform).
         infer_sort_by_call(args, symbol_types, type_errors, type_warnings, node_name)
+      when "sort_by_desc", "stdlib.collection.sort_by_desc"
+        # LANG-STDLIB-COLLECTION-SORT-BY-DESC-P2 (admitted by -PROP-P1, ch8 §8.14): the stable
+        # DESCENDING sibling of sort_by — identical typing contract (Collection[T] preserved,
+        # K = Integer|Text|Decimal via OOF-COL11 with the sort_by_desc spelling), distinct
+        # qualified identity stdlib.collection.sort_by_desc. Per §8.14 Fixed Law 7 BOTH the bare
+        # and the qualified source form dispatch here (sort_by's bare-only match predates that
+        # law and stays untouched). Descending/tie SEMANTICS are §8.14.2 VM authority (P3) —
+        # this arm types and lowers only.
+        infer_sort_by_desc_call(args, symbol_types, type_errors, type_warnings, node_name)
       when "take"
         # LANG-STDLIB-COLLECTION-TAKE-CANON-P5: take(Collection[T], Integer) -> Collection[T].
         # A prefix-bounded reader, NOT a HOF — the second argument is an Integer count, never a
@@ -4624,6 +4633,91 @@ module IgniterLang
           "(Float is not admissible — convert to Decimal or Integer)"
         else
           "sort_by key must have a total order; expected Integer, Text, or Decimal, got #{key_name}"
+        end
+        type_errors << oof("OOF-COL11", message, node_name)
+      end
+
+      lambda_deps = body_typed.fetch("deps", [])
+      all_deps    = (collection_arg.fetch("deps", []) + lambda_deps).uniq
+
+      # ── Output type: Collection[T] — the ORIGINAL element type, never Collection[K] ────────────
+      output_type = collection_type_ir_from(elem_type)
+
+      lambda_typed = {
+        "kind" => "lambda",
+        "params" => lambda_params,
+        "body" => body_typed,
+        "resolved_type" => key_type
+      }
+
+      typed_expr("call", output_type, all_deps,
+                 "fn" => qualified, "args" => [collection_arg, lambda_typed])
+    end
+
+    # LANG-STDLIB-COLLECTION-SORT-BY-DESC-P2 (canon-admitted by -PROP-P1, ch8 §8.14):
+    # sort_by_desc(Collection[T], (T -> K)) -> Collection[T]. Stable DESCENDING sort by a
+    # total-scalar key. A dedicated mirror of infer_sort_by_call — deliberately NOT an alias or a
+    # shared-core parameterization, so the qualified identity stdlib.collection.sort_by_desc and
+    # the sort_by_desc diagnostic spelling cannot drift with (or perturb) sort_by's byte-stable
+    # arm. Same diagnostic families: OOF-COL1 (arity / non-lambda second arg), OOF-COL2
+    # (non-Collection first arg), reused OOF-COL11 (key not Integer|Text|Decimal; Float message
+    # routes to Decimal/Integer). Element type is UNCHANGED — Collection[T], never Collection[K].
+    # The descending order and the §8.14.2 stable-tie law are VM execution authority (P3); typing
+    # is direction-blind by construction.
+    def infer_sort_by_desc_call(args, symbol_types, type_errors, type_warnings, node_name)
+      qualified = "stdlib.collection.sort_by_desc"
+
+      # ── OOF-COL1: arity must be exactly 2 ────────────────────────────────────
+      unless args.length == 2
+        type_errors << oof("OOF-COL1",
+          "#{qualified}: expected 2 arguments, got #{args.length}",
+          node_name)
+        return typed_expr("call", type_ir("Unknown"), [], "fn" => qualified, "args" => [])
+      end
+
+      # ── Infer collection argument ─────────────────────────────────────────────
+      collection_arg = infer_expr(args[0], symbol_types, type_errors, type_warnings, node_name)
+      col_type_name  = type_name(collection_arg.fetch("resolved_type"))
+
+      # ── OOF-COL2: first arg must be Collection or Unknown ─────────────────────
+      unless col_type_name == "Collection" || col_type_name == "Unknown"
+        type_errors << oof("OOF-COL2",
+          "#{qualified}: first argument must be Collection[T], got #{col_type_name}",
+          node_name)
+        return typed_expr("call", type_ir("Unknown"), collection_arg.fetch("deps", []),
+                          "fn" => qualified, "args" => [collection_arg])
+      end
+
+      # ── second argument must be a lambda ──────────────────────────────────────
+      lambda_node = args[1]
+      unless lambda_node.is_a?(Hash) && lambda_node.fetch("kind", nil) == "lambda"
+        type_errors << oof("OOF-COL1",
+          "#{qualified}: second argument must be a lambda, got #{lambda_node.fetch("kind", "non-lambda") rescue "non-lambda"}",
+          node_name)
+        return typed_expr("call", collection_arg.fetch("resolved_type"), collection_arg.fetch("deps", []),
+                          "fn" => qualified, "args" => [collection_arg])
+      end
+
+      # ── Bind lambda parameter to element type ─────────────────────────────────
+      elem_type     = element_type_from_collection(collection_arg.fetch("resolved_type"))
+      lambda_params = lambda_node.fetch("params", [])
+      local_symbols = lambda_params.each_with_object(symbol_types.dup) do |param, acc|
+        acc[param] = elem_type
+      end
+
+      # ── Infer lambda body (the key extractor) ─────────────────────────────────
+      lambda_body = lambda_node.fetch("body")
+      body_typed  = infer_lambda_body(lambda_body, local_symbols, type_errors, type_warnings, node_name)
+      key_type    = body_typed.fetch("resolved_type")
+
+      # ── OOF-COL11 (reused): key must be exactly Integer, Text, or Decimal ─────
+      key_name = type_name(key_type)
+      unless %w[Integer Text String Decimal Unknown].include?(key_name)
+        message = if key_name == "Float"
+          "sort_by_desc key must have a total order; expected Integer, Text, or Decimal " \
+          "(Float is not admissible — convert to Decimal or Integer)"
+        else
+          "sort_by_desc key must have a total order; expected Integer, Text, or Decimal, got #{key_name}"
         end
         type_errors << oof("OOF-COL11", message, node_name)
       end
