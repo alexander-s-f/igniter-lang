@@ -1,8 +1,8 @@
 {
   "kind": "stdlib_inventory",
   "format_version": "v0",
-  "stdlib_surface_digest": "49196e4d899a2c5873be9eb7bd9bd2ab3317d7796d24599243df97dfe0a892d1",
-  "note": "Normatively referenced by Ch8. Digest is computed from canonical re-serialization of entries sorted by canonical_name with entry_digest fields stripped — never from raw file bytes. P3 proof verifies determinism. P5 adds stdlib.collection.map + stdlib.collection.filter entries and updates stdlib.collection.count proof_lineage. CONSTRUCT-P1 adds stdlib.decimal.decimal (explicit Decimal constructor) and recomputes the digest. FLATMAP-P5 adds stdlib.collection.flat_map and recomputes the digest. PREDICATE-OPS-P4 adds stdlib.collection.find/any/all and recomputes the digest. LANG-STDLIB-NUMERIC-TEXT-CONVERSION-P1 adds stdlib.integer.parse_int/int_to_text/modulo (category numeric) and recomputes the digest. LANG-STDLIB-TEXT-ESCAPE-DELIMITED-P2 adds stdlib.text.encode_delimited/decode_delimited (escape-aware delimited row codec; decode -> Option[Collection[Text]]) and recomputes the digest. LANG-STDLIB-COLLECTION-AT-INVENTORY-P5 adds stdlib.collection.at (Collection[T] x Integer -> Option[T], zero-based, total) and recomputes the digest. LANG-STDLIB-TEXT-JOIN-P1 adds stdlib.text.join (Collection[Text] x Text -> Text, inverse of split) and recomputes the digest. LANG-STDLIB-WIRE-FRAME-CODEC-P2 adds stdlib.text.encode_frame (Text -> Text) and stdlib.text.decode_frame (Text -> Option[FrameDecode], length-prefixed netstring frame codec) and recomputes the digest. LANG-STDLIB-COLLECTION-SORT-BY-P3 adds stdlib.collection.sort_by (Collection[T] x (T -> K) -> Collection[T], stable ascending, K in {Integer, Text, Decimal}, OOF-COL11 fail-closed on Float and every other key shape) and recomputes the digest. LANG-STDLIB-MAP-RUNTIME-P1 makes stdlib.map.empty/stdlib.map.from_pairs ACTUALLY EXECUTABLE in the VM (bytecode OP_CALL + eval_ast HOF-dispatch, shared pair-validation/last-input-wins helper) — both entries previously claimed `production-implemented` with no live VM constructor arm (readers only); reconciles their signatures to Map[String, V] (v0 keys are exactly String, never a generic K), fixes stdlib.map.get's stale Option[V]/totality/diagnostics fields, and documents the LAST-INPUT-WINS duplicate-key law and Pair{first,second} shape; recomputes the digest. LANG-STDLIB-INVENTORY-QUALIFIED-IMPORT-SURFACE-P2 adds the additive import_surface field (absent/default = bare_alias, preserving every existing row's behavior) and registers the 13 canon Ch8 §8.11 stdlib.bytes.* pure operations as qualified_only — discoverable via inventory/help/MCP, callable only through qualified names, bare/named import refused (OOF-IMP3), compat aliases text_to_bytes/bytes_to_text recorded but not importable; capability/effect modules (stdlib.IO.*, stdlib.net.*) deliberately stay OUT of this canon inventory; recomputes the digest. LANG-STDLIB-COLLECTION-TAKE-CANON-P5 adds stdlib.collection.take (Collection[T] x Integer -> Collection[T], prefix-bounded reader, n<=0 -> [], n>=count(xs) -> all input, OOF-COL12 fail-closed on a non-Integer/non-lambda second argument) and recomputes the digest. LANG-STDLIB-MAP-PUT-P2 adds stdlib.map.put (immutable Map[String,V] update, absent insert/existing overwrite, last-write-wins, sorted-key JSON, O(n) carrier copy) and recomputes the digest. LANG-STDLIB-BYTES-HEX-CODEC-P1 adds stdlib.bytes.encode_hex (Bytes -> Text, total, canonical lower-case hex) and stdlib.bytes.decode_hex (Text -> Result[Bytes, BytesError], even-length 0-9/a-f/A-F only; invalid_length/invalid_hex fail-closed as data) as the explicit application-level crossing named by OOF-BY1/§8.11.4; both qualified_only, both production-implemented; base64 remains deferred; recomputes the digest. LANG-STDLIB-COLLECTION-SORT-BY-DESC-P4 adds stdlib.collection.sort_by_desc (Collection[T] x (T -> K) -> Collection[T], stable DESCENDING with equal keys preserving authored order, K in {Integer, Text, Decimal}, OOF-COL11 reused in the sort_by_desc spelling) and recomputes the digest. LANG-FLOAT-OPERATOR-FAMILY-P2 preserves stdlib.integer.neg and records that Float/Decimal negation now lower to their own type-resolved identities; recomputes the digest. LANG-FLOAT-OPERATOR-FAMILY-P2 + LANG-NUMERIC-LAMBDA-OPERATOR-IDENTITY-P3 add the monomorphic Float/Decimal ordering and unary-negation rows (stdlib.float.{lt,lte,gt,gte,neg}, stdlib.decimal.{lt,lte,gt,gte,neg}): homogeneous operands only, identity keyed on operand type in direct AND collection-HOF lambda positions, IEEE signed zero for Float, exact scale-aware comparison and checked minor-unit negation for Decimal; recomputes the digest.",
+  "stdlib_surface_digest": "80760b1ed1f6131733428da16d1955b6637627ace44867a16bb1b4ff10feb316",
+  "note": "Normatively referenced by Ch8. Digest is computed from canonical re-serialization of entries sorted by canonical_name with entry_digest fields stripped — never from raw file bytes. P3 proof verifies determinism. P5 adds stdlib.collection.map + stdlib.collection.filter entries and updates stdlib.collection.count proof_lineage. CONSTRUCT-P1 adds stdlib.decimal.decimal (explicit Decimal constructor) and recomputes the digest. FLATMAP-P5 adds stdlib.collection.flat_map and recomputes the digest. PREDICATE-OPS-P4 adds stdlib.collection.find/any/all and recomputes the digest. LANG-STDLIB-NUMERIC-TEXT-CONVERSION-P1 adds stdlib.integer.parse_int/int_to_text/modulo (category numeric) and recomputes the digest. LANG-STDLIB-TEXT-ESCAPE-DELIMITED-P2 adds stdlib.text.encode_delimited/decode_delimited (escape-aware delimited row codec; decode -> Option[Collection[Text]]) and recomputes the digest. LANG-STDLIB-COLLECTION-AT-INVENTORY-P5 adds stdlib.collection.at (Collection[T] x Integer -> Option[T], zero-based, total) and recomputes the digest. LANG-STDLIB-TEXT-JOIN-P1 adds stdlib.text.join (Collection[Text] x Text -> Text, inverse of split) and recomputes the digest. LANG-STDLIB-WIRE-FRAME-CODEC-P2 adds stdlib.text.encode_frame (Text -> Text) and stdlib.text.decode_frame (Text -> Option[FrameDecode], length-prefixed netstring frame codec) and recomputes the digest. LANG-STDLIB-COLLECTION-SORT-BY-P3 adds stdlib.collection.sort_by (Collection[T] x (T -> K) -> Collection[T], stable ascending, K in {Integer, Text, Decimal}, OOF-COL11 fail-closed on Float and every other key shape) and recomputes the digest. LANG-STDLIB-MAP-RUNTIME-P1 makes stdlib.map.empty/stdlib.map.from_pairs ACTUALLY EXECUTABLE in the VM (bytecode OP_CALL + eval_ast HOF-dispatch, shared pair-validation/last-input-wins helper) — both entries previously claimed `production-implemented` with no live VM constructor arm (readers only); reconciles their signatures to Map[String, V] (v0 keys are exactly String, never a generic K), fixes stdlib.map.get's stale Option[V]/totality/diagnostics fields, and documents the LAST-INPUT-WINS duplicate-key law and Pair{first,second} shape; recomputes the digest. LANG-STDLIB-INVENTORY-QUALIFIED-IMPORT-SURFACE-P2 adds the additive import_surface field (absent/default = bare_alias, preserving every existing row's behavior) and registers the 13 canon Ch8 §8.11 stdlib.bytes.* pure operations as qualified_only — discoverable via inventory/help/MCP, callable only through qualified names, bare/named import refused (OOF-IMP3), compat aliases text_to_bytes/bytes_to_text recorded but not importable; capability/effect modules (stdlib.IO.*, stdlib.net.*) deliberately stay OUT of this canon inventory; recomputes the digest. LANG-STDLIB-COLLECTION-TAKE-CANON-P5 adds stdlib.collection.take (Collection[T] x Integer -> Collection[T], prefix-bounded reader, n<=0 -> [], n>=count(xs) -> all input, OOF-COL12 fail-closed on a non-Integer/non-lambda second argument) and recomputes the digest. LANG-STDLIB-MAP-PUT-P2 adds stdlib.map.put (immutable Map[String,V] update, absent insert/existing overwrite, last-write-wins, sorted-key JSON, O(n) carrier copy) and recomputes the digest. LANG-STDLIB-BYTES-HEX-CODEC-P1 adds stdlib.bytes.encode_hex (Bytes -> Text, total, canonical lower-case hex) and stdlib.bytes.decode_hex (Text -> Result[Bytes, BytesError], even-length 0-9/a-f/A-F only; invalid_length/invalid_hex fail-closed as data) as the explicit application-level crossing named by OOF-BY1/§8.11.4; both qualified_only, both production-implemented; base64 remains deferred; recomputes the digest. LANG-STDLIB-COLLECTION-SORT-BY-DESC-P4 adds stdlib.collection.sort_by_desc (Collection[T] x (T -> K) -> Collection[T], stable DESCENDING with equal keys preserving authored order, K in {Integer, Text, Decimal}, OOF-COL11 reused in the sort_by_desc spelling) and recomputes the digest. LANG-FLOAT-OPERATOR-FAMILY-P2 preserves stdlib.integer.neg and records that Float/Decimal negation now lower to their own type-resolved identities; recomputes the digest. LANG-FLOAT-OPERATOR-FAMILY-P2 + LANG-NUMERIC-LAMBDA-OPERATOR-IDENTITY-P3 add the monomorphic Float/Decimal ordering and unary-negation rows (stdlib.float.{lt,lte,gt,gte,neg}, stdlib.decimal.{lt,lte,gt,gte,neg}): homogeneous operands only, identity keyed on operand type in direct AND collection-HOF lambda positions, IEEE signed zero for Float, exact scale-aware comparison and checked minor-unit negation for Decimal; recomputes the digest. LANG-STDLIB-MATH-SURFACE-CANON-ADMISSION-P2 admits the 15-name stdlib.math surface in three reproducibility tiers (ch8 §8.15): N0 scalar helpers deterministic by construction (abs/min/max/clamp/sign, homogeneous Integer|Float, no coercion, sign(-0.0)==0), F1 fast platform-f64 with NO cross-ISA bit-identity claim (sin/cos/sqrt/pi, finite-only, sqrt(x<0) refused), and D1 deterministic fixed-carrier (det_sin/det_cos/det_sqrt/det_ln/ det_exp/det_tan, function-specific carriers + golden-bit locks, domain and non-finite refusals); recomputes the digest.",
   "entries": [
     {
       "canonical_name": "stdlib.text.byte_length",
@@ -3605,6 +3605,658 @@
       ],
       "compatibility_note": "Qualified-only module surface (Ch8 §8.11.6): callable ONLY as the qualified name; bare/named import is refused (OOF-IMP3); no compat alias. Carrier-invariant: no operation exposes the internal byte representation; implicit Bytes at contract ports is refused by OOF-BY1 — this op IS the explicit host-boundary crossing named by §8.11.4. Strict grammar: even-length ASCII hex using 0-9/a-f/A-F only — no `0x` prefix, no whitespace, no separators; re-encoding via encode_hex always yields the canonical lower-case form.",
       "owner_surface": "Ch8 §8.11",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.math.abs",
+      "semantic_ir_name": "stdlib.math.abs",
+      "legacy_sir": null,
+      "aliases": [
+        {
+          "kind": "source_alias",
+          "name": "abs"
+        }
+      ],
+      "category": "numeric",
+      "lifecycle_status": "lab-implemented",
+      "semantic_stability": "experiment-pass",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "partial",
+      "type_params": [
+        "T"
+      ],
+      "input_signature": [
+        "T"
+      ],
+      "output_signature": "T",
+      "diagnostics": [
+        "OOF-MATH1",
+        "OOF-MATH2",
+        "OOF-MATH3"
+      ],
+      "failure_behavior": "Integer overflow fails closed, including abs(i64::MIN) which has no positive counterpart; a non-finite Float input is a deterministic runtime error.",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "LANG-FLOAT-MATH-SURFACE-CANON-READINESS-P1 — measured 20 candidates x 8 planes (UNIFORM: Rust clean / canon Ruby OOF-TY0 / VM direct AND nested success / spec absent / inventory absent / import OOF-IMP2 / catalog lab_path_candidate+live_unregistered) and a payoff curve of 48 app diagnostics -> 1 residual for the chosen 15-name surface",
+        "LANG-STDLIB-MATH-SURFACE-CANON-ADMISSION-P2 — ch8 §8.15 written with the three reproducibility tiers; canon Ruby typing via one owner-local MATH_STDLIB_FNS table; Rust emitter qualifies the bare source spelling at both ownership points; VM Tier-F1 domain/finite refusals hardened (sqrt(-1.0) previously returned a canon-visible NaN); these inventory rows + Surface Catalog"
+      ],
+      "examples": [
+        "abs(-5) -> 5",
+        "abs(-2.5) -> 2.5",
+        "abs(i64::MIN) -> runtime error (overflow)"
+      ],
+      "compatibility_note": "Tier N0. Deterministic BY CONSTRUCTION — comparisons and sign flips are bit-identical on every target, so this tier needs no det_* sibling. The natural BARE spelling `abs(...)` is the source form; both toolchains lower it to the qualified identity `stdlib.math.abs`, and no newly emitted SIR carries a bare math identity (bare names remain runtime compatibility inputs so previously compiled artifacts keep executing). Recognized typed collection-HOF bodies emit the same qualified identity as direct positions. Diagnostics reuse the already-authoritative OOF-MATH1 (arity) / OOF-MATH2 (argument type) / OOF-MATH3 (mixed numeric family) verbatim in BOTH toolchains — no new code minted. T is Integer or Float, homogeneous — a mixed numeric pair is refused with OOF-MATH3, never widened. Decimal is deliberately not admitted here. Canon Ruby owns typing parity; execution is Rust VM authority, and the direct OP_CALL and nested eval-AST paths share one semantic owner. See ch8 §8.15.",
+      "owner_surface": "LANG-FLOAT-MATH-SURFACE-CANON-READINESS-P1",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.math.min",
+      "semantic_ir_name": "stdlib.math.min",
+      "legacy_sir": null,
+      "aliases": [
+        {
+          "kind": "source_alias",
+          "name": "min"
+        }
+      ],
+      "category": "numeric",
+      "lifecycle_status": "lab-implemented",
+      "semantic_stability": "experiment-pass",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "partial",
+      "type_params": [
+        "T"
+      ],
+      "input_signature": [
+        "T",
+        "T"
+      ],
+      "output_signature": "T",
+      "diagnostics": [
+        "OOF-MATH1",
+        "OOF-MATH2",
+        "OOF-MATH3"
+      ],
+      "failure_behavior": "Mixed numeric operands are OOF-MATH3 at typecheck; a non-finite Float input is a deterministic runtime error.",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "LANG-FLOAT-MATH-SURFACE-CANON-READINESS-P1 — measured 20 candidates x 8 planes (UNIFORM: Rust clean / canon Ruby OOF-TY0 / VM direct AND nested success / spec absent / inventory absent / import OOF-IMP2 / catalog lab_path_candidate+live_unregistered) and a payoff curve of 48 app diagnostics -> 1 residual for the chosen 15-name surface",
+        "LANG-STDLIB-MATH-SURFACE-CANON-ADMISSION-P2 — ch8 §8.15 written with the three reproducibility tiers; canon Ruby typing via one owner-local MATH_STDLIB_FNS table; Rust emitter qualifies the bare source spelling at both ownership points; VM Tier-F1 domain/finite refusals hardened (sqrt(-1.0) previously returned a canon-visible NaN); these inventory rows + Surface Catalog"
+      ],
+      "examples": [
+        "min(3, 7) -> 3",
+        "min(1.5, 2.5) -> 1.5"
+      ],
+      "compatibility_note": "Tier N0. Deterministic BY CONSTRUCTION — comparisons and sign flips are bit-identical on every target, so this tier needs no det_* sibling. The natural BARE spelling `min(...)` is the source form; both toolchains lower it to the qualified identity `stdlib.math.min`, and no newly emitted SIR carries a bare math identity (bare names remain runtime compatibility inputs so previously compiled artifacts keep executing). Recognized typed collection-HOF bodies emit the same qualified identity as direct positions. Diagnostics reuse the already-authoritative OOF-MATH1 (arity) / OOF-MATH2 (argument type) / OOF-MATH3 (mixed numeric family) verbatim in BOTH toolchains — no new code minted. T is Integer or Float, homogeneous — a mixed numeric pair is refused with OOF-MATH3, never widened. Decimal is deliberately not admitted here. Canon Ruby owns typing parity; execution is Rust VM authority, and the direct OP_CALL and nested eval-AST paths share one semantic owner. See ch8 §8.15.",
+      "owner_surface": "LANG-FLOAT-MATH-SURFACE-CANON-READINESS-P1",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.math.max",
+      "semantic_ir_name": "stdlib.math.max",
+      "legacy_sir": null,
+      "aliases": [
+        {
+          "kind": "source_alias",
+          "name": "max"
+        }
+      ],
+      "category": "numeric",
+      "lifecycle_status": "lab-implemented",
+      "semantic_stability": "experiment-pass",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "partial",
+      "type_params": [
+        "T"
+      ],
+      "input_signature": [
+        "T",
+        "T"
+      ],
+      "output_signature": "T",
+      "diagnostics": [
+        "OOF-MATH1",
+        "OOF-MATH2",
+        "OOF-MATH3"
+      ],
+      "failure_behavior": "Mixed numeric operands are OOF-MATH3 at typecheck; a non-finite Float input is a deterministic runtime error.",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "LANG-FLOAT-MATH-SURFACE-CANON-READINESS-P1 — measured 20 candidates x 8 planes (UNIFORM: Rust clean / canon Ruby OOF-TY0 / VM direct AND nested success / spec absent / inventory absent / import OOF-IMP2 / catalog lab_path_candidate+live_unregistered) and a payoff curve of 48 app diagnostics -> 1 residual for the chosen 15-name surface",
+        "LANG-STDLIB-MATH-SURFACE-CANON-ADMISSION-P2 — ch8 §8.15 written with the three reproducibility tiers; canon Ruby typing via one owner-local MATH_STDLIB_FNS table; Rust emitter qualifies the bare source spelling at both ownership points; VM Tier-F1 domain/finite refusals hardened (sqrt(-1.0) previously returned a canon-visible NaN); these inventory rows + Surface Catalog"
+      ],
+      "examples": [
+        "max(3, 7) -> 7",
+        "max(1.5, 2.5) -> 2.5"
+      ],
+      "compatibility_note": "Tier N0. Deterministic BY CONSTRUCTION — comparisons and sign flips are bit-identical on every target, so this tier needs no det_* sibling. The natural BARE spelling `max(...)` is the source form; both toolchains lower it to the qualified identity `stdlib.math.max`, and no newly emitted SIR carries a bare math identity (bare names remain runtime compatibility inputs so previously compiled artifacts keep executing). Recognized typed collection-HOF bodies emit the same qualified identity as direct positions. Diagnostics reuse the already-authoritative OOF-MATH1 (arity) / OOF-MATH2 (argument type) / OOF-MATH3 (mixed numeric family) verbatim in BOTH toolchains — no new code minted. T is Integer or Float, homogeneous — a mixed numeric pair is refused with OOF-MATH3, never widened. Decimal is deliberately not admitted here. Canon Ruby owns typing parity; execution is Rust VM authority, and the direct OP_CALL and nested eval-AST paths share one semantic owner. See ch8 §8.15.",
+      "owner_surface": "LANG-FLOAT-MATH-SURFACE-CANON-READINESS-P1",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.math.clamp",
+      "semantic_ir_name": "stdlib.math.clamp",
+      "legacy_sir": null,
+      "aliases": [
+        {
+          "kind": "source_alias",
+          "name": "clamp"
+        }
+      ],
+      "category": "numeric",
+      "lifecycle_status": "lab-implemented",
+      "semantic_stability": "experiment-pass",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "partial",
+      "type_params": [
+        "T"
+      ],
+      "input_signature": [
+        "T",
+        "T",
+        "T"
+      ],
+      "output_signature": "T",
+      "diagnostics": [
+        "OOF-MATH1",
+        "OOF-MATH2",
+        "OOF-MATH3"
+      ],
+      "failure_behavior": "clamp(value, lo, hi) refuses lo > hi at runtime rather than silently reordering the bounds; mixed operands are OOF-MATH3; non-finite Float input is an error.",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "LANG-FLOAT-MATH-SURFACE-CANON-READINESS-P1 — measured 20 candidates x 8 planes (UNIFORM: Rust clean / canon Ruby OOF-TY0 / VM direct AND nested success / spec absent / inventory absent / import OOF-IMP2 / catalog lab_path_candidate+live_unregistered) and a payoff curve of 48 app diagnostics -> 1 residual for the chosen 15-name surface",
+        "LANG-STDLIB-MATH-SURFACE-CANON-ADMISSION-P2 — ch8 §8.15 written with the three reproducibility tiers; canon Ruby typing via one owner-local MATH_STDLIB_FNS table; Rust emitter qualifies the bare source spelling at both ownership points; VM Tier-F1 domain/finite refusals hardened (sqrt(-1.0) previously returned a canon-visible NaN); these inventory rows + Surface Catalog"
+      ],
+      "examples": [
+        "clamp(9, 1, 5) -> 5",
+        "clamp(0.5, 1.0, 2.0) -> 1.0"
+      ],
+      "compatibility_note": "Tier N0. Deterministic BY CONSTRUCTION — comparisons and sign flips are bit-identical on every target, so this tier needs no det_* sibling. The natural BARE spelling `clamp(...)` is the source form; both toolchains lower it to the qualified identity `stdlib.math.clamp`, and no newly emitted SIR carries a bare math identity (bare names remain runtime compatibility inputs so previously compiled artifacts keep executing). Recognized typed collection-HOF bodies emit the same qualified identity as direct positions. Diagnostics reuse the already-authoritative OOF-MATH1 (arity) / OOF-MATH2 (argument type) / OOF-MATH3 (mixed numeric family) verbatim in BOTH toolchains — no new code minted. T is Integer or Float, homogeneous — a mixed numeric pair is refused with OOF-MATH3, never widened. Decimal is deliberately not admitted here. Canon Ruby owns typing parity; execution is Rust VM authority, and the direct OP_CALL and nested eval-AST paths share one semantic owner. See ch8 §8.15.",
+      "owner_surface": "LANG-FLOAT-MATH-SURFACE-CANON-READINESS-P1",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.math.sign",
+      "semantic_ir_name": "stdlib.math.sign",
+      "legacy_sir": null,
+      "aliases": [
+        {
+          "kind": "source_alias",
+          "name": "sign"
+        }
+      ],
+      "category": "numeric",
+      "lifecycle_status": "lab-implemented",
+      "semantic_stability": "experiment-pass",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "partial",
+      "type_params": [
+        "T"
+      ],
+      "input_signature": [
+        "T"
+      ],
+      "output_signature": "Integer",
+      "diagnostics": [
+        "OOF-MATH1",
+        "OOF-MATH2",
+        "OOF-MATH3"
+      ],
+      "failure_behavior": "A non-finite Float input is a deterministic runtime error.",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "LANG-FLOAT-MATH-SURFACE-CANON-READINESS-P1 — measured 20 candidates x 8 planes (UNIFORM: Rust clean / canon Ruby OOF-TY0 / VM direct AND nested success / spec absent / inventory absent / import OOF-IMP2 / catalog lab_path_candidate+live_unregistered) and a payoff curve of 48 app diagnostics -> 1 residual for the chosen 15-name surface",
+        "LANG-STDLIB-MATH-SURFACE-CANON-ADMISSION-P2 — ch8 §8.15 written with the three reproducibility tiers; canon Ruby typing via one owner-local MATH_STDLIB_FNS table; Rust emitter qualifies the bare source spelling at both ownership points; VM Tier-F1 domain/finite refusals hardened (sqrt(-1.0) previously returned a canon-visible NaN); these inventory rows + Surface Catalog"
+      ],
+      "examples": [
+        "sign(-2.5) -> -1",
+        "sign(0) -> 0",
+        "sign(-0.0) -> 0"
+      ],
+      "compatibility_note": "Tier N0. Deterministic BY CONSTRUCTION — comparisons and sign flips are bit-identical on every target, so this tier needs no det_* sibling. The natural BARE spelling `sign(...)` is the source form; both toolchains lower it to the qualified identity `stdlib.math.sign`, and no newly emitted SIR carries a bare math identity (bare names remain runtime compatibility inputs so previously compiled artifacts keep executing). Recognized typed collection-HOF bodies emit the same qualified identity as direct positions. Diagnostics reuse the already-authoritative OOF-MATH1 (arity) / OOF-MATH2 (argument type) / OOF-MATH3 (mixed numeric family) verbatim in BOTH toolchains — no new code minted. T is Integer or Float, homogeneous — a mixed numeric pair is refused with OOF-MATH3, never widened. Decimal is deliberately not admitted here. Result is Integer in {-1, 0, 1}. sign(-0.0) == 0, consistent with ch8 §8.14's signed-zero law where -0.0 == 0.0. Canon Ruby owns typing parity; execution is Rust VM authority, and the direct OP_CALL and nested eval-AST paths share one semantic owner. See ch8 §8.15.",
+      "owner_surface": "LANG-FLOAT-MATH-SURFACE-CANON-READINESS-P1",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.math.sin",
+      "semantic_ir_name": "stdlib.math.sin",
+      "legacy_sir": null,
+      "aliases": [
+        {
+          "kind": "source_alias",
+          "name": "sin"
+        }
+      ],
+      "category": "numeric",
+      "lifecycle_status": "lab-implemented",
+      "semantic_stability": "experiment-pass",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "partial",
+      "type_params": [],
+      "input_signature": [
+        "Float"
+      ],
+      "output_signature": "Float",
+      "diagnostics": [
+        "OOF-MATH1",
+        "OOF-MATH2",
+        "OOF-MATH3"
+      ],
+      "failure_behavior": "A non-finite input is refused — a canon-visible NaN is a leak, not a value.",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "LANG-FLOAT-MATH-SURFACE-CANON-READINESS-P1 — measured 20 candidates x 8 planes (UNIFORM: Rust clean / canon Ruby OOF-TY0 / VM direct AND nested success / spec absent / inventory absent / import OOF-IMP2 / catalog lab_path_candidate+live_unregistered) and a payoff curve of 48 app diagnostics -> 1 residual for the chosen 15-name surface",
+        "LANG-STDLIB-MATH-SURFACE-CANON-ADMISSION-P2 — ch8 §8.15 written with the three reproducibility tiers; canon Ruby typing via one owner-local MATH_STDLIB_FNS table; Rust emitter qualifies the bare source spelling at both ownership points; VM Tier-F1 domain/finite refusals hardened (sqrt(-1.0) previously returned a canon-visible NaN); these inventory rows + Surface Catalog"
+      ],
+      "examples": [
+        "sin(0.5) -> 0.479425538604203"
+      ],
+      "compatibility_note": "Tier F1. FAST platform-f64. Tolerance-tested; NO bit-identical cross-ISA claim. A replay that must be bit-exact on another architecture uses the D1 tier instead. The natural BARE spelling `sin(...)` is the source form; both toolchains lower it to the qualified identity `stdlib.math.sin`, and no newly emitted SIR carries a bare math identity (bare names remain runtime compatibility inputs so previously compiled artifacts keep executing). Recognized typed collection-HOF bodies emit the same qualified identity as direct positions. Diagnostics reuse the already-authoritative OOF-MATH1 (arity) / OOF-MATH2 (argument type) / OOF-MATH3 (mixed numeric family) verbatim in BOTH toolchains — no new code minted. No implicit Integer/Decimal conversion. Canon Ruby owns typing parity; execution is Rust VM authority, and the direct OP_CALL and nested eval-AST paths share one semantic owner. See ch8 §8.15.",
+      "owner_surface": "LANG-FLOAT-MATH-SURFACE-CANON-READINESS-P1",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.math.cos",
+      "semantic_ir_name": "stdlib.math.cos",
+      "legacy_sir": null,
+      "aliases": [
+        {
+          "kind": "source_alias",
+          "name": "cos"
+        }
+      ],
+      "category": "numeric",
+      "lifecycle_status": "lab-implemented",
+      "semantic_stability": "experiment-pass",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "partial",
+      "type_params": [],
+      "input_signature": [
+        "Float"
+      ],
+      "output_signature": "Float",
+      "diagnostics": [
+        "OOF-MATH1",
+        "OOF-MATH2",
+        "OOF-MATH3"
+      ],
+      "failure_behavior": "A non-finite input is refused.",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "LANG-FLOAT-MATH-SURFACE-CANON-READINESS-P1 — measured 20 candidates x 8 planes (UNIFORM: Rust clean / canon Ruby OOF-TY0 / VM direct AND nested success / spec absent / inventory absent / import OOF-IMP2 / catalog lab_path_candidate+live_unregistered) and a payoff curve of 48 app diagnostics -> 1 residual for the chosen 15-name surface",
+        "LANG-STDLIB-MATH-SURFACE-CANON-ADMISSION-P2 — ch8 §8.15 written with the three reproducibility tiers; canon Ruby typing via one owner-local MATH_STDLIB_FNS table; Rust emitter qualifies the bare source spelling at both ownership points; VM Tier-F1 domain/finite refusals hardened (sqrt(-1.0) previously returned a canon-visible NaN); these inventory rows + Surface Catalog"
+      ],
+      "examples": [
+        "cos(0.5) -> 0.8775825618903728"
+      ],
+      "compatibility_note": "Tier F1. FAST platform-f64. Tolerance-tested; NO bit-identical cross-ISA claim. A replay that must be bit-exact on another architecture uses the D1 tier instead. The natural BARE spelling `cos(...)` is the source form; both toolchains lower it to the qualified identity `stdlib.math.cos`, and no newly emitted SIR carries a bare math identity (bare names remain runtime compatibility inputs so previously compiled artifacts keep executing). Recognized typed collection-HOF bodies emit the same qualified identity as direct positions. Diagnostics reuse the already-authoritative OOF-MATH1 (arity) / OOF-MATH2 (argument type) / OOF-MATH3 (mixed numeric family) verbatim in BOTH toolchains — no new code minted. No implicit Integer/Decimal conversion. Canon Ruby owns typing parity; execution is Rust VM authority, and the direct OP_CALL and nested eval-AST paths share one semantic owner. See ch8 §8.15.",
+      "owner_surface": "LANG-FLOAT-MATH-SURFACE-CANON-READINESS-P1",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.math.sqrt",
+      "semantic_ir_name": "stdlib.math.sqrt",
+      "legacy_sir": null,
+      "aliases": [
+        {
+          "kind": "source_alias",
+          "name": "sqrt"
+        }
+      ],
+      "category": "numeric",
+      "lifecycle_status": "lab-implemented",
+      "semantic_stability": "experiment-pass",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "partial",
+      "type_params": [],
+      "input_signature": [
+        "Float"
+      ],
+      "output_signature": "Float",
+      "diagnostics": [
+        "OOF-MATH1",
+        "OOF-MATH2",
+        "OOF-MATH3"
+      ],
+      "failure_behavior": "x < 0 is refused with a domain error, and a non-finite input is refused. BEFORE this admission sqrt(-1.0) returned a NaN that serialized as null; closing that leak was a precondition of publishing this row, not a footnote.",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "LANG-FLOAT-MATH-SURFACE-CANON-READINESS-P1 — measured 20 candidates x 8 planes (UNIFORM: Rust clean / canon Ruby OOF-TY0 / VM direct AND nested success / spec absent / inventory absent / import OOF-IMP2 / catalog lab_path_candidate+live_unregistered) and a payoff curve of 48 app diagnostics -> 1 residual for the chosen 15-name surface",
+        "LANG-STDLIB-MATH-SURFACE-CANON-ADMISSION-P2 — ch8 §8.15 written with the three reproducibility tiers; canon Ruby typing via one owner-local MATH_STDLIB_FNS table; Rust emitter qualifies the bare source spelling at both ownership points; VM Tier-F1 domain/finite refusals hardened (sqrt(-1.0) previously returned a canon-visible NaN); these inventory rows + Surface Catalog"
+      ],
+      "examples": [
+        "sqrt(4.0) -> 2.0",
+        "sqrt(-1.0) -> runtime domain error"
+      ],
+      "compatibility_note": "Tier F1. FAST platform-f64. Tolerance-tested; NO bit-identical cross-ISA claim. A replay that must be bit-exact on another architecture uses the D1 tier instead. The natural BARE spelling `sqrt(...)` is the source form; both toolchains lower it to the qualified identity `stdlib.math.sqrt`, and no newly emitted SIR carries a bare math identity (bare names remain runtime compatibility inputs so previously compiled artifacts keep executing). Recognized typed collection-HOF bodies emit the same qualified identity as direct positions. Diagnostics reuse the already-authoritative OOF-MATH1 (arity) / OOF-MATH2 (argument type) / OOF-MATH3 (mixed numeric family) verbatim in BOTH toolchains — no new code minted. No implicit Integer/Decimal conversion. Canon Ruby owns typing parity; execution is Rust VM authority, and the direct OP_CALL and nested eval-AST paths share one semantic owner. See ch8 §8.15.",
+      "owner_surface": "LANG-FLOAT-MATH-SURFACE-CANON-READINESS-P1",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.math.pi",
+      "semantic_ir_name": "stdlib.math.pi",
+      "legacy_sir": null,
+      "aliases": [
+        {
+          "kind": "source_alias",
+          "name": "pi"
+        }
+      ],
+      "category": "numeric",
+      "lifecycle_status": "lab-implemented",
+      "semantic_stability": "experiment-pass",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "total",
+      "type_params": [],
+      "input_signature": [],
+      "output_signature": "Float",
+      "diagnostics": [
+        "OOF-MATH1",
+        "OOF-MATH2",
+        "OOF-MATH3"
+      ],
+      "failure_behavior": "Arity other than zero is OOF-MATH1. Cannot fail at runtime.",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "LANG-FLOAT-MATH-SURFACE-CANON-READINESS-P1 — measured 20 candidates x 8 planes (UNIFORM: Rust clean / canon Ruby OOF-TY0 / VM direct AND nested success / spec absent / inventory absent / import OOF-IMP2 / catalog lab_path_candidate+live_unregistered) and a payoff curve of 48 app diagnostics -> 1 residual for the chosen 15-name surface",
+        "LANG-STDLIB-MATH-SURFACE-CANON-ADMISSION-P2 — ch8 §8.15 written with the three reproducibility tiers; canon Ruby typing via one owner-local MATH_STDLIB_FNS table; Rust emitter qualifies the bare source spelling at both ownership points; VM Tier-F1 domain/finite refusals hardened (sqrt(-1.0) previously returned a canon-visible NaN); these inventory rows + Surface Catalog"
+      ],
+      "examples": [
+        "pi() -> 3.141592653589793"
+      ],
+      "compatibility_note": "Tier F1. FAST platform-f64. Tolerance-tested; NO bit-identical cross-ISA claim. A replay that must be bit-exact on another architecture uses the D1 tier instead. The natural BARE spelling `pi(...)` is the source form; both toolchains lower it to the qualified identity `stdlib.math.pi`, and no newly emitted SIR carries a bare math identity (bare names remain runtime compatibility inputs so previously compiled artifacts keep executing). Recognized typed collection-HOF bodies emit the same qualified identity as direct positions. Diagnostics reuse the already-authoritative OOF-MATH1 (arity) / OOF-MATH2 (argument type) / OOF-MATH3 (mixed numeric family) verbatim in BOTH toolchains — no new code minted. Zero-argument constant surface. Canon Ruby owns typing parity; execution is Rust VM authority, and the direct OP_CALL and nested eval-AST paths share one semantic owner. See ch8 §8.15.",
+      "owner_surface": "LANG-FLOAT-MATH-SURFACE-CANON-READINESS-P1",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.math.det_sin",
+      "semantic_ir_name": "stdlib.math.det_sin",
+      "legacy_sir": null,
+      "aliases": [
+        {
+          "kind": "source_alias",
+          "name": "det_sin"
+        }
+      ],
+      "category": "numeric",
+      "lifecycle_status": "lab-implemented",
+      "semantic_stability": "experiment-pass",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "partial",
+      "type_params": [],
+      "input_signature": [
+        "Float"
+      ],
+      "output_signature": "Float",
+      "diagnostics": [
+        "OOF-MATH1",
+        "OOF-MATH2",
+        "OOF-MATH3"
+      ],
+      "failure_behavior": "Non-finite input or non-finite result fails closed.",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "LANG-FLOAT-MATH-SURFACE-CANON-READINESS-P1 — measured 20 candidates x 8 planes (UNIFORM: Rust clean / canon Ruby OOF-TY0 / VM direct AND nested success / spec absent / inventory absent / import OOF-IMP2 / catalog lab_path_candidate+live_unregistered) and a payoff curve of 48 app diagnostics -> 1 residual for the chosen 15-name surface",
+        "LANG-STDLIB-MATH-SURFACE-CANON-ADMISSION-P2 — ch8 §8.15 written with the three reproducibility tiers; canon Ruby typing via one owner-local MATH_STDLIB_FNS table; Rust emitter qualifies the bare source spelling at both ownership points; VM Tier-F1 domain/finite refusals hardened (sqrt(-1.0) previously returned a canon-visible NaN); these inventory rows + Surface Catalog"
+      ],
+      "examples": [
+        "det_sin(0.5) -> 0.479425538604203"
+      ],
+      "compatibility_note": "Tier D1. DETERMINISTIC fixed-result carrier plus golden-bit drift locks: vendored pure-Rust libm owns det_sin/det_cos/det_ln/det_exp/det_tan; IEEE-correct f64::sqrt owns det_sqrt. Governed deterministic execution is claimed; VERIFIED multi-ISA parity is NOT — cross-arch confirmation is a separate CI matter and must not be inferred from this row. The natural BARE spelling `det_sin(...)` is the source form; both toolchains lower it to the qualified identity `stdlib.math.det_sin`, and no newly emitted SIR carries a bare math identity (bare names remain runtime compatibility inputs so previously compiled artifacts keep executing). Recognized typed collection-HOF bodies emit the same qualified identity as direct positions. Diagnostics reuse the already-authoritative OOF-MATH1 (arity) / OOF-MATH2 (argument type) / OOF-MATH3 (mixed numeric family) verbatim in BOTH toolchains — no new code minted. Vendored pure-Rust libm with a local golden-bit lock. Canon Ruby owns typing parity; execution is Rust VM authority, and the direct OP_CALL and nested eval-AST paths share one semantic owner. See ch8 §8.15.",
+      "owner_surface": "LANG-FLOAT-MATH-SURFACE-CANON-READINESS-P1",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.math.det_cos",
+      "semantic_ir_name": "stdlib.math.det_cos",
+      "legacy_sir": null,
+      "aliases": [
+        {
+          "kind": "source_alias",
+          "name": "det_cos"
+        }
+      ],
+      "category": "numeric",
+      "lifecycle_status": "lab-implemented",
+      "semantic_stability": "experiment-pass",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "partial",
+      "type_params": [],
+      "input_signature": [
+        "Float"
+      ],
+      "output_signature": "Float",
+      "diagnostics": [
+        "OOF-MATH1",
+        "OOF-MATH2",
+        "OOF-MATH3"
+      ],
+      "failure_behavior": "Non-finite input or non-finite result fails closed.",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "LANG-FLOAT-MATH-SURFACE-CANON-READINESS-P1 — measured 20 candidates x 8 planes (UNIFORM: Rust clean / canon Ruby OOF-TY0 / VM direct AND nested success / spec absent / inventory absent / import OOF-IMP2 / catalog lab_path_candidate+live_unregistered) and a payoff curve of 48 app diagnostics -> 1 residual for the chosen 15-name surface",
+        "LANG-STDLIB-MATH-SURFACE-CANON-ADMISSION-P2 — ch8 §8.15 written with the three reproducibility tiers; canon Ruby typing via one owner-local MATH_STDLIB_FNS table; Rust emitter qualifies the bare source spelling at both ownership points; VM Tier-F1 domain/finite refusals hardened (sqrt(-1.0) previously returned a canon-visible NaN); these inventory rows + Surface Catalog"
+      ],
+      "examples": [
+        "det_cos(0.5) -> 0.8775825618903728"
+      ],
+      "compatibility_note": "Tier D1. DETERMINISTIC fixed-result carrier plus golden-bit drift locks: vendored pure-Rust libm owns det_sin/det_cos/det_ln/det_exp/det_tan; IEEE-correct f64::sqrt owns det_sqrt. Governed deterministic execution is claimed; VERIFIED multi-ISA parity is NOT — cross-arch confirmation is a separate CI matter and must not be inferred from this row. The natural BARE spelling `det_cos(...)` is the source form; both toolchains lower it to the qualified identity `stdlib.math.det_cos`, and no newly emitted SIR carries a bare math identity (bare names remain runtime compatibility inputs so previously compiled artifacts keep executing). Recognized typed collection-HOF bodies emit the same qualified identity as direct positions. Diagnostics reuse the already-authoritative OOF-MATH1 (arity) / OOF-MATH2 (argument type) / OOF-MATH3 (mixed numeric family) verbatim in BOTH toolchains — no new code minted. Vendored pure-Rust libm with a local golden-bit lock. Canon Ruby owns typing parity; execution is Rust VM authority, and the direct OP_CALL and nested eval-AST paths share one semantic owner. See ch8 §8.15.",
+      "owner_surface": "LANG-FLOAT-MATH-SURFACE-CANON-READINESS-P1",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.math.det_sqrt",
+      "semantic_ir_name": "stdlib.math.det_sqrt",
+      "legacy_sir": null,
+      "aliases": [
+        {
+          "kind": "source_alias",
+          "name": "det_sqrt"
+        }
+      ],
+      "category": "numeric",
+      "lifecycle_status": "lab-implemented",
+      "semantic_stability": "experiment-pass",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "partial",
+      "type_params": [],
+      "input_signature": [
+        "Float"
+      ],
+      "output_signature": "Float",
+      "diagnostics": [
+        "OOF-MATH1",
+        "OOF-MATH2",
+        "OOF-MATH3"
+      ],
+      "failure_behavior": "Requires x >= 0; a negative input or a non-finite input fails closed.",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "LANG-FLOAT-MATH-SURFACE-CANON-READINESS-P1 — measured 20 candidates x 8 planes (UNIFORM: Rust clean / canon Ruby OOF-TY0 / VM direct AND nested success / spec absent / inventory absent / import OOF-IMP2 / catalog lab_path_candidate+live_unregistered) and a payoff curve of 48 app diagnostics -> 1 residual for the chosen 15-name surface",
+        "LANG-STDLIB-MATH-SURFACE-CANON-ADMISSION-P2 — ch8 §8.15 written with the three reproducibility tiers; canon Ruby typing via one owner-local MATH_STDLIB_FNS table; Rust emitter qualifies the bare source spelling at both ownership points; VM Tier-F1 domain/finite refusals hardened (sqrt(-1.0) previously returned a canon-visible NaN); these inventory rows + Surface Catalog"
+      ],
+      "examples": [
+        "det_sqrt(4.0) -> 2.0"
+      ],
+      "compatibility_note": "Tier D1. DETERMINISTIC fixed-result carrier plus golden-bit drift locks: vendored pure-Rust libm owns det_sin/det_cos/det_ln/det_exp/det_tan; IEEE-correct f64::sqrt owns det_sqrt. Governed deterministic execution is claimed; VERIFIED multi-ISA parity is NOT — cross-arch confirmation is a separate CI matter and must not be inferred from this row. The natural BARE spelling `det_sqrt(...)` is the source form; both toolchains lower it to the qualified identity `stdlib.math.det_sqrt`, and no newly emitted SIR carries a bare math identity (bare names remain runtime compatibility inputs so previously compiled artifacts keep executing). Recognized typed collection-HOF bodies emit the same qualified identity as direct positions. Diagnostics reuse the already-authoritative OOF-MATH1 (arity) / OOF-MATH2 (argument type) / OOF-MATH3 (mixed numeric family) verbatim in BOTH toolchains — no new code minted. IEEE-correct f64::sqrt — exact on every conforming target. Canon Ruby owns typing parity; execution is Rust VM authority, and the direct OP_CALL and nested eval-AST paths share one semantic owner. See ch8 §8.15.",
+      "owner_surface": "LANG-FLOAT-MATH-SURFACE-CANON-READINESS-P1",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.math.det_ln",
+      "semantic_ir_name": "stdlib.math.det_ln",
+      "legacy_sir": null,
+      "aliases": [
+        {
+          "kind": "source_alias",
+          "name": "det_ln"
+        }
+      ],
+      "category": "numeric",
+      "lifecycle_status": "lab-implemented",
+      "semantic_stability": "experiment-pass",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "partial",
+      "type_params": [],
+      "input_signature": [
+        "Float"
+      ],
+      "output_signature": "Float",
+      "diagnostics": [
+        "OOF-MATH1",
+        "OOF-MATH2",
+        "OOF-MATH3"
+      ],
+      "failure_behavior": "Requires x > 0; det_ln(0.0) and det_ln(x<0) are deterministic domain errors.",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "LANG-FLOAT-MATH-SURFACE-CANON-READINESS-P1 — measured 20 candidates x 8 planes (UNIFORM: Rust clean / canon Ruby OOF-TY0 / VM direct AND nested success / spec absent / inventory absent / import OOF-IMP2 / catalog lab_path_candidate+live_unregistered) and a payoff curve of 48 app diagnostics -> 1 residual for the chosen 15-name surface",
+        "LANG-STDLIB-MATH-SURFACE-CANON-ADMISSION-P2 — ch8 §8.15 written with the three reproducibility tiers; canon Ruby typing via one owner-local MATH_STDLIB_FNS table; Rust emitter qualifies the bare source spelling at both ownership points; VM Tier-F1 domain/finite refusals hardened (sqrt(-1.0) previously returned a canon-visible NaN); these inventory rows + Surface Catalog"
+      ],
+      "examples": [
+        "det_ln(2.0) -> 0.6931471805599453",
+        "det_ln(0.0) -> runtime domain error"
+      ],
+      "compatibility_note": "Tier D1. DETERMINISTIC fixed-result carrier plus golden-bit drift locks: vendored pure-Rust libm owns det_sin/det_cos/det_ln/det_exp/det_tan; IEEE-correct f64::sqrt owns det_sqrt. Governed deterministic execution is claimed; VERIFIED multi-ISA parity is NOT — cross-arch confirmation is a separate CI matter and must not be inferred from this row. The natural BARE spelling `det_ln(...)` is the source form; both toolchains lower it to the qualified identity `stdlib.math.det_ln`, and no newly emitted SIR carries a bare math identity (bare names remain runtime compatibility inputs so previously compiled artifacts keep executing). Recognized typed collection-HOF bodies emit the same qualified identity as direct positions. Diagnostics reuse the already-authoritative OOF-MATH1 (arity) / OOF-MATH2 (argument type) / OOF-MATH3 (mixed numeric family) verbatim in BOTH toolchains — no new code minted. Vendored libm — one fixed algorithm on every target. Canon Ruby owns typing parity; execution is Rust VM authority, and the direct OP_CALL and nested eval-AST paths share one semantic owner. See ch8 §8.15.",
+      "owner_surface": "LANG-FLOAT-MATH-SURFACE-CANON-READINESS-P1",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.math.det_exp",
+      "semantic_ir_name": "stdlib.math.det_exp",
+      "legacy_sir": null,
+      "aliases": [
+        {
+          "kind": "source_alias",
+          "name": "det_exp"
+        }
+      ],
+      "category": "numeric",
+      "lifecycle_status": "lab-implemented",
+      "semantic_stability": "experiment-pass",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "partial",
+      "type_params": [],
+      "input_signature": [
+        "Float"
+      ],
+      "output_signature": "Float",
+      "diagnostics": [
+        "OOF-MATH1",
+        "OOF-MATH2",
+        "OOF-MATH3"
+      ],
+      "failure_behavior": "Overflow to a non-finite result is refused; finite UNDERFLOW to zero is permitted (det_exp(-1000.0) -> 0.0).",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "LANG-FLOAT-MATH-SURFACE-CANON-READINESS-P1 — measured 20 candidates x 8 planes (UNIFORM: Rust clean / canon Ruby OOF-TY0 / VM direct AND nested success / spec absent / inventory absent / import OOF-IMP2 / catalog lab_path_candidate+live_unregistered) and a payoff curve of 48 app diagnostics -> 1 residual for the chosen 15-name surface",
+        "LANG-STDLIB-MATH-SURFACE-CANON-ADMISSION-P2 — ch8 §8.15 written with the three reproducibility tiers; canon Ruby typing via one owner-local MATH_STDLIB_FNS table; Rust emitter qualifies the bare source spelling at both ownership points; VM Tier-F1 domain/finite refusals hardened (sqrt(-1.0) previously returned a canon-visible NaN); these inventory rows + Surface Catalog"
+      ],
+      "examples": [
+        "det_exp(1.0) -> 2.7182818284590455",
+        "det_exp(1000.0) -> runtime overflow error"
+      ],
+      "compatibility_note": "Tier D1. DETERMINISTIC fixed-result carrier plus golden-bit drift locks: vendored pure-Rust libm owns det_sin/det_cos/det_ln/det_exp/det_tan; IEEE-correct f64::sqrt owns det_sqrt. Governed deterministic execution is claimed; VERIFIED multi-ISA parity is NOT — cross-arch confirmation is a separate CI matter and must not be inferred from this row. The natural BARE spelling `det_exp(...)` is the source form; both toolchains lower it to the qualified identity `stdlib.math.det_exp`, and no newly emitted SIR carries a bare math identity (bare names remain runtime compatibility inputs so previously compiled artifacts keep executing). Recognized typed collection-HOF bodies emit the same qualified identity as direct positions. Diagnostics reuse the already-authoritative OOF-MATH1 (arity) / OOF-MATH2 (argument type) / OOF-MATH3 (mixed numeric family) verbatim in BOTH toolchains — no new code minted. Vendored libm — one fixed algorithm on every target. Canon Ruby owns typing parity; execution is Rust VM authority, and the direct OP_CALL and nested eval-AST paths share one semantic owner. See ch8 §8.15.",
+      "owner_surface": "LANG-FLOAT-MATH-SURFACE-CANON-READINESS-P1",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.math.det_tan",
+      "semantic_ir_name": "stdlib.math.det_tan",
+      "legacy_sir": null,
+      "aliases": [
+        {
+          "kind": "source_alias",
+          "name": "det_tan"
+        }
+      ],
+      "category": "numeric",
+      "lifecycle_status": "lab-implemented",
+      "semantic_stability": "experiment-pass",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "partial",
+      "type_params": [],
+      "input_signature": [
+        "Float"
+      ],
+      "output_signature": "Float",
+      "diagnostics": [
+        "OOF-MATH1",
+        "OOF-MATH2",
+        "OOF-MATH3"
+      ],
+      "failure_behavior": "A non-finite input or a non-finite pole result fails closed. Note that an exact pole is not reachable in f64 (pi()/2.0 is not exactly pi/2), so a large finite value near the pole is a correct result, not a missed refusal.",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "LANG-FLOAT-MATH-SURFACE-CANON-READINESS-P1 — measured 20 candidates x 8 planes (UNIFORM: Rust clean / canon Ruby OOF-TY0 / VM direct AND nested success / spec absent / inventory absent / import OOF-IMP2 / catalog lab_path_candidate+live_unregistered) and a payoff curve of 48 app diagnostics -> 1 residual for the chosen 15-name surface",
+        "LANG-STDLIB-MATH-SURFACE-CANON-ADMISSION-P2 — ch8 §8.15 written with the three reproducibility tiers; canon Ruby typing via one owner-local MATH_STDLIB_FNS table; Rust emitter qualifies the bare source spelling at both ownership points; VM Tier-F1 domain/finite refusals hardened (sqrt(-1.0) previously returned a canon-visible NaN); these inventory rows + Surface Catalog"
+      ],
+      "examples": [
+        "det_tan(0.5) -> 0.5463024898437905"
+      ],
+      "compatibility_note": "Tier D1. DETERMINISTIC fixed-result carrier plus golden-bit drift locks: vendored pure-Rust libm owns det_sin/det_cos/det_ln/det_exp/det_tan; IEEE-correct f64::sqrt owns det_sqrt. Governed deterministic execution is claimed; VERIFIED multi-ISA parity is NOT — cross-arch confirmation is a separate CI matter and must not be inferred from this row. The natural BARE spelling `det_tan(...)` is the source form; both toolchains lower it to the qualified identity `stdlib.math.det_tan`, and no newly emitted SIR carries a bare math identity (bare names remain runtime compatibility inputs so previously compiled artifacts keep executing). Recognized typed collection-HOF bodies emit the same qualified identity as direct positions. Diagnostics reuse the already-authoritative OOF-MATH1 (arity) / OOF-MATH2 (argument type) / OOF-MATH3 (mixed numeric family) verbatim in BOTH toolchains — no new code minted. Vendored libm — one fixed algorithm on every target. Canon Ruby owns typing parity; execution is Rust VM authority, and the direct OP_CALL and nested eval-AST paths share one semantic owner. See ch8 §8.15.",
+      "owner_surface": "LANG-FLOAT-MATH-SURFACE-CANON-READINESS-P1",
       "entry_digest": null
     }
   ]

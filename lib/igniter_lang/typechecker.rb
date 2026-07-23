@@ -41,6 +41,42 @@ module IgniterLang
       "join"             => { arg_types: %w[Collection Text],       return_type: "Text" },
     }.freeze
 
+    # ── LANG-STDLIB-MATH-SURFACE-CANON-ADMISSION-P2: the math surface ──────────
+    # ONE owner-local table for the 15 admitted operations, in the three tiers ch8 distinguishes.
+    # The tiers differ ONLY in their reproducibility promise; typing is identical within a shape.
+    #
+    #   :numeric_same    N0 — homogeneous {Integer, Float}, result is the operand type T
+    #   :numeric_to_int  N0 — sign : (T) -> Integer over {Integer, Float}
+    #   :float_unary     F1/D1 — (Float) -> Float
+    #   :float_nullary   F1 — () -> Float  (pi)
+    #
+    # Diagnostics reuse the ALREADY-AUTHORITATIVE families the Rust toolchain emits, verbatim:
+    # OOF-MATH1 arity, OOF-MATH2 wrong argument type, OOF-MATH3 mixed numeric family. No new code
+    # is minted. `isqrt`/`ipow`/`mod`/`to_float`/`float_to_text` are NOT part of this admission
+    # (`mod` in particular would collide with the admitted `stdlib.integer.modulo`).
+    MATH_STDLIB_FNS = {
+      # Tier N0 — scalar helpers, deterministic by construction (comparisons and sign flips are
+      # bit-identical on every target).
+      "abs"      => { shape: :numeric_same,   arity: 1, tier: "N0" },
+      "min"      => { shape: :numeric_same,   arity: 2, tier: "N0" },
+      "max"      => { shape: :numeric_same,   arity: 2, tier: "N0" },
+      "clamp"    => { shape: :numeric_same,   arity: 3, tier: "N0" },
+      "sign"     => { shape: :numeric_to_int, arity: 1, tier: "N0" },
+      # Tier F1 — fast platform-f64. Tolerance-tested; NO cross-ISA bit-identity claim.
+      "sin"      => { shape: :float_unary,    arity: 1, tier: "F1" },
+      "cos"      => { shape: :float_unary,    arity: 1, tier: "F1" },
+      "sqrt"     => { shape: :float_unary,    arity: 1, tier: "F1" },
+      "pi"       => { shape: :float_nullary,  arity: 0, tier: "F1" },
+      # Tier D1 — deterministic, algorithm-fixed (vendored libm + golden-bit drift locks).
+      # Algorithm-fixed execution is claimed; VERIFIED multi-ISA parity is NOT.
+      "det_sin"  => { shape: :float_unary,    arity: 1, tier: "D1" },
+      "det_cos"  => { shape: :float_unary,    arity: 1, tier: "D1" },
+      "det_sqrt" => { shape: :float_unary,    arity: 1, tier: "D1" },
+      "det_ln"   => { shape: :float_unary,    arity: 1, tier: "D1" },
+      "det_exp"  => { shape: :float_unary,    arity: 1, tier: "D1" },
+      "det_tan"  => { shape: :float_unary,    arity: 1, tier: "D1" },
+    }.freeze
+
     # ── PROP-041: T2 structural-size relation registry ─────────────────────────
     # Stdlib-certified entries: hardcoded, trust = stdlib_certified.
     # source = "compiler_builtin" is the canonical source string for stdlib entries.
@@ -2181,6 +2217,24 @@ module IgniterLang
       when *TEXT_STDLIB_FNS.keys
         # igniter-string-core-units-and-pure-stdlib-boundary-v0
         infer_text_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
+      when *MATH_STDLIB_FNS.keys, *MATH_STDLIB_FNS.keys.map { |k| "stdlib.math.#{k}" }
+        # LANG-STDLIB-MATH-SURFACE-CANON-ADMISSION-P2: bare source spelling AND the qualified
+        # form both resolve to the canonical `stdlib.math.*` SIR identity.
+        #
+        # `min`/`max` are the one genuinely OVERLOADED pair on this surface: the bare names are
+        # declared twice in canon `.ig` source — as the scalar Tier-N0 helpers admitted here
+        # (stdlib.Math, math.ig:41-42) and as the collection aggregates (stdlib.Collections,
+        # collections.ig:20-21). The lab Rust compiler routes them by FIRST-ARGUMENT TYPE
+        # (`is_legacy_minmax_aggregate`, stdlib_calls.rs:262). This admission is additive only:
+        # when the aggregate shape is what was written, decline the name here and let it fall
+        # through exactly as it did before this card, rather than mint an OOF-MATH2 that would
+        # declare a live `collections.ig` declaration a type error.
+        if legacy_minmax_aggregate?(fn, args, symbol_types, type_warnings, node_name)
+          type_errors << oof("OOF-TY0", "Unknown function: #{fn}", node_name)
+          typed_expr("call", type_ir("Unknown"), [], "fn" => fn, "args" => [])
+        else
+          infer_math_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
+        end
       when *NUMERIC_STDLIB_ALIASES.keys
         # LANG-STDLIB-NUMERIC-TEXT-CONVERSION-P1: parse_int / int_to_text / modulo (bare +
         # stdlib.numeric.* + stdlib.integer.* aliases resolve to the canonical stdlib.integer.* SIR name)
@@ -3467,6 +3521,97 @@ module IgniterLang
     # Validate and type-infer a call to a text stdlib function.
     # Emits OOF-TY0 for arity mismatch or argument type mismatch.
     # Resolves fn name to the canonical "stdlib.text.<fn>" IR path.
+    # LANG-STDLIB-MATH-SURFACE-CANON-ADMISSION-P2: canon typing for the 15-name math surface.
+    #
+    # Mirrors the already-live Rust arms exactly — same acceptance, same result types, same
+    # OOF-MATH1/2/3 families and message wording — so a source file types identically on both
+    # toolchains and emits ONE identity. Bare and `stdlib.math.`-qualified spellings both arrive
+    # here; the emitted `fn` is always the qualified form.
+    #
+    # Unknown stays permissive (inference in progress is never punished) and never selects a type.
+    # Mirror of the lab Rust compiler's `is_legacy_minmax_aggregate` (stdlib_calls.rs:262): the
+    # bare names `min`/`max` route to the collection aggregate — NOT the scalar Tier-N0 helper —
+    # when the first argument resolves to a Collection. Typing the argument here is side-effect
+    # free with respect to `type_errors`: a throwaway sink absorbs any diagnostics so that merely
+    # ASKING the question can never emit one; the chosen branch types the arguments for real.
+    def legacy_minmax_aggregate?(fn, args, symbol_types, type_warnings, node_name)
+      # An explicitly-qualified math call is never the legacy collection aggregate.
+      # Only the overloaded bare source spelling is routed by first-argument type.
+      return false if fn.start_with?("stdlib.math.")
+
+      base = fn.sub(/\Astdlib\.math\./, "")
+      return false unless base == "min" || base == "max"
+
+      first = args.first
+      return false if first.nil?
+
+      probe = infer_expr(first, symbol_types, [], type_warnings, node_name)
+      type_name(probe.fetch("resolved_type")) == "Collection"
+    end
+
+    def infer_math_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
+      base      = fn.sub(/\Astdlib\.math\./, "")
+      spec      = MATH_STDLIB_FNS.fetch(base)
+      qualified = "stdlib.math.#{base}"
+      float_ir  = type_ir("Float")
+      int_ir    = type_ir("Integer")
+
+      if args.length != spec[:arity]
+        type_errors << oof(
+          "OOF-MATH1",
+          "#{base}: expected #{spec[:arity]} argument#{spec[:arity] == 1 ? '' : 's'}, got #{args.length}",
+          node_name
+        )
+        default = spec[:shape] == :numeric_to_int ? int_ir : float_ir
+        return typed_expr("call", default, [], "fn" => qualified, "args" => [])
+      end
+
+      typed_args = args.map { |a| infer_expr(a, symbol_types, type_errors, type_warnings, node_name) }
+      names      = typed_args.map { |ta| type_name(ta.fetch("resolved_type")) }
+      deps       = typed_args.flat_map { |ta| ta.fetch("deps") }.uniq
+
+      result_type =
+        case spec[:shape]
+        when :float_nullary
+          float_ir
+        when :float_unary
+          unless names[0] == "Float" || names[0] == "Unknown"
+            type_errors << oof("OOF-MATH2", "#{base}: argument must be Float, got #{names[0]}", node_name)
+          end
+          float_ir
+        when :numeric_same, :numeric_to_int
+          bad = names.find { |n| !%w[Integer Float Unknown].include?(n) }
+          if bad
+            type_errors << oof(
+              "OOF-MATH2",
+              "#{base}: argument must be Integer or Float (Decimal support deferred), got #{bad}",
+              node_name
+            )
+          else
+            known = names.reject { |n| n == "Unknown" }
+            mixed = known.each_cons(2).any? { |left, right| left != right }
+            if mixed
+            # No implicit coercion: a mixed numeric pair is refused, never widened.
+              type_errors << oof(
+                "OOF-MATH3",
+                "#{base}: mixed numeric types #{known.inspect} (no implicit coercion)",
+                node_name
+              )
+            end
+          end
+          if spec[:shape] == :numeric_to_int
+            int_ir
+          else
+            # Same-type-in/out: carry the operand's OWN resolved type so a parameterised numeric
+            # type is never flattened to a bare name.
+            idx = names.index { |n| n != "Unknown" }
+            idx ? typed_args[idx].fetch("resolved_type") : type_ir("Unknown")
+          end
+        end
+
+      typed_expr("call", result_type, deps, "fn" => qualified, "args" => typed_args)
+    end
+
     def infer_text_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
       spec           = TEXT_STDLIB_FNS.fetch(fn)
       expected_count = spec[:arg_types].length

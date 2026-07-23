@@ -649,3 +649,109 @@ LANG-STDLIB-COLLECTION-SORT-BY-DESC-P3   Rust compiler parity + VM execution (by
 LANG-STDLIB-COLLECTION-SORT-BY-DESC-P4   stdlib-inventory.json row + surface-digest recompute +
                                          runtime_stdlib_op_catalog() census sync
 ```
+
+## 8.15 `stdlib.math` — the scalar/transcendental surface in three reproducibility tiers (LANG-STDLIB-MATH-SURFACE-CANON-ADMISSION-P2, 2026-07-22)
+
+Admits fifteen operations that were already executable in the lab VM but had **no canon standing**:
+no spec section, no inventory row, no import path, and — decisively — canon Ruby refused every one
+of them with `OOF-TY0 Unknown function`. Runtime callability is not admission; this section, the
+inventory rows and dual-toolchain typing together are.
+
+The surface is deliberately split into **three tiers that differ only in what they promise about
+reproducibility**. The distinction IS the canon value: a program that must replay bit-identically
+elsewhere may use N0 and D1 freely, and must treat F1 as a platform-dependent convenience.
+
+### 8.15.1 Tier N0 — scalar helpers, deterministic by construction
+
+```
+abs(x: T) -> T          min(a: T, b: T) -> T          max(a: T, b: T) -> T
+clamp(x: T, lo: T, hi: T) -> T                        sign(x: T) -> Integer
+```
+
+- `T` is `Integer` or `Float`, **homogeneous**. There is no implicit coercion: a mixed pair is
+  refused at typecheck with `OOF-MATH3`. `Decimal` is deliberately NOT admitted here — a Decimal
+  surface needs its own pressure and its own checked-scale law.
+- `abs`/`min`/`max`/`clamp` return the operand type `T`; `sign` returns `Integer` in `{-1, 0, 1}`.
+- **`sign(-0.0) == 0`** — consistent with §8.14's signed-zero law, where `-0.0 == 0.0`.
+- `clamp(value, lo, hi)` refuses `lo > hi` at runtime rather than silently reordering the bounds.
+- Integer overflow fails closed, including `abs(i64::MIN)`, which has no positive counterpart.
+- These are deterministic BY CONSTRUCTION: comparisons and sign flips are bit-identical on every
+  target, so N0 needs no `det_*` sibling.
+
+**`min`/`max` are overloaded, and this admission does not close the overload.** The bare names
+are declared twice in canon `.ig` source: the scalar helpers above (`stdlib.Math`,
+`math.ig:41-42`) and the collection aggregates `min(coll: Collection[T], field: Symbol) ->
+Option[T]` (`stdlib.Collections`, `collections.ig:20-21`). They are routed by **first-argument
+type** — a `Collection` first argument selects the aggregate, anything else selects the scalar
+helper. This admission is **additive only**: it claims the scalar reading and leaves the
+aggregate reading exactly as it was, including its refusal text where a toolchain does not
+implement it. A toolchain must never answer the aggregate shape with `OOF-MATH2`, which would
+assert that a live `collections.ig` declaration is a type error.
+
+Consequence for the published surface: `stdlib.math.min` and `stdlib.math.max` are the only two
+rows of this admission that the Surface Catalog reports as `conflicting`
+(`declared_identity_matches_multiple_source_defs`), because the catalog's identity join is
+bare-name based and both `.ig` defs are real. That verdict is CORRECT — it is the overload made
+visible, not a defect in either plane — and it is the same shape already carried by
+`stdlib.collection.concat`. Collapsing it would require a module-qualified identity join, which
+is a Surface Catalog change with its own blast radius and belongs to its own card.
+
+### 8.15.2 Tier F1 — fast platform-f64
+
+```
+sin(x: Float) -> Float    cos(x: Float) -> Float    sqrt(x: Float) -> Float    pi() -> Float
+```
+
+- Evaluated through the platform's own f64 routines. They are tolerance-tested and make **no
+  bit-identical cross-ISA claim**. A program whose replay must be bit-exact on another
+  architecture uses Tier D1 instead.
+- Inputs and results must be FINITE. `sqrt(x)` refuses `x < 0` and a non-finite input is refused
+  for all three — a canon-visible `NaN` is a leak, not a value. (Before this admission `sqrt(-1.0)`
+  returned a NaN that serialized as `null`; closing that was a precondition of publishing the row,
+  not a footnote.)
+- No implicit `Integer`/`Decimal` conversion is introduced by this tier.
+
+### 8.15.3 Tier D1 — deterministic, fixed-carrier
+
+```
+det_sin  det_cos  det_sqrt  det_ln  det_exp  det_tan     -- each (Float) -> Float
+```
+
+- Their contract is a **fixed result carrier plus golden-bit drift locks**: vendored pure-Rust
+  `libm` owns `det_sin`, `det_cos`, `det_ln`, `det_exp` and `det_tan`; IEEE-correct
+  `f64::sqrt` owns `det_sqrt`. This section claims governed deterministic execution; it does
+  **not** claim verified multi-ISA parity — cross-architecture confirmation is a separate CI
+  matter and must not be inferred from this text.
+- Non-finite inputs and non-finite results fail closed.
+- `det_sqrt` requires `x >= 0`; `det_ln` requires `x > 0`; `det_exp` refuses overflow while finite
+  underflow to zero is permitted; `det_tan` refuses a non-finite pole result.
+
+### 8.15.4 Identity, spelling and diagnostics
+
+- The natural BARE spelling is the source form (`sqrt(x)`), and both toolchains lower it to the
+  qualified identity `stdlib.math.sqrt`. **No newly emitted SIR row carries a bare math identity.**
+  Bare names remain runtime compatibility inputs so previously compiled artifacts keep executing.
+- `import stdlib.math` and selective `import stdlib.math.{ … }` expose the natural bare call
+  spelling; the emitted SIR identity remains qualified. This section does not introduce a new
+  dotted function-call source grammar.
+- Recognized typed collection-HOF bodies emit the same qualified identity as direct positions
+  (the lexical-environment owner admitted by `LANG-NUMERIC-LAMBDA-OPERATOR-IDENTITY-P3`).
+- Diagnostics reuse the already-authoritative families verbatim in BOTH toolchains — `OOF-MATH1`
+  arity, `OOF-MATH2` wrong argument type, `OOF-MATH3` mixed numeric family. No new code is minted.
+- Direct `OP_CALL` and nested eval-AST execution return byte-identical values, or the same bounded
+  refusal, for the same qualified identity.
+
+### 8.15.5 Closed (v0)
+
+`isqrt`, `ipow` and bare `mod` (the last collides with the admitted `stdlib.integer.modulo` — two
+spellings for one Euclidean remainder), `to_float`, `float_to_text`, Decimal math, Float sort keys,
+implicit numeric coercion, locale/formatting concerns, quantization, and any new algorithm added
+for symmetry rather than for measured pressure.
+
+### 8.15.6 Dual-toolchain responsibilities
+
+Canon Ruby owns typing parity through one owner-local `MATH_STDLIB_FNS` table (arity, accepted
+types, result type, the three OOF-MATH families) and the `stdlib-inventory.json` rows. **Execution
+is Rust VM authority** — the same boundary as every other stdlib family; the VM owns the single
+math semantic owner that both the bytecode and eval-AST paths call, and it owns the domain and
+finite-value refusals stated above.
