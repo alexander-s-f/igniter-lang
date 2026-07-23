@@ -237,6 +237,10 @@ module IgniterLang
       # (invalid_length/invalid_hex fail-closed as BytesError data, never a VM abort).
       "stdlib.bytes.encode_hex"    => { args: %w[B],     ret: "Text" },
       "stdlib.bytes.decode_hex"    => { args: %w[S],     ret: %w[Bytes BytesError] },
+      # LANG-STDLIB-CONTENT-DIGEST-P1: SHA-256 over the exact ordered octets, rendered as
+      # exactly 64 lower-case hex digits with NO `sha256:` prefix — the caller owns framing.
+      # Same shape as encode_hex (Bytes -> Text, total), so it needs no new machinery here.
+      "stdlib.bytes.sha256"        => { args: %w[B],     ret: "Text" },
     }.freeze
 
     # ── LANG-TYPE-REF-UNRESOLVED-FAIL-CLOSED-P1: contract port type-reference registry ──

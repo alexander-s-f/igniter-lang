@@ -368,7 +368,31 @@ stdlib.bytes.unpack_u32_le(Bytes)              -> Result[Integer, BytesError]  -
 stdlib.bytes.unpack_i16_le(Bytes)              -> Result[Integer, BytesError]  -- exactly 2 bytes
 stdlib.bytes.encode_hex(Bytes)                 -> Text                        -- total, canonical lower-case hex, 2 digits/octet
 stdlib.bytes.decode_hex(Text)                  -> Result[Bytes, BytesError]   -- even-length 0-9/a-f/A-F only; rejects 0x/whitespace/separators
+stdlib.bytes.sha256(Bytes)                     -> Text                        -- total, exactly 64 lower-case hex digits, NO prefix
 ```
+
+**`sha256` — content-addressed evidence an application can author itself
+(LANG-STDLIB-CONTENT-DIGEST-P1, 2026-07-23).** SHA-256 over the exact ordered octets of the
+input value, rendered as exactly 64 lower-case hex digits from the alphabet `[0-9a-f]`, with no
+`sha256:` prefix, whitespace or separators. It is pure, total and deterministic: the same Bytes
+value always yields byte-identical Text, and every octet participates — `00`, `80` and `ff` are
+hashed as bytes, never as text or as signed integers. The NIST anchors hold:
+
+```
+stdlib.bytes.sha256(from_octets([]))        = e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+stdlib.bytes.sha256(from_text("abc"))       = ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad
+```
+
+**The caller owns framing.** A receipt or intent that wants `sha256:<64-lower-hex>` builds that
+text itself; the cryptographic operation does not carry receipt syntax, an algorithm parameter or
+a tagged digest record, and it does not hash `Text` implicitly — encode first with `from_text`,
+so the octets being digested are the ones the author chose.
+
+**What this is NOT**, stated because a digest is routinely mistaken for all of them: it is not
+password hashing, not a MAC or signature, not a secret-redaction mechanism, not canonical JSON
+hashing, and not a streaming API. Above all it is **not evidence that the digested content is
+true, trusted, admitted or authorized** — it says only that these exact octets hash to this
+value. Whoever consumes the digest still owes the argument about where the octets came from.
 
 `BytesError` is a sealed error record `{ error_type : String, message : String }` (e.g.
 `invalid_range`, `octet_out_of_range`, `invalid_utf8`, `invalid_length`, `invalid_hex`).
