@@ -55,6 +55,32 @@ ContractRef contravariant on inputs, covariant on outputs
 Ref invariant:            Ref[T] <: Ref[U]  only if T = U
 ```
 
+### 3.2a Nominal `Option[T]` law
+
+`Option[T]` has exactly two semantic arms:
+
+```text
+Some(value: T)
+None
+```
+
+The carrier is nominal and preserves authored nesting. In particular,
+`Some(None) != None`, and `Option[Option[T]]` retains both levels. A consumer
+observes only this arm/payload law, independently of whether the value came
+from a source constructor, an optional field, a collection/map/text producer,
+or a temporal read.
+
+A Record never becomes Option because it contains `$option`, `__arm`, or
+`__variant`; Record keys are not carrier evidence. The internal VM layout is
+not source syntax, a Record convention, or a user-constructible API. Source
+constructors remain `some(value)` and `none()`. Their canonical SemanticIR
+identity is specified in Ch6.
+
+At the typed host boundary the declared port type, including recursively
+resolved named-record fields, selects Option decoding. Generic JSON decoding
+does not infer Option from object shape. Malformed or wrong-carrier values fail
+with `OOF-VM-OPTION-CARRIER` under Ch7.
+
 ---
 
 ## 3.3 Typing Rules (PROP-004 §Typing Rules)

@@ -9,6 +9,8 @@ Primary evidence:
 
 - `experiments/runtime_machine_memory_proof/` — load/evaluate/checkpoint/resume PASS
 - `experiments/stdlib_execution_kernel_stage1/` — stdlib execution kernel PASS
+- `experiments/option_runtime_carrier_convergence_p2/` — canon evaluator and
+  artifact-admission proof for `first_class_v1`
 - `experiments/temporal_cache_key_proof/` — CORE vs TEMPORAL cache-key proof PASS
 - `experiments/runtime_cache_proof_local_memoization/` — proof-local cache semantics PASS
 - `experiments/temporal_runtime_load_guard/` — TEMPORAL load guard PASS
@@ -45,6 +47,9 @@ RuntimeMachine.load(path) -> LoadedProgram | LoadRefusal
 Load reads:
 
 - `manifest.json`
+- `semantic_ir_program.json`
+- `semantic_hash.txt`
+- `semantic_hash_law.txt`
 - `compilation_report.json`
 - `contracts/<Name>.json`
 - `requirements.json`
@@ -53,6 +58,9 @@ Load reads:
 Load verifies:
 
 - manifest shape and contract list
+- manifest/sidecar/recomputed SemanticIR program identity agree
+- `option_carrier == "first_class_v1"` in both manifest and SemanticIR
+- every contract has exactly one first `option_carrier_guard_v1`
 - compilation report `pass_result == "ok"`
 - each contract artifact exists and is not `fragment_class: "oof"`
 - schema descriptor compatibility
@@ -148,12 +156,71 @@ decimal add/sub/mul/rescale
 bool `&&`/`||`/`!` (the source word forms `and`/`or` are not aliases)
 string concat
 collection map/filter/fold/count
-option or_else
+option or_else/unwrap_or/is_some/is_none/map/flat_map/and_then
+result map/unwrap_or/and_then
 ```
 
 Runtime operator lookup and stdlib kernel execution are PASS in the Stage 1/2
 proof suite. Unknown or unresolved stdlib operators remain assembler/compiler
 refusals rather than runtime surprises.
+
+### 7.4a First-class Option carrier and typed host projection
+
+Desktop VM and Standard Runtime share the one core Option value and helper
+family. Conceptually:
+
+```text
+Option::None
+Option::Some(value)
+```
+
+Construction, arm inspection, payload extraction, equality, depth accounting,
+and checked JSON projection all use that owner. `Some(None)` remains distinct
+from `None`; direct bytecode and nested eval-AST/HOF execution call the same
+helpers. An admitted producer returns the nominal carrier before a consumer
+can observe it, and an admitted consumer rejects every other carrier instead
+of guessing which producer created it.
+
+Overloaded source spellings are resolved by their static subject type before
+runtime. Option HOF/predicate calls use `stdlib.option.*`; Result map/and_then
+use `stdlib.result.*` and Result unwrap uses `result_unwrap_or`; Collection
+retains `stdlib.collection.*`. Result `flat_map` is refused. No runtime branch
+selects Option or Result behavior by testing for Record keys.
+
+Only a declared `Option[T]` port selects the typed wire envelope:
+
+```json
+{"$option":{"v":1,"arm":"none"}}
+```
+
+```json
+{"$option":{"v":1,"arm":"some","value":"<recursively encoded T>"}}
+```
+
+Decoding requires exactly version `1`, an exact lower-case arm, the `value` key
+only for `some`, and no unknown keys. It applies recursively through Option,
+Collection, admitted Map values, and named Record fields resolved from
+SemanticIR `type_declarations`. Generic JSON decoding never mints Option by
+shape. Thus a declared Record containing `$option`, `__arm`, or `__variant`
+remains a Record.
+
+Raw or `null` Option input, wrong version/arm, missing or extra keys, excessive
+nesting, a non-Option consumer operand, and marker/guard disagreement fail
+closed with:
+
+```text
+OOF-VM-OPTION-CARRIER
+```
+
+The diagnostic carries a bounded reason token and never echoes a payload,
+secret material, or complete host object. Option presence has no capability,
+authorization, or business meaning.
+
+Markerless and legacy-carrier artifacts are not admitted after the bounded
+read-old generation and zero-markerless census. An unknown marker never falls
+back by timestamp, path, mtime, or value shape. The carrier's presence in the
+shared core does not add a portable opcode or capability; unsupported portable
+Option instructions fail admission before execution.
 
 ---
 
@@ -546,6 +613,13 @@ Phase 1 live reads require all acceptance conditions from the Gate 3 request:
 | AT-10 | Every authorized live History read emits `temporal_read_observation`. |
 | AT-11 | Stage 1/2 and S3-R7..R10 regression proof chain remains PASS. |
 | AT-12 | TEMPORAL executor refuses CORE/out-of-scope artifacts before evaluation. |
+
+`bihistory_at(...)` is also source-frontdoor refused in the
+`first_class_v1` runtime plane. The canon typechecker emits
+`OOF-BT2: bihistory_at is not executable in the first_class_v1 runtime plane; no bitemporal runtime/TBackend lowering is admitted`
+and no SemanticIR artifact is produced. The runtime
+`runtime.temporal_scope_exclusion` check remains defense in depth for older or
+foreign bitemporal artifacts; it is not an alternate admission path.
 
 Approved Phase 1 scope:
 

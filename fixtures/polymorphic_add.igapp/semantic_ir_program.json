@@ -1,0 +1,220 @@
+{
+  "compilation_report_ref": "compilation_report/49ae94eca6a4b50d",
+  "contracts": [
+    {
+      "capabilities": [],
+      "contract_name": "Lang.Examples.PolymorphicAdd.Add[Float]",
+      "contract_ref": "contract/Lang.Examples.PolymorphicAdd.Add[Float]/sha256:6942ee59f77f6dcef8ca35f7",
+      "effects": [],
+      "escape_boundaries": [],
+      "fragment_class": "core",
+      "implements": [
+        {
+          "check": "passed",
+          "shape": "AddShape[Float]"
+        }
+      ],
+      "inputs": [
+        {
+          "lifecycle": "local",
+          "name": "a",
+          "type": {
+            "name": "Float",
+            "params": []
+          }
+        },
+        {
+          "lifecycle": "local",
+          "name": "b",
+          "type": {
+            "name": "Float",
+            "params": []
+          }
+        }
+      ],
+      "kind": "contract_ir",
+      "modifier": "pure",
+      "nodes": [
+        {
+          "deps": [],
+          "expr": {
+            "body": {
+              "kind": "literal",
+              "value": true
+            },
+            "kind": "option_carrier_guard_v1",
+            "resolved_type": {
+              "name": "Bool",
+              "params": []
+            },
+            "version": "first_class_v1"
+          },
+          "fragment": "core",
+          "kind": "compute",
+          "name": "__option_carrier_guard_v1",
+          "type": {
+            "name": "Bool",
+            "params": []
+          }
+        },
+        {
+          "deps": [
+            "a",
+            "b"
+          ],
+          "expr": {
+            "args": [
+              {
+                "kind": "ref",
+                "name": "a"
+              },
+              {
+                "kind": "ref",
+                "name": "b"
+              }
+            ],
+            "fn": "stdlib.float.add",
+            "kind": "call"
+          },
+          "fragment": "core",
+          "kind": "compute",
+          "name": "sum",
+          "type": {
+            "name": "Float",
+            "params": []
+          }
+        }
+      ],
+      "option_carrier": "first_class_v1",
+      "outputs": [
+        {
+          "lifecycle": "session",
+          "name": "sum",
+          "type": {
+            "name": "Float",
+            "params": []
+          }
+        }
+      ],
+      "specialization_of": "Add",
+      "type_args": {
+        "T": "Float"
+      }
+    },
+    {
+      "capabilities": [],
+      "contract_name": "Lang.Examples.PolymorphicAdd.Add[Integer]",
+      "contract_ref": "contract/Lang.Examples.PolymorphicAdd.Add[Integer]/sha256:08d1b8abcc8a89e9d782abc9",
+      "effects": [],
+      "escape_boundaries": [],
+      "fragment_class": "core",
+      "implements": [
+        {
+          "check": "passed",
+          "shape": "AddShape[Integer]"
+        }
+      ],
+      "inputs": [
+        {
+          "lifecycle": "local",
+          "name": "a",
+          "type": {
+            "name": "Integer",
+            "params": []
+          }
+        },
+        {
+          "lifecycle": "local",
+          "name": "b",
+          "type": {
+            "name": "Integer",
+            "params": []
+          }
+        }
+      ],
+      "kind": "contract_ir",
+      "modifier": "pure",
+      "nodes": [
+        {
+          "deps": [],
+          "expr": {
+            "body": {
+              "kind": "literal",
+              "value": true
+            },
+            "kind": "option_carrier_guard_v1",
+            "resolved_type": {
+              "name": "Bool",
+              "params": []
+            },
+            "version": "first_class_v1"
+          },
+          "fragment": "core",
+          "kind": "compute",
+          "name": "__option_carrier_guard_v1",
+          "type": {
+            "name": "Bool",
+            "params": []
+          }
+        },
+        {
+          "deps": [
+            "a",
+            "b"
+          ],
+          "expr": {
+            "args": [
+              {
+                "kind": "ref",
+                "name": "a"
+              },
+              {
+                "kind": "ref",
+                "name": "b"
+              }
+            ],
+            "fn": "stdlib.integer.add",
+            "kind": "call"
+          },
+          "fragment": "core",
+          "kind": "compute",
+          "name": "sum",
+          "type": {
+            "name": "Integer",
+            "params": []
+          }
+        }
+      ],
+      "option_carrier": "first_class_v1",
+      "outputs": [
+        {
+          "lifecycle": "session",
+          "name": "sum",
+          "type": {
+            "name": "Integer",
+            "params": []
+          }
+        }
+      ],
+      "specialization_of": "Add",
+      "type_args": {
+        "T": "Integer"
+      }
+    }
+  ],
+  "fixture_provenance": {
+    "kind": "historical_fixture_reassembly_v1",
+    "owner": "experiments/option_runtime_carrier_convergence_p2/publish_tracked_igapp_fixtures.rb",
+    "purpose": "preserve a pre-current compiler fixture behind the mandatory Option carrier fence",
+    "runtime_execution_authority": false,
+    "source_compilation_authority": false
+  },
+  "format_version": "0.1.0",
+  "grammar_version": "0.1.0",
+  "kind": "semantic_ir_program",
+  "module": "Lang.Examples.PolymorphicAdd",
+  "option_carrier": "first_class_v1",
+  "program_id": "semanticir/49ae94eca6a4b50d",
+  "source_hash": "sha256:49ae94eca6a4b50da2910af861d204d7a778a6c298dca8948ff60e79c249ee34",
+  "source_path": "source/polymorphic_add.ig"
+}

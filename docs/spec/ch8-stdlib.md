@@ -22,8 +22,8 @@ is held/legacy — prefer explicit unit-qualified ops (`byte_length`, `rune_leng
 stdlib/
   core/
     collection.ig   — fold, map, filter, group_by, sort_by, take, first, last
-    option.ig       — some, none, or_else, map, flat_map, some?
-    result.ig       — ok, err, ok?, err?, map, flat_map, unwrap_or
+    option.ig       — some/none; fallback, predicate, map/flat_map/and_then consumers
+    result.ig       — ok, err, ok?, err?, map, unwrap_or, and_then (no flat_map)
     numeric.ig      — add, sub, mul, div, neg, compare (generic, pre-resolution)
     integer.ig      — stdlib.integer.add, sub, mul, div, neg, compare
     float.ig        — stdlib.float.add, ...
@@ -77,11 +77,54 @@ last(xs) -> Option[T]
 ```
 some(v: T) -> Option[T]
 none() -> Option[T]
-some?(opt) -> Bool
 or_else(opt: Option[T], fallback: T) -> T
+unwrap_or(opt: Option[T], fallback: T) -> T
+is_some(opt: Option[T]) -> Bool
+is_none(opt: Option[T]) -> Bool
 map(opt: Option[T], fn: T -> U) -> Option[U]
 flat_map(opt: Option[T], fn: T -> Option[U]) -> Option[U]
+and_then(opt: Option[T], fn: T -> Option[U]) -> Option[U]
 ```
+
+`some` and `none` are source constructors, not qualified stdlib calls. Both
+lower to Ch6 `option_value_construct`. The remaining lines are the exact
+currently admitted Option functions. Their runtime operand law is the nominal
+carrier from Ch7 and is producer-independent.
+
+`or_else` and `unwrap_or` return the Some payload and select the fallback only
+for None. `is_some` and `is_none` inspect the exact arm. `map` invokes its
+lambda only for Some and wraps the result once. `flat_map` invokes its lambda
+only for Some and requires an Option result; `and_then` is its semantic alias.
+The compiler selects these source overloads from the static subject type and
+emits `stdlib.option.is_some`, `stdlib.option.is_none`,
+`stdlib.option.map`, `stdlib.option.flat_map`, or
+`stdlib.option.and_then`. Collection and Result overloads have distinct SIR
+owners, so runtime value shape never selects a family.
+
+The orphaned Rust-only `stdlib.option.wrap` surface and the predicate spellings
+`some?` / `none?` are not admitted. A missing/legacy carrier, raw/null value,
+or Record-shaped imitation receives `OOF-VM-OPTION-CARRIER`.
+
+Current admitted Option-producing families are:
+
+```text
+source constructors: some, none
+optional Record field normalization
+stdlib.map.get / map_get_string
+stdlib.collection.first / last / at / find
+stdlib.integer.parse_int
+stdlib.text.decode_delimited / decode_frame
+History[T] read shaping within its separately authorized runtime scope
+```
+
+`collection.filter_map` is an admitted consumer: it drops None and appends the
+payload of Some. It never retains the wrapper. Collection `avg`/`min`/`max`,
+regexp capture/date parsing are not claimed here as current dual-toolchain
+executable Option surfaces merely because a declaration or lab branch exists.
+`bihistory_at` is explicitly de-admitted in `first_class_v1`: canon emits
+`OOF-BT2` before SemanticIR because no bitemporal runtime/TBackend lowering is
+admitted. Each remaining producer must be admitted or de-admitted by its owning
+lane.
 
 ---
 
@@ -94,7 +137,15 @@ ok?(r) -> Bool
 err?(r) -> Bool
 map(r: Result[T,E], fn: T -> U) -> Result[U, E]
 unwrap_or(r: Result[T,E], fallback: T) -> T
+and_then(r: Result[T,E], fn: T -> Result[U,E]) -> Result[U,E]
 ```
+
+These source-overloaded consumers lower statically to
+`stdlib.result.map`, `result_unwrap_or`, and
+`stdlib.result.and_then`. They never inspect arbitrary Record keys to choose
+Result behavior. The historical `or_else(Result[T,E], fallback)` source alias
+also lowers to `result_unwrap_or`; it does not create a second runtime owner.
+Result `flat_map` is not admitted.
 
 ---
 

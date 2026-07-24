@@ -1,9 +1,9 @@
 {
   "kind": "compilation_report",
   "format_version": "0.1.0",
-  "program_id": "compilation_report/8fdf5465f8ac9d6f",
+  "program_id": "compilation_report/98a66a3eb42a79a4",
   "grammar_version": "assumptions-v0",
-  "source_hash": "sha256:8fdf5465f8ac9d6f007e50b81395d580f22b7bb3c90ae0374ee013c540cf6d70",
+  "source_hash": "sha256:98a66a3eb42a79a4c5088e1e8196f8a4fa082b3456aa34c22bfb9e82fae59170",
   "source_path": "experiments/assumptions_proof/fixtures/oof_a1_undeclared_assumption.ig",
   "pass_result": "oof",
   "stages": {

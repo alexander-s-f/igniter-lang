@@ -1,17 +1,18 @@
 {
+  "compilation_report_ref": "compilation_report/8d380232c26184a7",
+  "contracts": [
+    "AvailabilityProjection"
+  ],
+  "format_version": "0.1.0",
   "fragment_class": "escape",
-  "pass0_version": "0.1.0",
-  "contracts": ["AvailabilityProjection"],
+  "kind": "classified_program",
+  "loadable_contracts": [
+    "AvailabilityProjection"
+  ],
   "oof_count": 0,
-  "oof_nodes": [],
-  "nodes": {
-    "input:technician_id":    { "node_id": "input:technician_id",   "kind": "input",   "fragment": "core",   "escape_name": null,               "oof_reason": null },
-    "input:date":             { "node_id": "input:date",            "kind": "input",   "fragment": "core",   "escape_name": null,               "oof_reason": null },
-    "node_geo_signals":       { "node_id": "node_geo_signals",      "kind": "read",    "fragment": "escape", "escape_name": "stream_collection", "oof_reason": null },
-    "node_schedule":          { "node_id": "node_schedule",         "kind": "read",    "fragment": "core",   "escape_name": null,               "oof_reason": null },
-    "node_available_slots":   { "node_id": "node_available_slots",  "kind": "compute", "fragment": "core",   "escape_name": null,               "oof_reason": null },
-    "node_snapshot":          { "node_id": "node_snapshot",         "kind": "snapshot","fragment": "core",   "escape_name": null,               "oof_reason": null },
-    "output:available_slots": { "node_id": "output:available_slots","kind": "output",  "fragment": "core",   "escape_name": null,               "oof_reason": null },
-    "output:snapshot":        { "node_id": "output:snapshot",       "kind": "output",  "fragment": "core",   "escape_name": null,               "oof_reason": null }
-  }
+  "pass_result": "ok",
+  "program_id": "semanticir/8d380232c26184a7",
+  "semantic_ir_ref": "semanticir/8d380232c26184a7",
+  "source_hash": "sha256:8d380232c26184a7983711a5716e853b475272b55788c48e932e5cf331097686",
+  "source_path": "source/availability_projection.ig"
 }

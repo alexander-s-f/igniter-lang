@@ -1,13 +1,19 @@
 {
   "kind": "typed_program",
   "typechecker_version": "typed-pass-executable-proof-v0",
-  "program_id": "typed_pass/aefb1db5b8c576c2",
-  "classified_program_id": "classifier_pass/aa5bf3656b30cf64",
+  "program_id": "typed_pass/13e4895f199aec49",
+  "classified_program_id": "classifier_pass/393c9799c1382e38",
   "source_path": "igniter-lang/experiments/assumptions_proof/fixtures/oof_a1_undeclared_assumption.ig",
-  "source_hash": "sha256:8fdf5465f8ac9d6f007e50b81395d580f22b7bb3c90ae0374ee013c540cf6d70",
+  "source_hash": "sha256:98a66a3eb42a79a4c5088e1e8196f8a4fa082b3456aa34c22bfb9e82fae59170",
   "grammar_version": "assumptions-v0",
   "module": "Risk.Scoring",
   "type_env": {
+    "Signal": {
+      "value": {
+        "name": "Integer",
+        "params": []
+      }
+    },
     "Assumption": {
       "kind": {
         "name": "Symbol",
@@ -23,6 +29,14 @@
       },
       "source": {
         "name": "String",
+        "params": []
+      }
+    }
+  },
+  "declared_type_env": {
+    "Signal": {
+      "value": {
+        "name": "Integer",
         "params": []
       }
     }

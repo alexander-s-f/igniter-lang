@@ -37,9 +37,10 @@ module IgniterLang
 
     def semantic_ir_program(parsed_program, contracts)
       report_id = compilation_report_id(parsed_program)
-      {
+      result = {
         "kind" => "semantic_ir_program",
         "format_version" => FORMAT_VERSION,
+        "option_carrier" => "first_class_v1",
         "program_id" => program_id(parsed_program),
         "grammar_version" => parsed_program.fetch("grammar_version"),
         "source_hash" => parsed_program.fetch("source_hash"),
@@ -48,6 +49,9 @@ module IgniterLang
         "compilation_report_ref" => report_id,
         "contracts" => contracts.map { |contract| contract.reject { |key, _value| key == "diagnostics" } }
       }
+      declarations = semantic_type_declarations(@types)
+      result["type_declarations"] = declarations unless declarations.empty?
+      result
     end
 
     def compilation_report(parsed_program, diagnostics, semantic_ir)
@@ -76,6 +80,7 @@ module IgniterLang
       result = {
         "kind" => "semantic_ir_program",
         "format_version" => FORMAT_VERSION,
+        "option_carrier" => "first_class_v1",
         "program_id" => typed_program_id(typed_program),
         "grammar_version" => typed_program.fetch("grammar_version"),
         "source_hash" => typed_program.fetch("source_hash"),
@@ -92,12 +97,39 @@ module IgniterLang
       # PROP-044 P6: emit variant declarations when present
       variant_env = typed_program.fetch("variant_env", {})
       result["variant_declarations"] = semantic_variant_declarations(variant_env) unless variant_env.empty?
+      declarations = semantic_type_declarations(
+        typed_program.fetch("declared_type_env", typed_program.fetch("type_env", {}))
+      )
+      result["type_declarations"] = declarations unless declarations.empty?
       # PROP-045: emit module-level intent_text when present
       module_intent = typed_program.fetch("intent_text", nil)
       result["intent_text"] = module_intent if module_intent
       entrypoint = semantic_entrypoint(typed_program, result.fetch("contracts"))
       result["entrypoint"] = entrypoint if entrypoint
       result
+    end
+
+    # Typed host projection needs the complete, deterministic schema of named
+    # Records reached from contract ports.  Ports retain their full type trees;
+    # named declarations live once at program scope and are resolved recursively
+    # by the shared runtime codec.
+    def semantic_type_declarations(type_env)
+      type_env.keys.sort.map do |name|
+        fields = type_env.fetch(name)
+        {
+          "kind" => "type_decl",
+          "name" => name,
+          "fields" => fields.keys.sort.map do |field_name|
+            field_type = fields.fetch(field_name)
+            {
+              "name" => field_name,
+              "type" => normalize_semantic_type_ir(
+                field_type.is_a?(Hash) ? field_type : type_ir(field_type)
+              )
+            }
+          end
+        }
+      end
     end
 
     def semantic_entrypoint(typed_program, contracts)
@@ -162,6 +194,7 @@ module IgniterLang
     def typed_contract_ir(contract)
       contract_ir = {
         "kind" => "contract_ir",
+        "option_carrier" => "first_class_v1",
         "contract_ref" => nil,
         "contract_name" => contract.fetch("name"),
         "modifier" => contract.fetch("modifier", "pure"),
@@ -264,7 +297,7 @@ module IgniterLang
       contract.fetch("declarations").select { |decl| decl.fetch("kind") == kind }.map do |decl|
         port = {
           "name" => decl.fetch("name"),
-          "type" => decl.fetch("type"),
+          "type" => normalize_semantic_type_ir(decl.fetch("type")),
           "lifecycle" => decl.fetch("lifecycle", kind == "input" ? "local" : "session")
         }
         if kind == "output"
@@ -279,7 +312,7 @@ module IgniterLang
 
     def typed_nodes(contract)
       declarations = contract.fetch("declarations")
-      contract.fetch("declarations").filter_map do |decl|
+      business_nodes = contract.fetch("declarations").filter_map do |decl|
         next decl.fetch("semantic_node") if decl.key?("semantic_node")
 
         case decl.fetch("kind")
@@ -315,6 +348,83 @@ module IgniterLang
           loop_node(decl, "budgeted", "budget_exhaustion")
         end
       end
+      temporal_stores = temporal_history_stores(declarations)
+      business_nodes.map! { |node| lower_nested_history_reads(node, temporal_stores) }
+      [option_carrier_guard_node] + business_nodes
+    end
+
+    # A top-level history_at remains the existing temporal_access_node owned by
+    # typed_nodes. Nested authored reads cannot use that contract-node lane, so
+    # lower only the exact history_at(read_ref, as_of_ref) shape to the VM's
+    # existing inline temporal_read expression. The store template comes from
+    # the same contract-local read declaration; no runtime carrier/store
+    # inference is introduced.
+    def temporal_history_stores(declarations)
+      declarations.each_with_object({}) do |decl, stores|
+        next unless decl.fetch("kind", nil) == "read"
+        next unless decl.fetch("required_capability", nil) == "history_read"
+        next unless decl.fetch("temporal_axis", nil) == "valid_time"
+
+        store_ref = decl.fetch("from", nil)
+        stores[decl.fetch("name")] = store_ref if store_ref.is_a?(String)
+      end
+    end
+
+    def lower_nested_history_reads(value, temporal_stores)
+      case value
+      when Hash
+        temporal_read = nested_history_read_node(value, temporal_stores)
+        return temporal_read if temporal_read
+
+        value.transform_values { |child| lower_nested_history_reads(child, temporal_stores) }
+      when Array
+        value.map { |child| lower_nested_history_reads(child, temporal_stores) }
+      else
+        value
+      end
+    end
+
+    def nested_history_read_node(expr, temporal_stores)
+      return nil unless expr.fetch("kind", nil) == "call"
+      return nil unless expr.fetch("fn", nil) == "history_at"
+
+      args = expr.fetch("args", [])
+      return nil unless args.length == 2
+
+      history_ref = ref_name(args[0])
+      as_of_ref = ref_name(args[1])
+      store_ref = temporal_stores[history_ref]
+      resolved_type = expr.fetch("resolved_type", nil)
+      return nil unless store_ref && as_of_ref && resolved_type
+
+      {
+        "kind" => "temporal_read",
+        "source_ref" => history_ref,
+        "store_ref" => store_ref,
+        "as_of_ref" => as_of_ref,
+        "resolved_type" => normalize_semantic_type_ir(resolved_type)
+      }
+    end
+
+    # The marker is semantic identity; this first executable node is the
+    # downgrade fence.  A predecessor compiler/runtime does not know this
+    # expression kind and refuses the selected contract before business
+    # execution.  The v1 runtime validates exact placement and shape.
+    def option_carrier_guard_node
+      bool_type = { "name" => "Bool", "params" => [] }
+      {
+        "kind" => "compute",
+        "name" => "__option_carrier_guard_v1",
+        "expr" => {
+          "kind" => "option_carrier_guard_v1",
+          "version" => "first_class_v1",
+          "body" => { "kind" => "literal", "value" => true },
+          "resolved_type" => bool_type
+        },
+        "type" => bool_type,
+        "deps" => [],
+        "fragment" => "core"
+      }
     end
 
     def typed_assumption_registry(typed_program)
@@ -361,11 +471,10 @@ module IgniterLang
             "resolved_type" => expr.fetch("resolved_type", { "name" => "SecretRef", "params" => [] }),
             "sealed"        => true
           }
-        # LANG-OPTIONAL-FIELD-PARTIAL-RECORD-P3: option_construct → SIR node.
-        # TC-synthesized only (no source syntax): appears when the optional-fields
-        # gate is ON, at record-literal fields (omit→none / raw-T→some).
-        elsif expr.fetch("kind", nil) == "option_construct"
-          semantic_option_construct(expr)
+        # LANG-OPTION-RUNTIME-CARRIER-CONVERGENCE-P2: source constructors and
+        # optional-field normalization converge on one nominal SIR identity.
+        elsif expr.fetch("kind", nil) == "option_value_construct"
+          semantic_option_value_construct(expr)
         # PROP-044 P6: match_expr → typed match_node (renamed to avoid confusion with parse AST)
         elsif expr.fetch("kind", nil) == "match_expr"
           semantic_match_node(expr)
@@ -473,34 +582,35 @@ module IgniterLang
       node
     end
 
-    # LANG-OPTIONAL-FIELD-PARTIAL-RECORD-P3: lower a TypeChecker option_construct
-    # node to SemanticIR shape. Modeled on semantic_variant_construct; the node is
-    # TC-synthesized (no source syntax for Some/None — that is the one structural
-    # difference from variant_construct). SIR layout (parity-locked with Rust):
-    #   { "kind": "option_construct", "arm": "some"|"none",
-    #     "inner_type": <T ir>, "value": <expr — some arm only>,
+    # Canonical v1 Option construction, parity-locked with the Rust compiler:
+    #   { "kind": "option_value_construct", "arm": "Some"|"None",
+    #     "value": <expr — Some only>,
     #     "resolved_type": { "name": "Option", "params": [<T ir>] } }
-    def semantic_option_construct(expr)
+    def semantic_option_value_construct(expr)
       node = {
-        "kind"       => "option_construct",
-        "arm"        => expr.fetch("arm"),
-        "inner_type" => expr.fetch("inner_type")
+        "kind" => "option_value_construct",
+        "arm" => expr.fetch("arm")
       }
       node["value"] = semantic_expr(expr.fetch("value")) if expr.key?("value")
-      node["resolved_type"] = expr.fetch("resolved_type")
+      node["resolved_type"] = normalize_semantic_type_ir(expr.fetch("resolved_type"))
       node
     end
 
     # PROP-044 P6: lower a TypeChecker match_expr node to SemanticIR match_node shape.
     def semantic_match_node(expr)
+      subject_type = expr.fetch("subject_type")
+      subject_type_name = subject_type.is_a?(Hash) ? subject_type.fetch("name", nil) : subject_type
       node = {
-        "kind"          => "match_node",
+        # LANG-OPTION-RUNTIME-CARRIER-CONVERGENCE-P2: an Option subject has a
+        # dedicated semantic owner.  Result and user variants retain the generic
+        # match_node path and carrier unchanged.
+        "kind"          => subject_type_name == "Option" ? "option_match" : "match_node",
         "subject"       => semantic_expr(expr.fetch("subject")),
-        "subject_type"  => expr.fetch("subject_type"),
+        "subject_type"  => normalize_semantic_type_ir(subject_type),
         "arms"          => expr.fetch("arms", []).map { |arm| semantic_match_arm(arm) },
         "exhaustive"    => expr.fetch("exhaustive", false),
         "has_wildcard"  => expr.fetch("has_wildcard", false),
-        "resolved_type" => expr.fetch("resolved_type")
+        "resolved_type" => normalize_semantic_type_ir(expr.fetch("resolved_type"))
       }
       # LANG-SUMTYPE-CONSTRUCT-MATCH-P3: sealed-only marker (Option/Result subjects).
       node["sealed"] = true if expr.fetch("sealed", false)
@@ -512,8 +622,29 @@ module IgniterLang
       {
         "pattern"       => arm.fetch("pattern"),
         "body"          => semantic_expr(body),
-        "resolved_type" => body.fetch("resolved_type")
+        "resolved_type" => normalize_semantic_type_ir(body.fetch("resolved_type"))
       }
+    end
+
+    # Classifier/typechecker type refs may retain parser-local `kind: type_ref`
+    # metadata. SemanticIR has one normalized recursive type-tree identity
+    # shared by ports, named Record declarations, constructors, and matches.
+    def normalize_semantic_type_ir(type)
+      return type unless type.is_a?(Hash)
+
+      type.each_with_object({}) do |(key, value), normalized|
+        next if key == "kind" && value == "type_ref"
+
+        normalized[key] =
+          case value
+          when Hash
+            normalize_semantic_type_ir(value)
+          when Array
+            value.map { |item| normalize_semantic_type_ir(item) }
+          else
+            value
+          end
+      end
     end
 
     def typed_invariant_coverage(semantic_ir)
@@ -1025,7 +1156,7 @@ module IgniterLang
       value_env = sample_input.dup
       inputs = []
       outputs = []
-      nodes = []
+      nodes = [option_carrier_guard_node]
 
       contract.fetch("body").each do |node|
         case node.fetch("kind")
@@ -1075,6 +1206,7 @@ module IgniterLang
                        end
       contract_ir = {
         "kind" => "contract_ir",
+        "option_carrier" => "first_class_v1",
         "contract_ref" => nil,
         "contract_name" => contract.fetch("name"),
         "modifier" => modifier,

@@ -1,20 +1,52 @@
 {
-  "program_id": "prog_a3f8c2e1d7b4509a",
-  "artifact_hash": "sha256:4e2a1b9c7f3d5086e1a4c2b8f9d7e3a5c1b4f2e8a9d7c3b5f1e2a4d8c7b9f3",
-  "language_version": "0.1.0",
-  "grammar_version": "0.1.0",
-  "schema_version": "1.0.0",
-  "axiom_descriptor_ref": "1.0.0",
-  "format": "igapp_dir",
-  "compiled_at": "2026-05-05T17:00:00Z",
-  "contracts": ["add"],
-  "fragment_class": "core",
-  "schema_descriptor": {
-    "trait_bounds": [
-      { "param": "T", "constraint": "Additive", "resolved_as": "Integer" }
-    ],
-    "migrations": []
+  "artifact_hash": "sha256:68f0e8145e051faa2672f37d9ca72c908573239ba37c4d5a1b6c0c368e65077d",
+  "assembler": "igapp-assembler-proof-stage1-v0",
+  "compilation_report_ref": "compilation_report/fe9a2479eb3f4d5d",
+  "compiled_at": "2026-05-06T00:00:00Z",
+  "contract_index": {
+    "Add": {
+      "contract_path": "contracts/add.json",
+      "contract_ref": "contract/Add/sha256:e0677d9cfcafa1e7f5057123",
+      "fragment_class": "core"
+    }
   },
-  "warnings": [],
-  "diagnostics": []
+  "contract_refs": {
+    "Add": "contract/Add/sha256:e0677d9cfcafa1e7f5057123"
+  },
+  "contracts": [
+    "Add"
+  ],
+  "diagnostics": [],
+  "format": "igapp_dir",
+  "format_version": "0.1.0",
+  "fragment_class": "core",
+  "fragment_summary": {
+    "fragment_classes": [
+      "core"
+    ],
+    "max_fragment_class": "core",
+    "precedence_high_to_low": [
+      "oof",
+      "temporal",
+      "stream",
+      "escape",
+      "core"
+    ]
+  },
+  "grammar_version": "0.1.0",
+  "kind": "igapp_manifest",
+  "language_version": "0.1.0",
+  "option_carrier": "first_class_v1",
+  "program_id": "semanticir/fe9a2479eb3f4d5d",
+  "schema_descriptor": {
+    "migrations": [],
+    "trait_bounds": []
+  },
+  "schema_version": "0.1.0",
+  "semantic_hash": "sha256:185ac7a89fcfb1ecaf8866ef5c36f1503006fbd8cbc8a1bae7330e6ac69b7c9c",
+  "semantic_hash_law": "igniter.semantic-hash.v2",
+  "semantic_ir_ref": "semanticir/fe9a2479eb3f4d5d",
+  "source_hash": "sha256:fe9a2479eb3f4d5d5b99e5263f691f0d4d2efb38f69ce0e082be71eca97773e1",
+  "source_path": "source/add.ig",
+  "warnings": []
 }

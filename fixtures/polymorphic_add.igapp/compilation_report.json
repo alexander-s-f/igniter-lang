@@ -1,0 +1,24 @@
+{
+  "diagnostics": [],
+  "fixture_provenance": {
+    "kind": "historical_fixture_reassembly_v1",
+    "owner": "experiments/option_runtime_carrier_convergence_p2/publish_tracked_igapp_fixtures.rb",
+    "purpose": "preserve a pre-current compiler fixture behind the mandatory Option carrier fence",
+    "runtime_execution_authority": false,
+    "source_compilation_authority": false
+  },
+  "format_version": "0.1.0",
+  "grammar_version": "0.1.0",
+  "kind": "compilation_report",
+  "pass_result": "ok",
+  "program_id": "compilation_report/49ae94eca6a4b50d",
+  "semantic_ir_ref": "semanticir/49ae94eca6a4b50d",
+  "source_hash": "sha256:49ae94eca6a4b50da2910af861d204d7a778a6c298dca8948ff60e79c249ee34",
+  "source_path": "source/polymorphic_add.ig",
+  "stages": {
+    "classify": "fixture_preserved",
+    "emit": "ok",
+    "parse": "fixture_preserved",
+    "typecheck": "fixture_preserved"
+  }
+}

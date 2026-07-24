@@ -1,1 +1,3 @@
-{ "diagnostics": [], "warnings": [{ "code": "escape.stream_collection", "message": "geo_signal read uses :window lifecycle" }] }
+{
+  "diagnostics": []
+}

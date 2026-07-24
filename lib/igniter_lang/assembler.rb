@@ -22,6 +22,8 @@ module IgniterLang
       core oof_registry fragment_registry escape_boundary contract_modifiers
       temporal stream olap invariant assumptions evidence_observation pipeline
     ].freeze
+    OPTION_CARRIER = "first_class_v1"
+    SEMANTIC_HASH_LAW = "igniter.semantic-hash.v2"
 
     module Canonical
       module_function
@@ -180,13 +182,43 @@ module IgniterLang
     end
 
     def validate_semantic_ir!(case_name, semantic_ir)
+      unless semantic_ir.fetch("option_carrier", nil) == OPTION_CARRIER
+        refuse!(case_name, "OOF-VM-OPTION-CARRIER: option_carrier marker must be #{OPTION_CARRIER}")
+      end
+
       semantic_ir.fetch("contracts").each do |contract|
         refuse!(case_name, "OOF contract emitted: #{contract.fetch("contract_name")}") if contract.fetch("fragment_class") == "oof"
+        unless contract.fetch("option_carrier", nil) == OPTION_CARRIER
+          refuse!(case_name, "OOF-VM-OPTION-CARRIER: contract #{contract.fetch("contract_name")} marker mismatch")
+        end
+        nodes = contract.fetch("nodes", [])
+        guard = nodes.first
+        guard_count = nodes.count { |node| node.dig("expr", "kind") == "option_carrier_guard_v1" }
+        unless guard_count == 1 && option_carrier_guard?(guard)
+          refuse!(case_name, "OOF-VM-OPTION-CARRIER: contract #{contract.fetch("contract_name")} missing first v1 guard")
+        end
       end
 
       return unless JSON.generate(semantic_ir).include?("stdlib.numeric.")
 
       refuse!(case_name, "unresolved stdlib.numeric operator in SemanticIR")
+    end
+
+    def option_carrier_guard?(node)
+      bool_type = { "name" => "Bool", "params" => [] }
+      node == {
+        "kind" => "compute",
+        "name" => "__option_carrier_guard_v1",
+        "expr" => {
+          "kind" => "option_carrier_guard_v1",
+          "version" => OPTION_CARRIER,
+          "body" => { "kind" => "literal", "value" => true },
+          "resolved_type" => bool_type
+        },
+        "type" => bool_type,
+        "deps" => [],
+        "fragment" => "core"
+      }
     end
 
     def build_artifact(case_name, report, semantic_ir, compiler_profile_source: nil)
@@ -223,6 +255,7 @@ module IgniterLang
       artifact_material["compiler_profile_id"] = compiler_profile_id if compiler_profile_id
 
       artifact_hash = Canonical.hash(artifact_material)
+      semantic_hash = semantic_hash(semantic_ir)
       contracts = contracts.map { |contract| contract.merge("artifact_hash" => artifact_hash) }
       fragment_summary = fragment_summary_for(contracts)
       contract_index = contract_index_for(contracts)
@@ -233,6 +266,9 @@ module IgniterLang
         "format" => "igapp_dir",
         "program_id" => semantic_ir.fetch("program_id"),
         "artifact_hash" => artifact_hash,
+        "semantic_hash" => semantic_hash,
+        "semantic_hash_law" => SEMANTIC_HASH_LAW,
+        "option_carrier" => OPTION_CARRIER,
         "language_version" => semantic_ir.fetch("format_version"),
         "grammar_version" => semantic_ir.fetch("grammar_version"),
         "schema_version" => "0.1.0",
@@ -255,6 +291,7 @@ module IgniterLang
       }
       manifest["entrypoint"] = entrypoint if entrypoint
       manifest["source_units"] = semantic_ir.fetch("source_units") if semantic_ir.key?("source_units")
+      manifest["type_declarations"] = semantic_ir.fetch("type_declarations") if semantic_ir.key?("type_declarations")
       # PROP-036: top-level manifest field; only present when a valid source is supplied.
       manifest["compiler_profile_id"] = compiler_profile_id if compiler_profile_id
       # LANG-TYPED-CONTRACT-REF-PROP-P3: emit dependency_edges when present
@@ -281,19 +318,10 @@ module IgniterLang
       output_ports = ports(contract_ir.fetch("outputs"))
       semantic_nodes = contract_ir.fetch("nodes")
       compute_nodes = semantic_nodes.filter_map do |node|
-        next unless compute_node?(node)
+        kind = node.fetch("kind", nil)
+        next unless compute_node?(node) || %w[loop service_loop_node].include?(kind)
 
-        {
-          "node_id" => "node_#{node.fetch("name")}",
-          "name" => node.fetch("name"),
-          "kind" => node.fetch("kind"),
-          "fragment_class" => node.fetch("fragment"),
-          "type_tag" => type_name(node.fetch("type")),
-          "lifecycle" => "session",
-          "obs_kind" => "value_observation",
-          "dependencies" => node.fetch("deps").map { |dep| "input:#{dep}" },
-          "expression" => compat_expr(node.fetch("expr"))
-        }
+        assemble_compute_node(node)
       end
       temporal_nodes = semantic_nodes.filter_map do |node|
         next unless temporal_node?(node)
@@ -308,10 +336,14 @@ module IgniterLang
 
       result = {
         "contract_id" => contract_id,
+        "option_carrier" => contract_ir.fetch("option_carrier"),
         "source_contract_ref" => contract_ir.fetch("contract_ref"),
         "name" => contract_id,
         "fragment_class" => contract_ir.fetch("fragment_class"),
+        "modifier" => contract_ir.fetch("modifier", "pure"),
         "escape_set" => contract_ir.fetch("escape_boundaries"),
+        "capabilities" => contract_ir.fetch("capabilities", []),
+        "effects" => contract_ir.fetch("effects", []),
         "lifecycle" => "session",
         "input_ports" => input_ports,
         "output_ports" => output_ports,
@@ -321,6 +353,7 @@ module IgniterLang
           "outputs" => output_ports.to_h { |port| [port.fetch("name"), port.fetch("type_tag")] }
         }
       }
+      result["effect_surface"] = contract_ir.fetch("effect_surface") if contract_ir.key?("effect_surface")
       result["temporal_nodes"] = temporal_nodes unless temporal_nodes.empty?
       result["stream_nodes"] = stream_nodes unless stream_nodes.empty?
       result
@@ -328,6 +361,56 @@ module IgniterLang
 
     def compute_node?(node)
       node.key?("expr") && node.key?("type")
+    end
+
+    # Keep this byte-shape equivalent to
+    # igniter_compiler::assembler::Assembler::assemble_compute_node. Standard
+    # Runtime re-derives this structure from identity-verified SIR and refuses
+    # any independently interpreted contract file.
+    def assemble_compute_node(node)
+      kind = node.fetch("kind", "compute")
+      result = {
+        "node_id" => "node_#{node.fetch("name")}",
+        "name" => node.fetch("name"),
+        "kind" => kind,
+        "fragment_class" => node.fetch("fragment", node.fetch("fragment_class", "core"))
+      }
+      type = node.fetch("type", node.fetch("type_tag", nil))
+      if type
+        result["type_tag"] = type_name(type)
+        result["type"] = type
+      end
+      result["lifecycle"] = "session"
+      result["obs_kind"] = "value_observation"
+
+      deps = node.fetch("deps", node.fetch("dependencies", nil))
+      if deps
+        result["dependencies"] = deps.map do |dep|
+          dep.start_with?("input:") ? dep : "input:#{dep}"
+        end
+      end
+
+      expr = node.fetch("expr", node.fetch("expression", nil))
+      if expr
+        lowered = compat_expr(expr)
+        result["expr"] = lowered
+        result["expression"] = lowered
+      end
+
+      if kind == "loop"
+        result["options"] = node.fetch("options") if node.key?("options")
+        if node.key?("body_nodes")
+          result["body_nodes"] = node.fetch("body_nodes").map { |inner| assemble_compute_node(inner) }
+        end
+      elsif kind == "service_loop_node"
+        result["interval"] = node.fetch("interval") if node.key?("interval")
+        result["temporal_binding"] = node.fetch("temporal_binding") if node.key?("temporal_binding")
+        if node.key?("body_nodes")
+          result["body_nodes"] = node.fetch("body_nodes").map { |inner| assemble_compute_node(inner) }
+        end
+      end
+
+      result
     end
 
     def temporal_node?(node)
@@ -534,6 +617,7 @@ module IgniterLang
         {
           "name" => port.fetch("name"),
           "type_tag" => type_name(port.fetch("type")),
+          "type" => port.fetch("type"),
           "lifecycle" => port.fetch("lifecycle"),
           "required" => true
         }
@@ -546,34 +630,31 @@ module IgniterLang
       kind = expr["kind"]
       case kind
       when "call"
-        operands = (expr["args"] || []).map { |arg| compat_expr(arg) }
-        res = expr.dup
-        res["kind"] = "apply"
-        res["operator"] = expr["fn"]
-        res["operands"] = operands
-        res.delete("fn")
-        res.delete("args")
-        res
+        {
+          "kind" => "apply",
+          "operator" => expr.fetch("fn"),
+          "operands" => expr.fetch("args").map { |arg| compat_expr(arg) }
+        }
       when "ref"
-        expr.dup
+        {
+          "kind" => "ref",
+          "name" => expr.fetch("name")
+        }
       when "literal"
-        res = expr.dup
-        res["type_tag"] = type_name(expr.fetch("resolved_type")) if expr.key?("resolved_type")
-        res
+        {
+          "kind" => "literal",
+          "value" => expr.fetch("value"),
+          "type_tag" => type_name(expr.fetch("resolved_type", expr.fetch("type_tag", "Unknown")))
+        }
       when "field_access"
-        res = expr.dup
-        res["object"] = compat_expr(expr.fetch("object"))
-        res
+        {
+          "kind" => "field_access",
+          "object" => compat_expr(expr.fetch("object")),
+          "field" => expr.fetch("field"),
+          "type_tag" => type_name(expr.fetch("resolved_type", expr.fetch("type_tag", "Unknown")))
+        }
       else
-        res = expr.dup
-        expr.each do |k, v|
-          if v.is_a?(Hash)
-            res[k] = compat_expr(v)
-          elsif v.is_a?(Array)
-            res[k] = v.map { |item| compat_expr(item) }
-          end
-        end
-        res
+        expr.dup
       end
     end
 
@@ -742,6 +823,8 @@ module IgniterLang
       write_json(target / "classified_ast.json", artifact.fetch("classified_ast"))
       write_json(target / "projections.json", artifact.fetch("projections"))
       write_json(target / "compatibility_metadata.json", artifact.fetch("compatibility_metadata"))
+      File.write(target / "semantic_hash.txt", artifact.fetch("manifest").fetch("semantic_hash"))
+      File.write(target / "semantic_hash_law.txt", artifact.fetch("manifest").fetch("semantic_hash_law"))
       artifact.fetch("contracts").each do |contract|
         write_json(target / "contracts/#{snake_case(contract.fetch("contract_id"))}.json", contract)
       end
@@ -749,6 +832,19 @@ module IgniterLang
 
     def write_json(path, value)
       File.write(path, Canonical.json(value))
+    end
+
+    # Path/layout-independent program identity, byte-compatible with the
+    # Standard Runtime's current `igniter.semantic-hash.v2` recomputation law.
+    # Removals are exact paths, never recursive key-name filtering.
+    def semantic_hash(semantic_ir)
+      semantic = Marshal.load(Marshal.dump(semantic_ir))
+      semantic.delete("source_path")
+      semantic.delete("compilation_report_ref")
+      semantic.delete("source_hash")
+      semantic.delete("program_id")
+      semantic.fetch("entrypoint", {}).delete("source_span")
+      Canonical.hash(semantic)
     end
 
     def snake_case(value)

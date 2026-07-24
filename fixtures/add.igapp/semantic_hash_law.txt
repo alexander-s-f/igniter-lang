@@ -1,0 +1,1 @@
+igniter.semantic-hash.v2

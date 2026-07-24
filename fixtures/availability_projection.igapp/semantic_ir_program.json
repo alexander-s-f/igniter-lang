@@ -1,0 +1,207 @@
+{
+  "compilation_report_ref": "compilation_report/8d380232c26184a7",
+  "contracts": [
+    {
+      "capabilities": [],
+      "contract_name": "AvailabilityProjection",
+      "contract_ref": "contract/AvailabilityProjection/sha256:7401ab780f1f4943a7e987c9",
+      "effects": [],
+      "escape_boundaries": [
+        {
+          "name": "stream_collection",
+          "produces": [],
+          "required_caps": []
+        }
+      ],
+      "fragment_class": "escape",
+      "inputs": [
+        {
+          "lifecycle": "local",
+          "name": "technician_id",
+          "type": {
+            "name": "String",
+            "params": []
+          }
+        },
+        {
+          "lifecycle": "local",
+          "name": "date",
+          "type": {
+            "name": "String",
+            "params": []
+          }
+        }
+      ],
+      "kind": "contract_ir",
+      "modifier": "observed",
+      "nodes": [
+        {
+          "deps": [],
+          "expr": {
+            "body": {
+              "kind": "literal",
+              "value": true
+            },
+            "kind": "option_carrier_guard_v1",
+            "resolved_type": {
+              "name": "Bool",
+              "params": []
+            },
+            "version": "first_class_v1"
+          },
+          "fragment": "core",
+          "kind": "compute",
+          "name": "__option_carrier_guard_v1",
+          "type": {
+            "name": "Bool",
+            "params": []
+          }
+        },
+        {
+          "deps": [
+            "technician_id",
+            "date"
+          ],
+          "expr": {
+            "kind": "tbackend_read",
+            "lifecycle": "window",
+            "subject_template": "geo_signal/{technician_id}/{date}"
+          },
+          "fragment": "escape",
+          "kind": "read",
+          "name": "geo_signals",
+          "type": {
+            "name": "Collection",
+            "params": [
+              {
+                "name": "GeoSignal",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "deps": [
+            "technician_id",
+            "date"
+          ],
+          "expr": {
+            "kind": "tbackend_read",
+            "lifecycle": "durable",
+            "subject_template": "schedule/{technician_id}/{date}"
+          },
+          "fragment": "core",
+          "kind": "read",
+          "name": "schedule",
+          "type": {
+            "name": "ScheduleFact",
+            "params": []
+          }
+        },
+        {
+          "deps": [
+            "geo_signals",
+            "schedule"
+          ],
+          "expr": {
+            "args": [
+              {
+                "kind": "ref",
+                "name": "geo_signals"
+              },
+              {
+                "kind": "ref",
+                "name": "schedule"
+              }
+            ],
+            "fn": "compute_slots",
+            "kind": "call"
+          },
+          "fragment": "core",
+          "kind": "compute",
+          "name": "available_slots",
+          "type": {
+            "name": "Collection",
+            "params": [
+              {
+                "name": "TimeSlot",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "deps": [
+            "available_slots"
+          ],
+          "expr": {
+            "args": [
+              {
+                "kind": "ref",
+                "name": "available_slots"
+              },
+              {
+                "kind": "ref",
+                "name": "technician_id"
+              },
+              {
+                "kind": "ref",
+                "name": "date"
+              }
+            ],
+            "fn": "build_snapshot",
+            "kind": "call"
+          },
+          "fragment": "core",
+          "kind": "snapshot",
+          "name": "snapshot",
+          "type": {
+            "name": "AvailabilitySnapshot",
+            "params": []
+          }
+        }
+      ],
+      "option_carrier": "first_class_v1",
+      "outputs": [
+        {
+          "lifecycle": "window",
+          "name": "available_slots",
+          "type": {
+            "name": "Collection",
+            "params": [
+              {
+                "name": "TimeSlot",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "lifecycle": "durable",
+          "name": "snapshot",
+          "type": {
+            "name": "AvailabilitySnapshot",
+            "params": []
+          }
+        }
+      ],
+      "specialization_of": null,
+      "type_args": {}
+    }
+  ],
+  "fixture_provenance": {
+    "kind": "historical_fixture_reassembly_v1",
+    "owner": "experiments/option_runtime_carrier_convergence_p2/publish_tracked_igapp_fixtures.rb",
+    "purpose": "preserve a pre-current compiler fixture behind the mandatory Option carrier fence",
+    "runtime_execution_authority": false,
+    "source_compilation_authority": false
+  },
+  "format_version": "0.1.0",
+  "grammar_version": "0.1.0",
+  "kind": "semantic_ir_program",
+  "module": "SparkCRM.Availability",
+  "option_carrier": "first_class_v1",
+  "program_id": "semanticir/8d380232c26184a7",
+  "source_hash": "sha256:8d380232c26184a7983711a5716e853b475272b55788c48e932e5cf331097686",
+  "source_path": "source/availability_projection.ig"
+}

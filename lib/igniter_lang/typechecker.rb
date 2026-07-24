@@ -160,6 +160,20 @@ module IgniterLang
       "outcome_is_partial_success"        => { qualified_name: "stdlib.outcome.is_partial_success",        return_type: "Bool"   },
     }.freeze
 
+    # LANG-OPTION-RUNTIME-CARRIER-CONVERGENCE-P2: Option operations have
+    # collision-free SemanticIR identities. Bare `map`/`flat_map` remain
+    # source-overloaded with Collection and are selected from the statically
+    # resolved first argument; the runtime never guesses the family.
+    OPTION_PREDICATE_FNS = {
+      "is_some" => "stdlib.option.is_some",
+      "is_none" => "stdlib.option.is_none"
+    }.freeze
+    OPTION_HOF_FNS = {
+      "map" => "stdlib.option.map",
+      "flat_map" => "stdlib.option.flat_map",
+      "and_then" => "stdlib.option.and_then"
+    }.freeze
+
     # LANG-STDLIB-COLLECTION-MAP-FILTER-PROP-P1: stdlib.collection HOF registry (v0 — exhaustive).
     # Source aliases → qualified SemanticIR names. All pure/core/authority_surface:none.
     # map/filter/find/any/all: 2-arg (collection, lambda). count: 1-arg (collection).
@@ -391,17 +405,11 @@ module IgniterLang
       cycle_errors = detect_uses_cycles(typed_contracts)
       entrypoint_errors, resolved_entrypoint = validate_entrypoint(classified_program)
 
-      # PROP-044-P9: OOF-KIND6 — reserved __* field names in module-level declarations.
+      # PROP-044-P9 / LANG-OPTION-RUNTIME-CARRIER-CONVERGENCE-P2:
+      # generic variant payload fields retain the compiler-prefix reservation
+      # while ordinary Record fields no longer do.  A nominal Option carrier
+      # makes `__arm` / `__variant` ordinary Record data, never carrier evidence.
       module_reserved_errors = []
-      classified_program.fetch("type_declarations", []).each do |type_decl|
-        type_decl.fetch("fields", []).each do |field|
-          fname = field.fetch("name", "")
-          next unless fname.start_with?("__")
-          module_reserved_errors << oof("OOF-KIND6",
-            "Field '#{fname}' in type '#{type_decl.fetch("name")}' uses reserved compiler prefix '__' (compiler-owned variant runtime field)",
-            type_decl.fetch("name"))
-        end
-      end
       classified_program.fetch("variant_declarations", []).each do |vd|
         vd.fetch("arms", []).each do |arm|
           arm.fetch("fields", []).each do |field|
@@ -449,6 +457,10 @@ module IgniterLang
         "grammar_version" => classified_program.fetch("grammar_version"),
         "module" => classified_program.fetch("module"),
         "type_env" => @type_shapes,
+        # Source-declared named Records only. `type_env` may additionally carry
+        # proof/typechecker synthetics such as Assumption; those are not typed
+        # host schema declarations and must not enter SemanticIR.
+        "declared_type_env" => @port_type_registry,
         "contracts" => typed_contracts,
         "type_errors" => typed_contracts.flat_map { |contract| contract.fetch("type_errors") } + const_errors + module_reserved_errors + entrypoint_errors + cycle_errors + function_errors + shape_conformance_errors(classified_program) + module_assumption_errors,
         "semantic_ir_ref" => nil
@@ -549,20 +561,21 @@ module IgniterLang
       type_ir(tir.fetch("params", []).fetch(0, "Unknown"))
     end
 
-    # LANG-OPTIONAL-FIELD-PARTIAL-RECORD-P3: TC-synthesized option_construct nodes.
-    # Unlike variant_construct there is NO source syntax that produces these —
-    # they originate in the typechecker at record-literal construction sites
-    # (omit → arm "none", raw-T value → arm "some" auto-wrap). Layout is modeled
-    # on variant_construct (kind/arm/resolved_type) with value+inner_type payload.
+    # LANG-OPTION-RUNTIME-CARRIER-CONVERGENCE-P2: every Option construction,
+    # including TC-synthesized optional-record-field normalization, uses the
+    # first-class v1 construction identity.  `Some`/`None` casing and the
+    # optional `value` key are shared byte-for-byte with the Rust compiler.
+    # No `inner_type`, `variant`, `sealed`, or record-shaped carrier metadata is
+    # emitted: `resolved_type` is the complete static Option[T] authority.
     def option_some_node(typed_value, inner_type)
-      typed_expr("option_construct", option_type_ir(inner_type),
+      typed_expr("option_value_construct", option_type_ir(inner_type),
                  typed_value.fetch("deps", []),
-                 "arm" => "some", "inner_type" => inner_type, "value" => typed_value)
+                 "arm" => "Some", "value" => typed_value)
     end
 
     def option_none_node(inner_type)
-      typed_expr("option_construct", option_type_ir(inner_type), [],
-                 "arm" => "none", "inner_type" => inner_type)
+      typed_expr("option_value_construct", option_type_ir(inner_type), [],
+                 "arm" => "None")
     end
 
     # PROP-044 P5: 3-level store: variant_name → arm_name → field_name → type_ir
@@ -2255,6 +2268,37 @@ module IgniterLang
       when "filter_map"
         # LANG-SUMTYPE-COLLECT-P3: filter_map(Collection[T], T -> Option[U]) -> Collection[U]
         infer_filter_map_call(args, symbol_types, type_errors, type_warnings, node_name)
+      when *OPTION_PREDICATE_FNS.keys,
+           *OPTION_PREDICATE_FNS.values
+        infer_option_predicate_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
+      when *OPTION_HOF_FNS.values
+        bare = fn.delete_prefix("stdlib.option.")
+        infer_option_hof_call(bare, args, symbol_types, type_errors, type_warnings, node_name)
+      when "map", "flat_map"
+        # Source overloads are resolved once from the typed first argument.
+        # Option and Collection then receive distinct SIR names, so the runtime
+        # has no carrier/type-shape dispatch.
+        first_arg =
+          if args.length == 2
+            infer_expr(args[0], symbol_types, type_errors, type_warnings, node_name)
+          end
+        first_name = first_arg && type_name(first_arg.fetch("resolved_type"))
+        if first_name == "Option"
+          infer_option_hof_call(
+            fn, args, symbol_types, type_errors, type_warnings, node_name,
+            option_arg: first_arg
+          )
+        elsif fn == "map" && first_name == "Result"
+          infer_result_map_call(
+            args, symbol_types, type_errors, type_warnings, node_name,
+            result_arg: first_arg
+          )
+        else
+          infer_collection_hof_call(
+            fn, args, symbol_types, type_errors, type_warnings, node_name,
+            collection_arg: first_arg
+          )
+        end
       when *COLLECTION_HOF_FNS.keys
         # LANG-STDLIB-COLLECTION-MAP-FILTER-PROP-P1: Collection HOF — map/filter/count
         infer_collection_hof_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
@@ -2329,7 +2373,10 @@ module IgniterLang
         # LAB-NUMERIC-DECIMAL-CONSTRUCT-P1: decimal(value, scale) -> Decimal[scale]
         infer_decimal_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
       when "or_else"
-        # PROP-043: Option[V] unwrap with default (or_else introduced alongside Map v0)
+        # PROP-043 source compatibility: Option[V] keeps the bare `or_else`
+        # SIR identity. A statically known Result[T,E] uses its exact existing
+        # `result_unwrap_or` runtime owner; carrier selection is never deferred
+        # to runtime shape inspection.
         infer_or_else(args, symbol_types, type_errors, type_warnings, node_name)
       when "secret_ref"
         # LANG-SECRET-REF-NATIVE-P2: the sole SecretRef constructor.
@@ -2341,8 +2388,23 @@ module IgniterLang
         # LANG-SUMTYPE-CONSTRUCT-MATCH-P3: unwrap_or(Result[T,E]|Option[T], default) -> T
         infer_unwrap_or(args, symbol_types, type_errors, type_warnings, node_name)
       when "and_then"
-        # LANG-SUMTYPE-CONSTRUCT-MATCH-P3: and_then(Result[T,E], (T -> Result[U,E])) -> Result[U,E]
-        infer_and_then(args, symbol_types, type_errors, type_warnings, node_name)
+        # LANG-OPTION-RUNTIME-CARRIER-CONVERGENCE-P2: source-overloaded
+        # and_then is statically split into exact Option/Result SIR owners.
+        first_arg =
+          if args.length == 2
+            infer_expr(args[0], symbol_types, type_errors, type_warnings, node_name)
+          end
+        if first_arg && type_name(first_arg.fetch("resolved_type")) == "Option"
+          infer_option_hof_call(
+            "and_then", args, symbol_types, type_errors, type_warnings, node_name,
+            option_arg: first_arg
+          )
+        else
+          infer_and_then(
+            args, symbol_types, type_errors, type_warnings, node_name,
+            result_arg: first_arg
+          )
+        end
       when "call_contract"
         # LAB-RUBY-CALL-CONTRACT-PARITY-P3: Tier 1 literal same-module + Tier 2 dynamic
         infer_call_contract(expr, symbol_types, type_errors, type_warnings, node_name)
@@ -2388,12 +2450,26 @@ module IgniterLang
       history_ref = infer_expr(args[0], symbol_types, type_errors, type_warnings, node_name)
       vt_ref = infer_expr(args[1], symbol_types, type_errors, type_warnings, node_name)
       tt_ref = infer_expr(args[2], symbol_types, type_errors, type_warnings, node_name)
+      axes_valid = true
       [vt_ref, tt_ref].each_with_index do |axis_ref, idx|
         axis_name = idx.zero? ? "valid_time" : "transaction_time"
         unless type_name(axis_ref.fetch("resolved_type")) == "DateTime" ||
                type_name(axis_ref.fetch("resolved_type")) == "Unknown"
+          axes_valid = false
           type_errors << oof_alias("OOF-BT4", "bihistory_at: #{axis_name} must be DateTime, got #{type_name(axis_ref.fetch("resolved_type"))}", node_name, ["OOF-TM6"])
         end
+      end
+      # LANG-OPTION-RUNTIME-CARRIER-CONVERGENCE-P2: a typed Option result is not
+      # an execution claim. Desktop/Standard Runtime has no admitted bitemporal
+      # lowering, so a well-shaped source call must refuse before SemanticIR.
+      if axes_valid
+        type_errors << oof_alias(
+          "OOF-BT2",
+          "bihistory_at is not executable in the first_class_v1 runtime plane; " \
+          "no bitemporal runtime/TBackend lowering is admitted",
+          node_name,
+          ["OOF-TM4"]
+        )
       end
       result_type = option_type_from(history_ref.fetch("resolved_type"))
       typed_expr(
@@ -4643,13 +4719,213 @@ module IgniterLang
                  "fn" => qualified_name, "args" => [outcome_arg])
     end
 
+    # LANG-OPTION-RUNTIME-CARRIER-CONVERGENCE-P2: nominal Option predicates.
+    # The static family check is deliberate: a runtime Record, nil, or raw T is
+    # never accepted by spelling or shape.
+    def infer_option_predicate_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
+      bare = fn.delete_prefix("stdlib.option.")
+      qualified = OPTION_PREDICATE_FNS.fetch(bare)
+      unless args.length == 1
+        type_errors << oof(
+          "OOF-TY0",
+          "#{qualified} requires 1 Option argument, got #{args.length}",
+          node_name
+        )
+        return typed_expr("call", type_ir("Bool"), [], "fn" => qualified, "args" => [])
+      end
+
+      option_arg = infer_expr(args[0], symbol_types, type_errors, type_warnings, node_name)
+      actual_name = type_name(option_arg.fetch("resolved_type"))
+      unless %w[Option Unknown].include?(actual_name)
+        type_errors << oof(
+          "OOF-TY0",
+          "#{qualified} requires Option[T], got #{actual_name}",
+          node_name
+        )
+      end
+
+      typed_expr(
+        "call",
+        type_ir("Bool"),
+        option_arg.fetch("deps", []),
+        "fn" => qualified,
+        "args" => [option_arg]
+      )
+    end
+
+    # Option map/flat_map/and_then all inspect the same nominal carrier.
+    # `map` wraps the lambda result once; `flat_map` and `and_then` require and
+    # preserve a lambda-produced Option. The latter two are semantic aliases
+    # with distinct public identities retained for source/API stability.
+    def infer_option_hof_call(
+      fn, args, symbol_types, type_errors, type_warnings, node_name,
+      option_arg: nil
+    )
+      qualified = OPTION_HOF_FNS.fetch(fn)
+      unless args.length == 2
+        type_errors << oof(
+          "OOF-TY0",
+          "#{qualified} requires 2 arguments (Option[T], lambda), got #{args.length}",
+          node_name
+        )
+        return typed_expr("call", option_type_ir(type_ir("Unknown")), [],
+                          "fn" => qualified, "args" => [])
+      end
+
+      option_arg ||= infer_expr(args[0], symbol_types, type_errors, type_warnings, node_name)
+      option_type = option_arg.fetch("resolved_type")
+      option_name = type_name(option_type)
+      unless %w[Option Unknown].include?(option_name)
+        type_errors << oof(
+          "OOF-TY0",
+          "#{qualified} requires Option[T], got #{option_name}",
+          node_name
+        )
+      end
+
+      lambda_node = args[1]
+      unless lambda_node.is_a?(Hash) && lambda_node.fetch("kind", nil) == "lambda"
+        type_errors << oof(
+          "OOF-TY0",
+          "#{qualified} requires a lambda as its second argument",
+          node_name
+        )
+        return typed_expr(
+          "call",
+          option_type_ir(type_ir("Unknown")),
+          option_arg.fetch("deps", []),
+          "fn" => qualified,
+          "args" => [option_arg]
+        )
+      end
+
+      inner_type = option_type.fetch("params", []).fetch(0, type_ir("Unknown"))
+      lambda_params = lambda_node.fetch("params", [])
+      local_symbols = lambda_params.each_with_object(symbol_types.dup) do |param, symbols|
+        symbols[param] = inner_type
+      end
+      body_typed = infer_lambda_body(
+        lambda_node.fetch("body"),
+        local_symbols,
+        type_errors,
+        type_warnings,
+        node_name
+      )
+      body_type = body_typed.fetch("resolved_type")
+      output_type =
+        if fn == "map"
+          option_type_ir(body_type)
+        elsif %w[Option Unknown].include?(type_name(body_type))
+          body_type
+        else
+          type_errors << oof(
+            "OOF-TY0",
+            "#{qualified} lambda must return Option[U], got #{type_name(body_type)}",
+            node_name
+          )
+          option_type_ir(type_ir("Unknown"))
+        end
+
+      lambda_typed = {
+        "kind" => "lambda",
+        "params" => lambda_params,
+        "body" => body_typed,
+        "resolved_type" => body_type
+      }
+      deps = (option_arg.fetch("deps", []) + body_typed.fetch("deps", [])).uniq
+      typed_expr(
+        "call",
+        output_type,
+        deps,
+        "fn" => qualified,
+        "args" => [option_arg, lambda_typed]
+      )
+    end
+
+    # Ch8 §8.4 Result map remains a separate, exact owner. This closes the
+    # historical Ruby/Result dispatch gap without admitting Result flat_map.
+    def infer_result_map_call(
+      args, symbol_types, type_errors, type_warnings, node_name,
+      result_arg: nil
+    )
+      qualified = "stdlib.result.map"
+      unless args.length == 2
+        type_errors << oof(
+          "OOF-TY0",
+          "#{qualified} requires 2 arguments (Result[T,E], lambda), got #{args.length}",
+          node_name
+        )
+        return typed_expr("call", result_type_ir(type_ir("Unknown"), type_ir("Unknown")), [],
+                          "fn" => qualified, "args" => [])
+      end
+
+      result_arg ||= infer_expr(args[0], symbol_types, type_errors, type_warnings, node_name)
+      result_type = result_arg.fetch("resolved_type")
+      result_name = type_name(result_type)
+      unless %w[Result Unknown].include?(result_name)
+        type_errors << oof(
+          "OOF-TY0",
+          "#{qualified} requires Result[T,E], got #{result_name}",
+          node_name
+        )
+      end
+
+      lambda_node = args[1]
+      unless lambda_node.is_a?(Hash) && lambda_node.fetch("kind", nil) == "lambda"
+        type_errors << oof(
+          "OOF-TY0",
+          "#{qualified} requires a lambda as its second argument",
+          node_name
+        )
+        return typed_expr(
+          "call",
+          result_type_ir(type_ir("Unknown"), type_ir("Unknown")),
+          result_arg.fetch("deps", []),
+          "fn" => qualified,
+          "args" => [result_arg]
+        )
+      end
+
+      params = result_type.fetch("params", [])
+      ok_type = params.fetch(0, type_ir("Unknown"))
+      error_type = params.fetch(1, type_ir("Unknown"))
+      lambda_params = lambda_node.fetch("params", [])
+      local_symbols = lambda_params.each_with_object(symbol_types.dup) do |param, symbols|
+        symbols[param] = ok_type
+      end
+      body_typed = infer_lambda_body(
+        lambda_node.fetch("body"),
+        local_symbols,
+        type_errors,
+        type_warnings,
+        node_name
+      )
+      lambda_typed = {
+        "kind" => "lambda",
+        "params" => lambda_params,
+        "body" => body_typed,
+        "resolved_type" => body_typed.fetch("resolved_type")
+      }
+      deps = (result_arg.fetch("deps", []) + body_typed.fetch("deps", [])).uniq
+      typed_expr(
+        "call",
+        result_type_ir(body_typed.fetch("resolved_type"), error_type),
+        deps,
+        "fn" => qualified,
+        "args" => [result_arg, lambda_typed]
+      )
+    end
+
     # LANG-STDLIB-COLLECTION-MAP-FILTER-PROP-P1: Collection HOF dispatch.
     # map(Collection[T],  (T→U))       → Collection[U]
     # filter(Collection[T], (T→Bool))  → Collection[T]
     # count(Collection[T])             → Integer
     # find(Collection[T], (T→Bool))    → Option[T]
     # any/all(Collection[T], (T→Bool)) → Bool
-    def infer_collection_hof_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
+    def infer_collection_hof_call(
+      fn, args, symbol_types, type_errors, type_warnings, node_name,
+      collection_arg: nil
+    )
       spec           = COLLECTION_HOF_FNS.fetch(fn)
       qualified      = spec[:qualified_name]
       expected_arity = spec[:arity]
@@ -4664,7 +4940,7 @@ module IgniterLang
       end
 
       # ── Infer collection argument ─────────────────────────────────────────────
-      collection_arg = infer_expr(args[0], symbol_types, type_errors, type_warnings, node_name)
+      collection_arg ||= infer_expr(args[0], symbol_types, type_errors, type_warnings, node_name)
       col_type_name  = type_name(collection_arg.fetch("resolved_type"))
 
       # ── OOF-COL2: first arg must be Collection or Unknown ─────────────────────
@@ -5873,9 +6149,10 @@ module IgniterLang
                  "fn" => qualified, "args" => [first_arg, second_arg])
     end
 
-    # Rule OR-ELSE: or_else(Option[V], V) → V
-    # V extracted from Option params[0]. Unknown-compat: Unknown if not Option.
-    # fn name in SemanticIR: "or_else" (no stdlib. prefix — v0 design).
+    # Rule OR-ELSE: or_else(Option[V], V) → V. The historical Result[T,E]
+    # source alias remains accepted, but lowers to the exact `result_unwrap_or`
+    # owner. Option keeps the bare v0 SIR identity. Unknown-compat remains
+    # Option-shaped and therefore never guesses Result at runtime.
     def infer_or_else(args, symbol_types, type_errors, type_warnings, node_name)
       unless args.length == 2
         type_errors << oof("OOF-TY0", "or_else requires 2 arguments (option, default)", node_name)
@@ -5886,23 +6163,26 @@ module IgniterLang
       default_arg = infer_expr(args[1], symbol_types, type_errors, type_warnings, node_name)
 
       opt_type = opt_arg.fetch("resolved_type")
-      inner_type = case type_name(opt_type)
-      when "Option"
+      opt_name = type_name(opt_type)
+      inner_type = case opt_name
+      when "Option", "Result"
         params = opt_type.fetch("params", [])
         params.length >= 1 ? params[0] : type_ir("Unknown")
-      when "Result"
-        # LANG-RUBY-IO-TYPECHECK-COMPILE-PARITY-P3: or_else unwraps sealed Result to its ok-type —
-        # LIVE runtime truth on both VM paths (LAB-VM-IO-RESULT-SHAPING-P2: or_else/unwrap_or
-        # already consume `{ok}/{err}` records); typing previously fell to permissive Unknown.
-        params = opt_type.fetch("params", [])
-        params.length >= 1 ? params[0] : type_ir("Unknown")
+      when "Unknown"
+        type_ir("Unknown")
       else
+        type_errors << oof(
+          "OOF-TY0",
+          "or_else requires Option[V] or Result[V,E], got #{opt_name}",
+          node_name
+        )
         type_ir("Unknown")
       end
+      sir_fn = opt_name == "Result" ? "result_unwrap_or" : "or_else"
 
       deps = (opt_arg.fetch("deps", []) + default_arg.fetch("deps", [])).uniq
       typed_expr("call", inner_type, deps,
-                 "fn" => "or_else", "args" => [opt_arg, default_arg])
+                 "fn" => sir_fn, "args" => [opt_arg, default_arg])
     end
 
     # LANG-SUMTYPE-CONSTRUCT-MATCH-P3: sealed built-in constructors.
@@ -5918,17 +6198,32 @@ module IgniterLang
         return typed_expr("call", type_ir("Unknown"), [], "fn" => fn, "args" => [])
       end
 
-      typed_args = args.map { |a| infer_expr(a, symbol_types, type_errors, type_warnings, node_name) }
-      deps = typed_args.flat_map { |a| a.fetch("deps", []) }.uniq
       hint = @sealed_output_hints&.fetch(node_name, nil)
+      typed_args =
+        if fn == "some" && hint && type_name(hint) == "Option"
+          # `some(none())` under Option[Option[T]] must pass the inner expected
+          # Option[T] to the nested constructor; reusing the outer hint would
+          # accidentally manufacture Option[Option[Option[T]]].
+          previous_hint = @sealed_output_hints[node_name]
+          @sealed_output_hints[node_name] =
+            hint.fetch("params", []).fetch(0, type_ir("Unknown"))
+          begin
+            args.map { |a| infer_expr(a, symbol_types, type_errors, type_warnings, node_name) }
+          ensure
+            @sealed_output_hints[node_name] = previous_hint
+          end
+        else
+          args.map { |a| infer_expr(a, symbol_types, type_errors, type_warnings, node_name) }
+        end
+      deps = typed_args.flat_map { |a| a.fetch("deps", []) }.uniq
 
       case fn
       when "some"
         inner = typed_args[0].fetch("resolved_type")
-        build_sealed_construct("Some", "Option", { "value" => typed_args[0] }, option_type_ir(inner), deps)
+        build_option_value_construct("Some", typed_args[0], option_type_ir(inner), deps)
       when "none"
         inner = hint_param(hint, "Option", 0)
-        build_sealed_construct("None", "Option", {}, option_type_ir(inner), deps)
+        build_option_value_construct("None", nil, option_type_ir(inner), deps)
       when "ok"
         t = typed_args[0].fetch("resolved_type")
         e = hint_param(hint, "Result", 1)
@@ -5992,9 +6287,18 @@ module IgniterLang
                  "typed_fields" => typed_fields, "sealed" => true)
     end
 
-    # LANG-SUMTYPE-CONSTRUCT-MATCH-P3: unwrap_or(Result[T,E]|Option[T], default) -> T.
-    # Mirrors or_else; extracts params[0] from Option/Result, else falls back to the
-    # default argument's type. SIR call shape parallels or_else (both args carried).
+    # Option is no longer encoded through the generic sealed-variant carrier.
+    # The nominal runtime owner recognizes this dedicated node directly.
+    def build_option_value_construct(arm, typed_value, resolved_type, deps)
+      fields = { "arm" => arm }
+      fields["value"] = typed_value if typed_value
+      typed_expr("option_value_construct", resolved_type, deps, fields)
+    end
+
+    # LANG-SUMTYPE-CONSTRUCT-MATCH-P3 +
+    # LANG-OPTION-RUNTIME-CARRIER-CONVERGENCE-P2:
+    # unwrap_or is source-overloaded but statically lowers to collision-free
+    # runtime owners: Option -> `unwrap_or`, Result -> `result_unwrap_or`.
     def infer_unwrap_or(args, symbol_types, type_errors, type_warnings, node_name)
       unless args.length == 2
         type_errors << oof("OOF-TY0", "unwrap_or requires 2 arguments (outcome, default)", node_name)
@@ -6005,16 +6309,25 @@ module IgniterLang
       default_arg = infer_expr(args[1], symbol_types, type_errors, type_warnings, node_name)
 
       out_type = outcome_arg.fetch("resolved_type")
-      inner_type = if %w[Option Result].include?(type_name(out_type))
+      out_name = type_name(out_type)
+      inner_type = if %w[Option Result].include?(out_name)
         params = out_type.fetch("params", [])
         params.length >= 1 ? params[0] : default_arg.fetch("resolved_type")
+      elsif out_name == "Unknown"
+        default_arg.fetch("resolved_type")
       else
+        type_errors << oof(
+          "OOF-TY0",
+          "unwrap_or requires Option[T] or Result[T,E], got #{out_name}",
+          node_name
+        )
         default_arg.fetch("resolved_type")
       end
+      sir_fn = out_name == "Result" ? "result_unwrap_or" : "unwrap_or"
 
       deps = (outcome_arg.fetch("deps", []) + default_arg.fetch("deps", [])).uniq
       typed_expr("call", inner_type, deps,
-                 "fn" => "unwrap_or", "args" => [outcome_arg, default_arg])
+                 "fn" => sir_fn, "args" => [outcome_arg, default_arg])
     end
 
     # LANG-SUMTYPE-CONSTRUCT-MATCH-P3: and_then(Result[T,E], (T -> Result[U,E])) -> Result[U,E].
@@ -6022,14 +6335,27 @@ module IgniterLang
     # the result keeps the input error type E and takes U from the lambda body's
     # Result[U,_]. A static call_contract may appear inside the lambda; no dynamic
     # callee dispatch is authorized here.
-    def infer_and_then(args, symbol_types, type_errors, type_warnings, node_name)
+    def infer_and_then(
+      args, symbol_types, type_errors, type_warnings, node_name,
+      result_arg: nil
+    )
       unless args.length == 2
         type_errors << oof("OOF-TY0", "and_then requires 2 arguments (result, lambda)", node_name)
-        return typed_expr("call", type_ir("Unknown"), [], "fn" => "and_then", "args" => [])
+        return typed_expr("call", type_ir("Unknown"), [],
+                          "fn" => "stdlib.result.and_then", "args" => [])
       end
 
-      result_arg = infer_expr(args[0], symbol_types, type_errors, type_warnings, node_name)
+      result_arg ||= infer_expr(args[0], symbol_types, type_errors, type_warnings, node_name)
       res_type   = result_arg.fetch("resolved_type")
+      unless %w[Result Unknown].include?(type_name(res_type))
+        type_errors << oof(
+          "OOF-TY0",
+          "and_then is admitted for Result[T,E], not #{type_name(res_type)}",
+          node_name
+        )
+        return typed_expr("call", type_ir("Unknown"), result_arg.fetch("deps", []),
+                          "fn" => "stdlib.result.and_then", "args" => [result_arg])
+      end
       res_params = res_type.fetch("params", [])
       t_type     = res_params.fetch(0, type_ir("Unknown"))
       e_type     = res_params.fetch(1, type_ir("Unknown"))
@@ -6039,7 +6365,7 @@ module IgniterLang
         type_errors << oof("OOF-TY0",
           "and_then: second argument must be a lambda (T -> Result[U,E])", node_name)
         return typed_expr("call", type_ir("Unknown"), result_arg.fetch("deps", []),
-                          "fn" => "and_then", "args" => [result_arg])
+                          "fn" => "stdlib.result.and_then", "args" => [result_arg])
       end
 
       lambda_params = lambda_node.fetch("params", [])
@@ -6047,15 +6373,29 @@ module IgniterLang
       body_typed = infer_lambda_body(lambda_node.fetch("body"), local_symbols, type_errors, type_warnings, node_name)
       body_type  = body_typed.fetch("resolved_type")
 
-      u_type = if type_name(body_type) == "Result"
+      body_name = type_name(body_type)
+      u_type = if body_name == "Result"
         body_type.fetch("params", []).fetch(0, type_ir("Unknown"))
+      elsif body_name == "Unknown"
+        type_ir("Unknown")
       else
+        type_errors << oof(
+          "OOF-TY0",
+          "stdlib.result.and_then lambda must return Result[U,E], got #{body_name}",
+          node_name
+        )
         type_ir("Unknown")
       end
 
       deps = (result_arg.fetch("deps", []) + body_typed.fetch("deps", [])).uniq
+      lambda_typed = {
+        "kind" => "lambda",
+        "params" => lambda_params,
+        "body" => body_typed,
+        "resolved_type" => body_type
+      }
       typed_expr("call", result_type_ir(u_type, e_type), deps,
-                 "fn" => "and_then", "args" => [result_arg])
+                 "fn" => "stdlib.result.and_then", "args" => [result_arg, lambda_typed])
     end
 
     # array_literal: infers Collection[T] from the first non-Unknown element type.
@@ -6067,10 +6407,36 @@ module IgniterLang
       end
 
       typed_items = items.map { |item| infer_expr(item, symbol_types, type_errors, type_warnings, node_name) }
-      elem_type   = typed_items.map { |ti| ti.fetch("resolved_type") }
-                               .find { |t| type_name(t) != "Unknown" } || type_ir("Unknown")
+      # A zero-argument `none()` cannot infer T from its own syntax. Prefer a
+      # concrete sibling element, then the declared Collection[T] boundary.
+      # Keep a concrete mismatching sibling authoritative so the binding check
+      # still refuses it instead of allowing expected-type context to hide it.
+      expected_element = @collection_output_hints&.fetch(node_name, nil)
+      elem_type = typed_items.map { |ti| ti.fetch("resolved_type") }
+                             .find { |type| !unknown_or_unknown_bearing?(type) } ||
+        expected_element ||
+        typed_items.map { |ti| ti.fetch("resolved_type") }
+                   .find { |type| type_name(type) != "Unknown" } ||
+        type_ir("Unknown")
+      typed_items.each do |item|
+        contextualize_option_value_construct!(item, elem_type)
+      end
       deps = typed_items.flat_map { |ti| ti.fetch("deps", []) }.uniq
       typed_expr("array_literal", collection_type_ir_from(elem_type), deps, "items" => typed_items)
+    end
+
+    # Apply an expected nominal Option tree only where constructor-local
+    # inference still contains Unknown. This is contextual typing, not a carrier
+    # translation: the node keeps the one first-class construction identity.
+    def contextualize_option_value_construct!(node, expected_type)
+      return unless node.is_a?(Hash) &&
+                    node.fetch("kind", nil) == "option_value_construct" &&
+                    type_name(expected_type) == "Option"
+
+      node["resolved_type"] = expected_type if unknown_or_unknown_bearing?(node.fetch("resolved_type"))
+      value = node.fetch("value", nil)
+      expected_inner = expected_type.fetch("params", []).fetch(0, type_ir("Unknown"))
+      contextualize_option_value_construct!(value, expected_inner) if value
     end
 
     # record_literal: resolves to named Record type via @output_type_hints if available.
@@ -6138,7 +6504,7 @@ module IgniterLang
             actual_type = typed_fields[fname].fetch("resolved_type")
             # LANG-OPTIONAL-FIELD-PARTIAL-RECORD-P3 (flag present only when the
             # gate is ON): present Option[T] → passthrough; present raw T →
-            # auto-wrap to Some (TC-synthesized option_construct); Unknown stays
+            # auto-wrap to Some (P2 nominal option_value_construct); Unknown stays
             # permissive (house rule); anything else falls through to the
             # existing OOF-TY0 (fail-closed, no new code).
             if optional_shape_field?(expected_type)
@@ -6268,8 +6634,8 @@ module IgniterLang
     end
 
     # LANG-OPTIONAL-FIELD-PARTIAL-RECORD-P3: rectangular construction lowering for
-    # an already-matched shape — omitted optional fields become option_construct
-    # `none`, present raw-T values are wrapped in option_construct `some`
+    # an already-matched shape — omitted optional fields become nominal None;
+    # present raw-T values are wrapped in nominal Some
     # (present Option/Unknown values pass through). Mutates typed_fields in place.
     def apply_optional_construction!(typed_fields, shape_fields)
       shape_fields.each do |fname, exp_type|

@@ -76,6 +76,23 @@ Accepted construction retains the existing `variant_construct` carrier
 when exactly one visible user variant owns the arm; qualification and owner
 selection introduce no VM carrier or runtime authority.
 
+### First-class Option Carrier
+
+| entity | status | pipeline_entry_point | classifier_fragment | golden_anchor | PROP | Covenant |
+|--------|--------|---------------------|---------------------|---------------|------|----------|
+| `option_value_construct` (`Some` / `None`) | experiment-pass | TypeChecker → SemanticIR Emitter | enclosing contract unchanged | `option_runtime_carrier_convergence_p2/golden/ruby-option-carrier.semantic_ir.json` | LANG-OPTION-RUNTIME-CARRIER-CONVERGENCE-P2 | P2, P11, P27 |
+| `option_match` | experiment-pass | SemanticIR Emitter (statically resolved Option subject) | enclosing contract unchanged | `option_runtime_carrier_convergence_p2/golden/ruby-option-carrier.semantic_ir.json` | LANG-OPTION-RUNTIME-CARRIER-CONVERGENCE-P2 | P2, P11 |
+| `option_carrier_guard_v1` | experiment-pass | SemanticIR Emitter (first executable node in every contract) | `core` node; enclosing contract unchanged | `option_runtime_carrier_convergence_p2/golden/ruby-option-carrier.semantic_ir.json` | LANG-OPTION-RUNTIME-CARRIER-CONVERGENCE-P2 | P2, P11, P28 |
+| `stdlib.option.is_some` / `is_none` | experiment-pass | TypeChecker static Option overload | `core` | `option_runtime_carrier_convergence_p2/golden/ruby-option-carrier.semantic_ir.json` | LANG-OPTION-RUNTIME-CARRIER-CONVERGENCE-P2 | P2, P11 |
+| `stdlib.option.map` / `flat_map` / `and_then` | experiment-pass | TypeChecker static Option overload | `core` | `option_runtime_carrier_convergence_p2/golden/ruby-option-carrier.semantic_ir.json` | LANG-OPTION-RUNTIME-CARRIER-CONVERGENCE-P2 | P2, P11 |
+| `stdlib.result.map` / `and_then`; `result_unwrap_or` | experiment-pass | TypeChecker static Result overload | `core` | `option_runtime_carrier_convergence_p2/golden/ruby-option-carrier.semantic_ir.json` | LANG-OPTION-RUNTIME-CARRIER-CONVERGENCE-P2 | P2, P11 |
+
+The top-level marker is `option_carrier: "first_class_v1"`. The guard is an
+executable downgrade fence, not provenance. The internal VM carrier is not a
+source entity; Records are never reclassified as Option by field names.
+Source overloads are resolved statically; runtime payload shape never selects
+Option, Result, or Collection behavior. Result `flat_map` remains refused.
+
 ### Module Constant
 
 | entity | status | pipeline_entry_point | classifier_fragment | golden_anchor | PROP | Covenant |
@@ -172,6 +189,7 @@ also produce `fragment_class: "oof"` on the containing contract.
 | OOF-OS2 | `EvidenceLinkedAlert` output missing `signal_refs` or `claim_refs` | `classifier_pass_proof/golden/negative_evidence_less_alert.classified.json` | PROP-025 | P22 |
 | OOF-KIND8 | A qualified arm is not a visible declared arm, or a bare user arm has zero or multiple visible owners | `variant_arm_qualified_construct_proof/verify_variant_arm_qualified_construct_p1.rb` | LANG-VARIANT-ARM-QUALIFIED-CONSTRUCT-P1 | P27, P28 |
 | OOF-KIND9 | A qualified match pattern names a variant other than the known subject variant | `variant_arm_qualified_construct_proof/verify_variant_arm_qualified_construct_p1.rb` | LANG-VARIANT-ARM-QUALIFIED-CONSTRUCT-P1 | P27, P28 |
+| OOF-VM-OPTION-CARRIER | Option marker/guard/carrier or typed host envelope is missing, incompatible, malformed, or excessive-depth | `option_runtime_carrier_convergence_p2/verify_option_runtime_carrier_p2.rb` | LANG-OPTION-RUNTIME-CARRIER-CONVERGENCE-P2 | P2, P11, P28 |
 | OOF-I1 | `@bitemporal` invariant on non-bitemporal type (deferred) | — | PROP-025 (deferred) | P14 |
 | OOF-I3 | `~T` invariant shape violation (deferred) | — | PROP-025 (deferred) | P14 |
 | OOF-I5 | (deferred invariant OOF, exact condition TBD) | — | PROP-025 (deferred) | P14 |

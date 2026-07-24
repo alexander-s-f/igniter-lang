@@ -10,6 +10,8 @@ Primary evidence:
 - `experiments/temporal_requirements_from_escape_boundaries/` — requirements derivation PASS
 - `experiments/temporal_runtime_load_guard/` — load guard PASS
 - `experiments/assumptions_proof/` — PROP-032 assumptions Classifier/TypeChecker/SemanticIR PASS
+- `experiments/option_runtime_carrier_convergence_p2/` — first-class Option marker,
+  guard, construction/match, static consumer identities, and typed schema PASS
 
 ---
 
@@ -53,18 +55,26 @@ produce a report and no `SemanticIRProgram`.
 {
   "kind": "semantic_ir_program",
   "format_version": "0.1.0",
+  "option_carrier": "first_class_v1",
   "program_id": "semanticir/<prefix16>",
   "grammar_version": "0.1.0",
   "source_hash": "sha256:<hex>",
   "source_path": "source/add.ig",
   "module": "Lang.Examples.Add",
   "compilation_report_ref": "compilation_report/<prefix16>",
+  "type_declarations": ["<TypeDeclIR>"],
   "contracts": ["<ContractIR>"]
 }
 ```
 
 OOF diagnostics do not live in `SemanticIRProgram`; they live in
 `CompilationReport`.
+
+`type_declarations`, when non-empty, is sorted by declaration name; each
+`type_decl.fields` array is sorted by field name and carries the complete field
+type IR. Contract ports retain their own complete type IR. Together these are
+the schema authority used by typed host projection; a runtime must not recover
+record structure by inspecting a value.
 
 ---
 
@@ -76,6 +86,7 @@ set needed by later assembly/runtime gates.
 ```json
 {
   "kind": "contract_ir",
+  "option_carrier": "first_class_v1",
   "contract_ref": "contract/Add/sha256:<prefix24>",
   "contract_name": "Add",
   "specialization_of": null,
@@ -89,6 +100,75 @@ set needed by later assembly/runtime gates.
 ```
 
 `fragment_class: "oof"` is forbidden in a loadable SemanticIR contract.
+
+### 6.3a First-class Option identity
+
+Every v1 SemanticIR program declares:
+
+```json
+{"option_carrier":"first_class_v1"}
+```
+
+Every `contract_ir` repeats that exact marker. Manifest, program, contract,
+and guard disagreement is a load-time `OOF-VM-OPTION-CARRIER`; no layer infers
+the version from artifact paths or value shapes.
+
+Every contract's first executable node is the synthetic compute
+`__option_carrier_guard_v1`:
+
+```json
+{
+  "kind": "compute",
+  "name": "__option_carrier_guard_v1",
+  "expr": {
+    "kind": "option_carrier_guard_v1",
+    "version": "first_class_v1",
+    "body": {"kind": "literal", "value": true},
+    "resolved_type": {"name": "Bool", "params": []}
+  },
+  "type": {"name": "Bool", "params": []},
+  "deps": [],
+  "fragment": "core"
+}
+```
+
+The guard has no business effect in a v1 runtime. It is executable and
+mandatory so a predecessor compiler/runtime that permissively ignores unknown
+top-level fields still refuses the unknown expression kind before any business
+node executes. Exactly one correctly placed guard is required; marker/guard
+absence, disagreement, unknown version, or duplicate guard is
+`OOF-VM-OPTION-CARRIER`.
+
+All source and compiler-synthesized Option constructions use:
+
+```json
+{
+  "kind": "option_value_construct",
+  "arm": "Some",
+  "value": "<ExpressionIR>",
+  "resolved_type": {"name": "Option", "params": ["<TypeIR>"]}
+}
+```
+
+or the `None` form with no `value` key. Arms are case-sensitive. There is no
+`variant`, `sealed`, `inner_type`, or record-carrier metadata on this node.
+When the statically resolved match subject is Option, the emitter uses
+`option_match`; Result and user variants retain `match_node`.
+
+`option_construct`, an Option-shaped `variant_construct`, and calls to
+`stdlib.option.wrap` are not v1 output and are refused after the bounded
+read-old generation closes. Runtime producers return the nominal core carrier
+directly; no adapter inspects Record keys.
+
+Source-overloaded consumers are statically disambiguated before emission.
+Option uses `stdlib.option.is_some`, `stdlib.option.is_none`,
+`stdlib.option.map`, `stdlib.option.flat_map`, and
+`stdlib.option.and_then`; Result uses `stdlib.result.map`,
+`result_unwrap_or`, and `stdlib.result.and_then`; Collection retains its
+`stdlib.collection.*` identities. `or_else` and Option `unwrap_or` retain their
+agreed SIR identities. The historical source spelling `or_else(Result, T)` is
+also lowered statically to `result_unwrap_or`; the runtime never chooses one
+of these families by inspecting a payload.
 
 The `outputs` array remains an array for schema stability, but for an ACCEPTED
 value-returning contract it carries exactly ONE `PortIR`: two or more `output`
@@ -325,6 +405,8 @@ section.
 ```text
 .igapp/
   manifest.json
+  semantic_hash.txt
+  semantic_hash_law.txt
   compilation_report.json
   semantic_ir_program.json
   requirements.json
@@ -332,6 +414,23 @@ section.
   contracts/
     <contract>.json
 ```
+
+The manifest projects `option_carrier` and, when present,
+`type_declarations` verbatim from SemanticIR. `option_carrier` participates in
+the recomputed program `semantic_hash`; it is not provenance decoration.
+Admission requires the identity triad to agree:
+
+```text
+manifest.semantic_hash
+  == semantic_hash.txt
+  == recompute(semantic_ir_program.json, manifest.semantic_hash_law)
+```
+
+Fresh artifacts declare `igniter.semantic-hash.v2` in both
+`manifest.semantic_hash_law` and `semantic_hash_law.txt`. The v2 law excludes
+only the exact provenance/layout paths defined by the assembler; the Option
+marker, guard, constructors, matches, declared type schemas, and all executable
+semantics remain hash material.
 
 ### `contracts/<contract>.json`
 

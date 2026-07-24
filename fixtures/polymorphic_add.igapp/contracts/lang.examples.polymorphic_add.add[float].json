@@ -1,0 +1,141 @@
+{
+  "artifact_hash": "sha256:7a6604deabbaee13b23274a5b4becc9747f902e1668aa25901801c26bf6a72f8",
+  "capabilities": [],
+  "compute_nodes": [
+    {
+      "dependencies": [],
+      "expr": {
+        "body": {
+          "kind": "literal",
+          "value": true
+        },
+        "kind": "option_carrier_guard_v1",
+        "resolved_type": {
+          "name": "Bool",
+          "params": []
+        },
+        "version": "first_class_v1"
+      },
+      "expression": {
+        "body": {
+          "kind": "literal",
+          "value": true
+        },
+        "kind": "option_carrier_guard_v1",
+        "resolved_type": {
+          "name": "Bool",
+          "params": []
+        },
+        "version": "first_class_v1"
+      },
+      "fragment_class": "core",
+      "kind": "compute",
+      "lifecycle": "session",
+      "name": "__option_carrier_guard_v1",
+      "node_id": "node___option_carrier_guard_v1",
+      "obs_kind": "value_observation",
+      "type": {
+        "name": "Bool",
+        "params": []
+      },
+      "type_tag": "Bool"
+    },
+    {
+      "dependencies": [
+        "input:a",
+        "input:b"
+      ],
+      "expr": {
+        "kind": "apply",
+        "operands": [
+          {
+            "kind": "ref",
+            "name": "a"
+          },
+          {
+            "kind": "ref",
+            "name": "b"
+          }
+        ],
+        "operator": "stdlib.float.add"
+      },
+      "expression": {
+        "kind": "apply",
+        "operands": [
+          {
+            "kind": "ref",
+            "name": "a"
+          },
+          {
+            "kind": "ref",
+            "name": "b"
+          }
+        ],
+        "operator": "stdlib.float.add"
+      },
+      "fragment_class": "core",
+      "kind": "compute",
+      "lifecycle": "session",
+      "name": "sum",
+      "node_id": "node_sum",
+      "obs_kind": "value_observation",
+      "type": {
+        "name": "Float",
+        "params": []
+      },
+      "type_tag": "Float"
+    }
+  ],
+  "contract_id": "Lang.Examples.PolymorphicAdd.Add[Float]",
+  "effects": [],
+  "escape_set": [],
+  "fragment_class": "core",
+  "input_ports": [
+    {
+      "lifecycle": "local",
+      "name": "a",
+      "required": true,
+      "type": {
+        "name": "Float",
+        "params": []
+      },
+      "type_tag": "Float"
+    },
+    {
+      "lifecycle": "local",
+      "name": "b",
+      "required": true,
+      "type": {
+        "name": "Float",
+        "params": []
+      },
+      "type_tag": "Float"
+    }
+  ],
+  "lifecycle": "session",
+  "modifier": "pure",
+  "name": "Lang.Examples.PolymorphicAdd.Add[Float]",
+  "option_carrier": "first_class_v1",
+  "output_ports": [
+    {
+      "lifecycle": "session",
+      "name": "sum",
+      "required": true,
+      "type": {
+        "name": "Float",
+        "params": []
+      },
+      "type_tag": "Float"
+    }
+  ],
+  "source_contract_ref": "contract/Lang.Examples.PolymorphicAdd.Add[Float]/sha256:6942ee59f77f6dcef8ca35f7",
+  "type_signature": {
+    "inputs": {
+      "a": "Float",
+      "b": "Float"
+    },
+    "outputs": {
+      "sum": "Float"
+    }
+  }
+}

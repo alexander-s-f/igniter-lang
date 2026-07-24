@@ -309,8 +309,8 @@ IG
 check("F-01 optional Collection field with `[]` stays clean (P3 unchanged)",
       clean?(optional), messages(optional).inspect)
 otags = decl(optional, "Demo", "p").dig("expr", "fields", "tags")
-check("F-02 optional field keeps the P3 Some-wrap lowering (option_construct)",
-      otags && otags["kind"] == "option_construct",
+check("F-02 optional field keeps Some-wrap semantics under the P2 nominal carrier",
+      otags && otags["kind"] == "option_value_construct" && otags["arm"] == "Some",
       otags && otags["kind"])
 
 puts

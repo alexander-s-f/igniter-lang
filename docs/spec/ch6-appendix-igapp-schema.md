@@ -25,6 +25,9 @@ The manifest file defines the entry points, compilation hashes, contract fragmen
     "source_hash",
     "source_path",
     "artifact_hash",
+    "semantic_hash",
+    "semantic_hash_law",
+    "option_carrier",
     "compilation_report_ref",
     "semantic_ir_ref",
     "fragment_class",
@@ -64,6 +67,40 @@ The manifest file defines the entry points, compilation hashes, contract fragmen
     "artifact_hash": {
       "type": "string",
       "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "semantic_hash": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "semantic_hash_law": {
+      "type": "string",
+      "const": "igniter.semantic-hash.v2"
+    },
+    "option_carrier": {
+      "type": "string",
+      "const": "first_class_v1"
+    },
+    "type_declarations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind", "name", "fields"],
+        "properties": {
+          "kind": { "type": "string", "const": "type_decl" },
+          "name": { "type": "string" },
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["name", "type"],
+              "properties": {
+                "name": { "type": "string" },
+                "type": { "type": "object" }
+              }
+            }
+          }
+        }
+      }
     },
     "compilation_report_ref": {
       "type": "string",
@@ -273,6 +310,7 @@ Each file inside the `contracts/` directory represents a compiled, monomorphic c
   "required": [
     "contract_id",
     "source_contract_ref",
+    "option_carrier",
     "fragment_class",
     "input_ports",
     "output_ports",
@@ -288,6 +326,10 @@ Each file inside the `contracts/` directory represents a compiled, monomorphic c
     "source_contract_ref": {
       "type": "string",
       "pattern": "^contract/[A-Za-z0-9_]+/sha256:[a-f0-9]{24}$"
+    },
+    "option_carrier": {
+      "type": "string",
+      "const": "first_class_v1"
     },
     "fragment_class": {
       "type": "string",
@@ -305,10 +347,11 @@ Each file inside the `contracts/` directory represents a compiled, monomorphic c
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["name", "type_tag", "lifecycle"],
+        "required": ["name", "type_tag", "type", "lifecycle"],
         "properties": {
           "name": { "type": "string" },
           "type_tag": { "type": "string" },
+          "type": { "type": "object" },
           "lifecycle": { "type": "string" },
           "required": { "type": "boolean" }
         }
@@ -318,10 +361,11 @@ Each file inside the `contracts/` directory represents a compiled, monomorphic c
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["name", "type_tag", "lifecycle"],
+        "required": ["name", "type_tag", "type", "lifecycle"],
         "properties": {
           "name": { "type": "string" },
           "type_tag": { "type": "string" },
+          "type": { "type": "object" },
           "lifecycle": { "type": "string" },
           "required": { "type": "boolean" }
         }

@@ -1,347 +1,357 @@
 # frozen_string_literal: true
 
-# IgniterLang::SemanticIRExpressionEvaluator
+# Internal, direct-require-only evaluator used by canon expression proofs.
 #
-# Internal Slice 1 / Slice 2 SemanticIR expression evaluator.
-#
-# Authorization: S3-R199-C1-A (Slice 1), S3-R201-C1-A (Slice 2 hook)
-# Track: branch-conditional-if-expr-live-runtime-evaluator-implementation-v0
-#        branch-conditional-if-expr-proof-runtime-consumer-v0
-#
-# Boundary:
-#   internal, direct-require-only, not root-required
-#   supported expression kinds: literal, ref, if_expr, option_construct
-#   not integrated into RuntimeSmoke, CompilerOrchestrator, CompilerResult,
-#   CompilationReport, Diagnostics, public API/CLI, release harness, or Spark
-#
-# Semantics:
-#   if_expr evaluation is lazy:
-#     1. Evaluate condition first.
-#     2. Require runtime Bool exactly: true or false. No truthy/falsy coercion.
-#     3. If condition is true, evaluate only then_branch.
-#     4. If condition is false, evaluate only else_branch.
-#     5. Return the selected branch value.
-#     6. Apply same rules recursively for nested if_expr.
-#
-#   external_evaluator: hook (Slice 2, backward-compatible):
-#     When external_evaluator: is provided and a selected-path expression kind
-#     is unsupported by this evaluator, the expression is delegated as:
-#       external_evaluator.call(expr, values)
-#     Not called for non-selected branches. Not called before condition evaluation.
-#     If the callable raises, the exception propagates unchanged.
-#     Omitting external_evaluator: preserves Slice 1 behavior exactly (no delegation).
-#
-# Internal diagnostics (non-canonical, not OOF-RT-*, not Diagnostics/reports):
-#   Reason labels are proof-debug/human-readable only.
+# LANG-OPTION-RUNTIME-CARRIER-CONVERGENCE-P2 removes the predecessor nullable
+# `option_construct` owner. The evaluator now exposes one nominal Option value
+# and accepts only first-class v1 constructor/match/call identities. It is not
+# a public runtime, CLI, or host-codec authority; igniter-vm-core owns those.
 
 module IgniterLang
   class SemanticIRExpressionEvaluator
-    # -------------------------------------------------------------------------
-    # Internal exception hierarchy
-    # All internal to this class; not integrated with Diagnostics, CompilerResult,
-    # CompilationReport, or public API/CLI surface.
-    # -------------------------------------------------------------------------
-
-    # Base class for all evaluator errors
     Error = Class.new(StandardError)
-
-    # if_expr node is missing a required field (condition, then_branch, else_branch)
     MalformedIfExprError = Class.new(Error)
-
-    # Condition value is not exactly true or false (no truthy/falsy coercion)
     ConditionNotBoolError = Class.new(Error)
-
-    # Expression kind is not supported by this evaluator (selected-path only)
     UnsupportedExpressionKindError = Class.new(Error)
-
-    # Referenced name is not present in the values hash
     MissingReferenceError = Class.new(Error)
 
-    # option_construct node has a missing/unknown arm or lacks its some-arm value
-    MalformedOptionConstructError = Class.new(Error)
+    class OptionCarrierError < Error
+      attr_reader :reason
 
-    # -------------------------------------------------------------------------
-    # Supported expression kinds (Slice 1 core + option_construct)
-    #
-    # LANG-OPTIONAL-FIELD-VM-LOWERING-P4: `option_construct` is the
-    # TC-synthesized node for optional record fields (omit→none arm,
-    # raw-T present→some arm; no source syntax produces it — see
-    # LANG-OPTIONAL-FIELD-PARTIAL-RECORD-P3). It ERASES to the existing
-    # nullable Option runtime representation shared with igniter-vm
-    # (or_else/is_some/map_get convention):
-    #   none arm    → nil        (VM: Value::Nil)
-    #   some(value) → the raw evaluated inner value (no wrapper)
-    # Deliberately NOT the tagged `__arm` variant record of source-level
-    # some(v)/none(): or_else is the v0 optional-field reader and would
-    # return a tagged wrapper unopened. No third convention.
-    # -------------------------------------------------------------------------
+      def initialize(reason)
+        @reason = reason
+        super("OOF-VM-OPTION-CARRIER: #{reason}")
+      end
+    end
 
-    SUPPORTED_KINDS = %w[literal ref if_expr option_construct].freeze
+    # A nominal in-process proof value. `Some(nil)` remains distinguishable
+    # from `None`; neither arm is inferred from the payload or Record keys.
+    class OptionValue
+      attr_reader :arm, :value
 
-    # -------------------------------------------------------------------------
-    # Public interface
-    # -------------------------------------------------------------------------
+      def self.some(value)
+        new(:some, value)
+      end
 
-    # Evaluate a SemanticIR expression node.
-    #
-    # expr               - Hash representing a SemanticIR expression node.
-    #                      Must have a "kind" key.
-    # values             - Hash (String keys) of resolved node names to runtime values.
-    # call_trace:        - Optional Array; if provided, evaluated expression kinds
-    #                      are appended in order. Proof/debug evidence only; must not
-    #                      be treated as dependency authority.
-    # external_evaluator: - Optional callable (Slice 2 adapter hook). When provided
-    #                      and the selected-path expression kind is unsupported by
-    #                      this evaluator, the expression is delegated as:
-    #                        external_evaluator.call(expr, values)
-    #                      The callable must return the evaluated value or raise.
-    #                      If it raises, the exception propagates unchanged.
-    #                      Not called for non-selected branches.
-    #                      Not called before condition evaluation.
-    #                      Omit to preserve Slice 1 behavior (no delegation).
+      def self.none
+        @none ||= new(:none, nil).freeze
+      end
+
+      def initialize(arm, value)
+        @arm = arm
+        @value = value
+        freeze
+      end
+
+      def some?
+        arm == :some
+      end
+
+      def none?
+        arm == :none
+      end
+
+      def ==(other)
+        other.is_a?(OptionValue) &&
+          arm == other.arm &&
+          (none? || value == other.value)
+      end
+
+      alias eql? ==
+
+      def hash
+        [self.class, arm, none? ? nil : value].hash
+      end
+
+      # Proof/debug rendering is bounded and does not echo payload contents.
+      def inspect
+        some? ? "#<OptionValue Some(...)>" : "#<OptionValue None>"
+      end
+
+      private_class_method :new
+    end
+
+    SUPPORTED_KINDS = %w[
+      literal
+      ref
+      if_expr
+      array_literal
+      record_literal
+      option_carrier_guard_v1
+      option_value_construct
+      option_match
+      call
+    ].freeze
+
+    OPTION_CALLS = %w[
+      or_else
+      unwrap_or
+      stdlib.option.is_some
+      stdlib.option.is_none
+      stdlib.option.map
+      stdlib.option.flat_map
+      stdlib.option.and_then
+    ].freeze
+
+    LEGACY_OPTION_CALLS = %w[some none stdlib.option.wrap].freeze
+    UNHANDLED = Object.new.freeze
+
     def evaluate(expr, values = {}, call_trace: nil, external_evaluator: nil)
       if external_evaluator
-        # Slice 2 path: use the extended evaluation pipeline with delegation.
-        # Authorization: S3-R201-C1-A
         eval_expr_ext(expr, values, call_trace, external_evaluator)
       else
-        # Slice 1 path: use the original evaluation pipeline (no delegation).
-        # Authorization: S3-R199-C1-A
         eval_expr(expr, values, call_trace)
       end
     end
 
     private
 
-    # =========================================================================
-    # Slice 1 core evaluation pipeline (original, unmodified).
-    # These methods are not changed to preserve Slice 1 proof structural checks.
-    # =========================================================================
-
-    # Core recursive evaluator (Slice 1)
     def eval_expr(expr, values, call_trace)
-      unless expr.is_a?(Hash) && expr.key?("kind")
-        raise MalformedIfExprError,
-              "Expression must be a Hash with a 'kind' key; got #{expr.class}"
-      end
-
+      validate_expression!(expr)
       kind = expr.fetch("kind")
       call_trace&.push(kind)
+      option_error!("legacy_constructor_refused") if legacy_option_node?(expr)
 
       case kind
       when "literal"
         eval_literal(expr)
-
       when "ref"
         eval_ref(expr, values)
-
       when "if_expr"
         eval_if_expr(expr, values, call_trace)
+      when "array_literal"
+        expr.fetch("items", []).map { |item| eval_expr(item, values, call_trace) }
+      when "record_literal"
+        expr.fetch("fields", {}).transform_values { |item| eval_expr(item, values, call_trace) }
+      when "option_carrier_guard_v1"
+        eval_option_guard(expr) { |body| eval_expr(body, values, call_trace) }
+      when "option_value_construct"
+        eval_option_construct_v1(expr) { |value| eval_expr(value, values, call_trace) }
+      when "option_match"
+        eval_option_match(expr, values) { |body, scope| eval_expr(body, scope, call_trace) }
+      when "call"
+        result = eval_option_call(expr, values) do |child, scope|
+          eval_expr(child, scope, call_trace)
+        end
+        return result unless result.equal?(UNHANDLED)
 
-      when "option_construct"
-        # LANG-OPTIONAL-FIELD-VM-LOWERING-P4: erase onto the nullable Option
-        # runtime representation (none → nil, some → raw inner value).
-        # Recursion stays inside the Slice 1 pipeline.
-        eval_option_construct(expr) { |inner| eval_expr(inner, values, call_trace) }
-
+        unsupported!(kind, expr.fetch("fn", nil))
       else
-        # Unknown expression kind in selected path: fail closed.
-        # This is reached only when the kind is actually selected for evaluation.
-        raise UnsupportedExpressionKindError,
-              "Unsupported expression kind in selected path: #{kind.inspect}. " \
-              "Supported: #{SUPPORTED_KINDS.join(", ")}"
+        unsupported!(kind)
       end
     end
 
-    # Evaluate an if_expr expression node with lazy semantics (Slice 1).
-    #
-    # Structural proof of selected-branch-only evaluation (LRT-IF12):
-    #   eval_if_expr passes ONLY the selected branch to eval_expr.
-    #   - When cond_val == true, ONLY then_branch is passed (line A).
-    #   - When cond_val == false, ONLY else_branch is passed (line B).
-    #   The two Ruby `if` arms are mutually exclusive; the non-selected branch
-    #   Hash is never passed to eval_expr in normal evaluation.
-    #
-    # This preserves the counterfactual audit stance: the explicit branch
-    # structure is retained in the node, allowing a future audit layer to
-    # inspect static branch metadata without requiring eager evaluation here.
-    def eval_if_expr(expr, values, call_trace)
-      # LRT-IF8: fail closed for malformed if_expr
-      required_keys = %w[condition then_branch else_branch]
-      missing = required_keys.reject { |k| expr.key?(k) }
-      unless missing.empty?
-        raise MalformedIfExprError,
-              "Malformed if_expr node: missing required keys #{missing.inspect}. " \
-              "Internal reason: runtime.if_expr_malformed"
-      end
-
-      # LRT-IF5: evaluate condition first; condition failure propagates before
-      # any branch is touched
-      cond_val = eval_expr(expr.fetch("condition"), values, call_trace)
-
-      # LRT-IF7: runtime Bool guard; no truthy/falsy coercion
-      unless cond_val == true || cond_val == false
-        raise ConditionNotBoolError,
-              "if_expr condition must evaluate to Bool (true or false); " \
-              "got #{cond_val.class}: #{cond_val.inspect}. " \
-              "Internal reason: runtime.if_expr_condition_not_bool"
-      end
-
-      # LRT-IF1 / LRT-IF2 / LRT-IF3 / LRT-IF4: lazy branch selection
-      # Only the selected branch is passed to eval_expr.
-      if cond_val == true
-        eval_expr(expr.fetch("then_branch"), values, call_trace) # line A: then_branch only
-      else
-        eval_expr(expr.fetch("else_branch"), values, call_trace) # line B: else_branch only
-      end
-    end
-
-    # =========================================================================
-    # Slice 2 extended evaluation pipeline (with external_evaluator delegation).
-    # Authorization: S3-R201-C1-A
-    # These methods mirror the Slice 1 pipeline but thread the external_evaluator
-    # callable through for selected-path delegation of unsupported kinds.
-    # =========================================================================
-
-    # Core recursive evaluator (Slice 2 — with external_evaluator)
     def eval_expr_ext(expr, values, call_trace, external_evaluator)
-      unless expr.is_a?(Hash) && expr.key?("kind")
-        raise MalformedIfExprError,
-              "Expression must be a Hash with a 'kind' key; got #{expr.class}"
-      end
-
+      validate_expression!(expr)
       kind = expr.fetch("kind")
       call_trace&.push(kind)
+      option_error!("legacy_constructor_refused") if legacy_option_node?(expr)
 
       case kind
       when "literal"
         eval_literal(expr)
-
       when "ref"
         eval_ref(expr, values)
-
       when "if_expr"
         eval_if_expr_ext(expr, values, call_trace, external_evaluator)
-
-      when "option_construct"
-        # LANG-OPTIONAL-FIELD-VM-LOWERING-P4: same erasure as Slice 1; the
-        # some-arm inner value recurses through the Slice 2 pipeline so an
-        # unsupported inner kind still reaches external_evaluator.
-        eval_option_construct(expr) do |inner|
-          eval_expr_ext(inner, values, call_trace, external_evaluator)
+      when "array_literal"
+        expr.fetch("items", []).map do |item|
+          eval_expr_ext(item, values, call_trace, external_evaluator)
         end
-
+      when "record_literal"
+        expr.fetch("fields", {}).transform_values do |item|
+          eval_expr_ext(item, values, call_trace, external_evaluator)
+        end
+      when "option_carrier_guard_v1"
+        eval_option_guard(expr) do |body|
+          eval_expr_ext(body, values, call_trace, external_evaluator)
+        end
+      when "option_value_construct"
+        eval_option_construct_v1(expr) do |value|
+          eval_expr_ext(value, values, call_trace, external_evaluator)
+        end
+      when "option_match"
+        eval_option_match(expr, values) do |body, scope|
+          eval_expr_ext(body, scope, call_trace, external_evaluator)
+        end
+      when "call"
+        result = eval_option_call(expr, values) do |child, scope|
+          eval_expr_ext(child, scope, call_trace, external_evaluator)
+        end
+        result.equal?(UNHANDLED) ? external_evaluator.call(expr, values) : result
       else
-        # PRT-IF3 / PRT-IF4 / PRT-IF5: selected-path kind unsupported by evaluator.
-        # Delegate to external_evaluator (proof RuntimeMachine local handler).
-        # External evaluator exceptions propagate unchanged (not wrapped).
-        # Not reached for non-selected branches (eval_if_expr_ext guarantees this).
         external_evaluator.call(expr, values)
       end
     end
 
-    # Evaluate an if_expr expression node with lazy semantics (Slice 2).
-    #
-    # Structural proof of selected-branch-only evaluation (PRT-IF6 / PRT-IF7):
-    #   eval_if_expr_ext passes ONLY the selected branch to eval_expr_ext.
-    #   - When cond_val == true, ONLY then_branch is passed (line A-ext).
-    #   - When cond_val == false, ONLY else_branch is passed (line B-ext).
-    #   The two Ruby `if` arms are mutually exclusive; the non-selected branch
-    #   Hash is never passed to eval_expr_ext.
-    #   Therefore external_evaluator is never called for the non-selected branch.
-    def eval_if_expr_ext(expr, values, call_trace, external_evaluator)
-      # PRT-IF10: fail closed for malformed if_expr
-      required_keys = %w[condition then_branch else_branch]
-      missing = required_keys.reject { |k| expr.key?(k) }
-      unless missing.empty?
-        raise MalformedIfExprError,
-              "Malformed if_expr node: missing required keys #{missing.inspect}. " \
-              "Internal reason: runtime.if_expr_malformed"
-      end
+    def validate_expression!(expr)
+      return if expr.is_a?(Hash) && expr.key?("kind")
 
-      # PRT-IF8: evaluate condition first; condition failure propagates before
-      # any branch is touched
-      cond_val = eval_expr_ext(expr.fetch("condition"), values, call_trace, external_evaluator)
-
-      # PRT-IF9: runtime Bool guard; no truthy/falsy coercion
-      unless cond_val == true || cond_val == false
-        raise ConditionNotBoolError,
-              "if_expr condition must evaluate to Bool (true or false); " \
-              "got #{cond_val.class}: #{cond_val.inspect}. " \
-              "Internal reason: runtime.if_expr_condition_not_bool"
-      end
-
-      # PRT-IF6 / PRT-IF7: lazy branch selection.
-      # Only the selected branch is passed to eval_expr_ext.
-      # external_evaluator is threaded through so selected branches of unsupported
-      # kinds can be delegated. It is never reached for the non-selected branch.
-      if cond_val == true
-        eval_expr_ext(expr.fetch("then_branch"), values, call_trace, external_evaluator) # line A-ext: then_branch only
-      else
-        eval_expr_ext(expr.fetch("else_branch"), values, call_trace, external_evaluator) # line B-ext: else_branch only
-      end
+      raise MalformedIfExprError,
+            "Expression must be a Hash with a 'kind' key"
     end
 
-    # =========================================================================
-    # Shared helpers (used by both Slice 1 and Slice 2 paths)
-    # =========================================================================
+    def eval_if_expr(expr, values, call_trace)
+      required = %w[condition then_branch else_branch]
+      missing = required.reject { |key| expr.key?(key) }
+      unless missing.empty?
+        raise MalformedIfExprError, "Malformed if_expr node: missing required fields"
+      end
 
-    # Evaluate a literal expression node.
-    # Returns the static value embedded in the node.
+      condition = eval_expr(expr.fetch("condition"), values, call_trace)
+      validate_condition!(condition)
+      selected = condition ? expr.fetch("then_branch") : expr.fetch("else_branch")
+      eval_expr(selected, values, call_trace)
+    end
+
+    def eval_if_expr_ext(expr, values, call_trace, external_evaluator)
+      required = %w[condition then_branch else_branch]
+      missing = required.reject { |key| expr.key?(key) }
+      unless missing.empty?
+        raise MalformedIfExprError, "Malformed if_expr node: missing required fields"
+      end
+
+      condition = eval_expr_ext(
+        expr.fetch("condition"),
+        values,
+        call_trace,
+        external_evaluator
+      )
+      validate_condition!(condition)
+      selected = condition ? expr.fetch("then_branch") : expr.fetch("else_branch")
+      eval_expr_ext(selected, values, call_trace, external_evaluator)
+    end
+
+    def validate_condition!(condition)
+      return if condition == true || condition == false
+
+      raise ConditionNotBoolError,
+            "if_expr condition must evaluate to Bool"
+    end
+
     def eval_literal(expr)
       expr.fetch("value") do
-        raise MalformedIfExprError,
-              "Literal expression is missing 'value' key"
+        raise MalformedIfExprError, "Literal expression is missing 'value' key"
       end
     end
 
-    # Evaluate a TC-synthesized option_construct expression node
-    # (LANG-OPTIONAL-FIELD-VM-LOWERING-P4).
-    #
-    # Runtime representation (parity with igniter-vm compiler.rs/vm.rs arms —
-    # the shape existing or_else/unwrap_or/is_some/is_none/map_get consume):
-    #   { "kind" => "option_construct", "arm" => "none", ... } → nil
-    #   { "kind" => "option_construct", "arm" => "some", "value" => <expr>, ... }
-    #     → the evaluated inner value, unwrapped (no wrapper record)
-    #
-    # The caller supplies the recursion as a block so this helper is shared by
-    # the Slice 1 and Slice 2 pipelines without cross-linking them.
-    # Fail closed on unknown arm / missing some-arm value.
-    def eval_option_construct(expr)
-      arm = expr.fetch("arm") do
-        raise MalformedOptionConstructError,
-              "option_construct is missing 'arm' key"
-      end
-
-      case arm
-      when "none"
-        nil
-      when "some"
-        inner = expr.fetch("value") do
-          raise MalformedOptionConstructError,
-                "option_construct some arm is missing 'value' key"
-        end
-        yield inner
-      else
-        raise MalformedOptionConstructError,
-              "option_construct arm must be 'some' or 'none'; got #{arm.inspect}"
-      end
-    end
-
-    # Evaluate a ref expression node.
-    # Looks up the referenced name in the values hash.
     def eval_ref(expr, values)
       name = expr.fetch("name") do
         raise MalformedIfExprError, "Ref expression is missing 'name' key"
       end
+      return values.fetch(name) if values.key?(name)
 
-      unless values.key?(name)
-        raise MissingReferenceError,
-              "Reference '#{name}' not found in values. " \
-              "Available: #{values.keys.sort.inspect}"
+      raise MissingReferenceError, "Reference not found"
+    end
+
+    def eval_option_guard(expr)
+      unless expr.fetch("version", nil) == "first_class_v1" &&
+             expr.fetch("resolved_type", {}).fetch("name", nil) == "Bool" &&
+             expr.key?("body")
+        option_error!("guard_malformed")
       end
 
-      values.fetch(name)
+      yield expr.fetch("body")
+    end
+
+    def eval_option_construct_v1(expr)
+      resolved_type = expr.fetch("resolved_type", {})
+      option_error!("construct_type") unless resolved_type.fetch("name", nil) == "Option"
+
+      case expr.fetch("arm", nil)
+      when "Some"
+        option_error!("construct_some_missing_value") unless expr.key?("value")
+        OptionValue.some(yield(expr.fetch("value")))
+      when "None"
+        option_error!("construct_none_has_value") if expr.key?("value")
+        OptionValue.none
+      else
+        option_error!("construct_arm")
+      end
+    end
+
+    def eval_option_match(expr, values)
+      subject = yield(expr.fetch("subject"), values)
+      option = require_option!(subject, "match_wrong_carrier")
+      target_arm = option.some? ? "Some" : "None"
+      arm = expr.fetch("arms", []).find do |candidate|
+        pattern = candidate.fetch("pattern", {})
+        pattern.fetch("wildcard", false) || pattern.fetch("arm", nil) == target_arm
+      end
+      option_error!("match_missing_arm") unless arm
+
+      scope = values.dup
+      if option.some?
+        bindings = arm.fetch("pattern", {}).fetch("bindings", [])
+        option_error!("match_some_binding") unless bindings.length <= 1
+        scope[bindings.first] = option.value if bindings.first
+      end
+      yield(arm.fetch("body"), scope)
+    end
+
+    def eval_option_call(expr, values)
+      fn = expr.fetch("fn", nil)
+      option_error!("legacy_constructor_refused") if LEGACY_OPTION_CALLS.include?(fn)
+      return UNHANDLED unless OPTION_CALLS.include?(fn)
+
+      args = expr.fetch("args", [])
+      expected_arity = %w[stdlib.option.is_some stdlib.option.is_none].include?(fn) ? 1 : 2
+      option_error!("call_arity") unless args.length == expected_arity
+
+      option = require_option!(
+        yield(args.fetch(0), values),
+        "call_wrong_carrier"
+      )
+      case fn
+      when "or_else", "unwrap_or"
+        option.some? ? option.value : yield(args.fetch(1), values)
+      when "stdlib.option.is_some"
+        option.some?
+      when "stdlib.option.is_none"
+        option.none?
+      when "stdlib.option.map"
+        option.none? ? OptionValue.none : OptionValue.some(eval_lambda(args.fetch(1), option.value, values) { |body, scope| yield(body, scope) })
+      when "stdlib.option.flat_map", "stdlib.option.and_then"
+        return OptionValue.none if option.none?
+
+        mapped = eval_lambda(args.fetch(1), option.value, values) do |body, scope|
+          yield(body, scope)
+        end
+        require_option!(mapped, "hof_result_wrong_carrier")
+      end
+    end
+
+    def eval_lambda(lambda_node, value, values)
+      option_error!("lambda_shape") unless lambda_node.is_a?(Hash) &&
+                                            lambda_node.fetch("kind", nil) == "lambda"
+      params = lambda_node.fetch("params", [])
+      option_error!("lambda_arity") unless params.length == 1
+
+      scope = values.merge(params.first => value)
+      yield(lambda_node.fetch("body"), scope)
+    end
+
+    def require_option!(value, reason)
+      return value if value.is_a?(OptionValue)
+
+      option_error!(reason)
+    end
+
+    def legacy_option_node?(expr)
+      expr.fetch("kind", nil) == "option_construct" ||
+        (expr.fetch("kind", nil) == "variant_construct" &&
+         expr.fetch("variant", nil) == "Option")
+    end
+
+    def option_error!(reason)
+      raise OptionCarrierError, reason
+    end
+
+    def unsupported!(kind, fn = nil)
+      suffix = fn ? " call #{fn.inspect}" : ""
+      raise UnsupportedExpressionKindError,
+            "Unsupported expression kind in selected path: #{kind.inspect}#{suffix}. " \
+            "Supported: #{SUPPORTED_KINDS.join(", ")}"
     end
   end
 end

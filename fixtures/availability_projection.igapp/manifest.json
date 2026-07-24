@@ -1,20 +1,52 @@
 {
-  "program_id": "prog_avail_b7c3d9e1f2a4085b",
-  "artifact_hash": "sha256:9b3e1c7a5f2d4086b1a8c3e9f7d5b2a4c8e1f3a7d2b9c5e8f1a3d7c9b4e2f6",
-  "language_version": "0.1.0",
-  "grammar_version": "0.1.0",
-  "schema_version": "1.0.0",
-  "axiom_descriptor_ref": "1.0.0",
-  "format": "igapp_dir",
-  "compiled_at": "2026-05-05T17:00:00Z",
-  "contracts": ["availability_projection"],
-  "fragment_class": "escape",
-  "schema_descriptor": {
-    "trait_bounds": [],
-    "migrations": []
+  "artifact_hash": "sha256:d63c178c951499ee7d2b71fd44717998adde79131eb7fcf4e3540ea864d99fe0",
+  "assembler": "igapp-assembler-proof-stage1-v0",
+  "compilation_report_ref": "compilation_report/8d380232c26184a7",
+  "compiled_at": "2026-05-06T00:00:00Z",
+  "contract_index": {
+    "AvailabilityProjection": {
+      "contract_path": "contracts/availability_projection.json",
+      "contract_ref": "contract/AvailabilityProjection/sha256:7401ab780f1f4943a7e987c9",
+      "fragment_class": "escape"
+    }
   },
-  "warnings": [
-    { "code": "escape.stream_collection", "message": "geo_signal read uses :window lifecycle; requires :window TBackend capability" }
+  "contract_refs": {
+    "AvailabilityProjection": "contract/AvailabilityProjection/sha256:7401ab780f1f4943a7e987c9"
+  },
+  "contracts": [
+    "AvailabilityProjection"
   ],
-  "diagnostics": []
+  "diagnostics": [],
+  "format": "igapp_dir",
+  "format_version": "0.1.0",
+  "fragment_class": "escape",
+  "fragment_summary": {
+    "fragment_classes": [
+      "escape"
+    ],
+    "max_fragment_class": "escape",
+    "precedence_high_to_low": [
+      "oof",
+      "temporal",
+      "stream",
+      "escape",
+      "core"
+    ]
+  },
+  "grammar_version": "0.1.0",
+  "kind": "igapp_manifest",
+  "language_version": "0.1.0",
+  "option_carrier": "first_class_v1",
+  "program_id": "semanticir/8d380232c26184a7",
+  "schema_descriptor": {
+    "migrations": [],
+    "trait_bounds": []
+  },
+  "schema_version": "0.1.0",
+  "semantic_hash": "sha256:2e9e68104524b0d18fd489ef847cc0259edbd1e5f26fb7313cdf643a268ff1ed",
+  "semantic_hash_law": "igniter.semantic-hash.v2",
+  "semantic_ir_ref": "semanticir/8d380232c26184a7",
+  "source_hash": "sha256:8d380232c26184a7983711a5716e853b475272b55788c48e932e5cf331097686",
+  "source_path": "source/availability_projection.ig",
+  "warnings": []
 }

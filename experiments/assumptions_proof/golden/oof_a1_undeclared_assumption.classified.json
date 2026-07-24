@@ -1,12 +1,24 @@
 {
   "kind": "classified_program",
   "classifier_version": "classifier-pass-executable-proof-v0",
-  "program_id": "classifier_pass/aa5bf3656b30cf64",
+  "program_id": "classifier_pass/393c9799c1382e38",
   "source_path": "igniter-lang/experiments/assumptions_proof/fixtures/oof_a1_undeclared_assumption.ig",
-  "source_hash": "sha256:8fdf5465f8ac9d6f007e50b81395d580f22b7bb3c90ae0374ee013c540cf6d70",
+  "source_hash": "sha256:98a66a3eb42a79a4c5088e1e8196f8a4fa082b3456aa34c22bfb9e82fae59170",
   "grammar_version": "assumptions-v0",
   "module": "Risk.Scoring",
-  "type_declarations": [],
+  "type_declarations": [
+    {
+      "kind": "type",
+      "name": "Signal",
+      "fields": [
+        {
+          "name": "value",
+          "type_annotation": "Integer",
+          "optional": false
+        }
+      ]
+    }
+  ],
   "contracts": [
     {
       "kind": "classified_contract",

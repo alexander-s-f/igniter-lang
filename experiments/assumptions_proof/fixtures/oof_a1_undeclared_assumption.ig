@@ -1,5 +1,9 @@
 module Risk.Scoring
 
+type Signal {
+  value: Integer
+}
+
 contract BadAssumptionUse {
   input signal: Signal
   uses assumptions undeclared_heuristic

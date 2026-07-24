@@ -1,0 +1,3454 @@
+{
+  "kind": "semantic_ir_program",
+  "format_version": "0.1.0",
+  "option_carrier": "first_class_v1",
+  "program_id": "semanticir/197274cc215e51f4",
+  "grammar_version": "variant-v0",
+  "source_hash": "sha256:197274cc215e51f48bc3da9c73445bd557a983c26bcc20098c66bf10ad866306",
+  "source_path": "experiments/option_runtime_carrier_convergence_p2/fixtures/ruby_option_carrier.ig",
+  "module": "Option.Carrier",
+  "compilation_report_ref": "compilation_report/197274cc215e51f4",
+  "contracts": [
+    {
+      "kind": "contract_ir",
+      "option_carrier": "first_class_v1",
+      "contract_ref": "contract/Build/sha256:6eda016db45b004f8366a9f7",
+      "contract_name": "Build",
+      "modifier": "pure",
+      "specialization_of": null,
+      "type_args": {},
+      "fragment_class": "core",
+      "inputs": [
+        {
+          "name": "n",
+          "type": {
+            "name": "Integer",
+            "params": []
+          },
+          "lifecycle": "local"
+        },
+        {
+          "name": "label",
+          "type": {
+            "name": "Text",
+            "params": []
+          },
+          "lifecycle": "local"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "result",
+          "type": {
+            "name": "Envelope",
+            "params": []
+          },
+          "lifecycle": "session"
+        }
+      ],
+      "nodes": [
+        {
+          "kind": "compute",
+          "name": "__option_carrier_guard_v1",
+          "expr": {
+            "kind": "option_carrier_guard_v1",
+            "version": "first_class_v1",
+            "body": {
+              "kind": "literal",
+              "value": true
+            },
+            "resolved_type": {
+              "name": "Bool",
+              "params": []
+            }
+          },
+          "type": {
+            "name": "Bool",
+            "params": []
+          },
+          "deps": [],
+          "fragment": "core"
+        },
+        {
+          "kind": "compute",
+          "name": "payload",
+          "expr": {
+            "kind": "record_literal",
+            "fields": {
+              "__arm": {
+                "kind": "ref",
+                "name": "label",
+                "resolved_type": {
+                  "name": "Text",
+                  "params": []
+                }
+              },
+              "__variant": {
+                "kind": "ref",
+                "name": "label",
+                "resolved_type": {
+                  "name": "Text",
+                  "params": []
+                }
+              },
+              "value": {
+                "kind": "ref",
+                "name": "n",
+                "resolved_type": {
+                  "name": "Integer",
+                  "params": []
+                }
+              }
+            },
+            "resolved_type": {
+              "name": "Payload",
+              "params": []
+            }
+          },
+          "type": {
+            "name": "Payload",
+            "params": []
+          },
+          "deps": [
+            "label",
+            "n"
+          ],
+          "fragment": "core"
+        },
+        {
+          "kind": "compute",
+          "name": "direct",
+          "expr": {
+            "kind": "option_value_construct",
+            "arm": "Some",
+            "value": {
+              "kind": "ref",
+              "name": "payload",
+              "resolved_type": {
+                "name": "Payload",
+                "params": []
+              }
+            },
+            "resolved_type": {
+              "name": "Option",
+              "params": [
+                {
+                  "name": "Payload",
+                  "params": []
+                }
+              ]
+            }
+          },
+          "type": {
+            "name": "Option",
+            "params": [
+              {
+                "name": "Payload",
+                "params": []
+              }
+            ]
+          },
+          "deps": [
+            "payload"
+          ],
+          "fragment": "core"
+        },
+        {
+          "kind": "compute",
+          "name": "nested",
+          "expr": {
+            "kind": "option_value_construct",
+            "arm": "Some",
+            "value": {
+              "kind": "option_value_construct",
+              "arm": "Some",
+              "value": {
+                "kind": "ref",
+                "name": "n",
+                "resolved_type": {
+                  "name": "Integer",
+                  "params": []
+                }
+              },
+              "resolved_type": {
+                "name": "Option",
+                "params": [
+                  {
+                    "name": "Integer",
+                    "params": []
+                  }
+                ]
+              }
+            },
+            "resolved_type": {
+              "name": "Option",
+              "params": [
+                {
+                  "name": "Option",
+                  "params": [
+                    {
+                      "name": "Integer",
+                      "params": []
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "type": {
+            "name": "Option",
+            "params": [
+              {
+                "name": "Option",
+                "params": [
+                  {
+                    "name": "Integer",
+                    "params": []
+                  }
+                ]
+              }
+            ]
+          },
+          "deps": [
+            "n"
+          ],
+          "fragment": "core"
+        },
+        {
+          "kind": "compute",
+          "name": "values",
+          "expr": {
+            "kind": "array_literal",
+            "items": [
+              {
+                "kind": "option_value_construct",
+                "arm": "Some",
+                "value": {
+                  "kind": "ref",
+                  "name": "n",
+                  "resolved_type": {
+                    "name": "Integer",
+                    "params": []
+                  }
+                },
+                "resolved_type": {
+                  "name": "Option",
+                  "params": [
+                    {
+                      "name": "Integer",
+                      "params": []
+                    }
+                  ]
+                }
+              },
+              {
+                "kind": "option_value_construct",
+                "arm": "None",
+                "resolved_type": {
+                  "name": "Option",
+                  "params": [
+                    {
+                      "name": "Integer",
+                      "params": []
+                    }
+                  ]
+                }
+              }
+            ],
+            "resolved_type": {
+              "name": "Collection",
+              "params": [
+                {
+                  "name": "Option",
+                  "params": [
+                    {
+                      "name": "Integer",
+                      "params": []
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "type": {
+            "name": "Collection",
+            "params": [
+              {
+                "name": "Option",
+                "params": [
+                  {
+                    "name": "Integer",
+                    "params": []
+                  }
+                ]
+              }
+            ]
+          },
+          "deps": [
+            "n"
+          ],
+          "fragment": "core"
+        },
+        {
+          "kind": "compute",
+          "name": "result",
+          "expr": {
+            "kind": "record_literal",
+            "fields": {
+              "direct": {
+                "kind": "ref",
+                "name": "direct",
+                "resolved_type": {
+                  "name": "Option",
+                  "params": [
+                    {
+                      "name": "Payload",
+                      "params": []
+                    }
+                  ]
+                }
+              },
+              "nested": {
+                "kind": "ref",
+                "name": "nested",
+                "resolved_type": {
+                  "name": "Option",
+                  "params": [
+                    {
+                      "name": "Option",
+                      "params": [
+                        {
+                          "name": "Integer",
+                          "params": []
+                        }
+                      ]
+                    }
+                  ]
+                }
+              },
+              "values": {
+                "kind": "ref",
+                "name": "values",
+                "resolved_type": {
+                  "name": "Collection",
+                  "params": [
+                    {
+                      "name": "Option",
+                      "params": [
+                        {
+                          "name": "Integer",
+                          "params": []
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            "resolved_type": {
+              "name": "Envelope",
+              "params": []
+            }
+          },
+          "type": {
+            "name": "Envelope",
+            "params": []
+          },
+          "deps": [
+            "direct",
+            "nested",
+            "values"
+          ],
+          "fragment": "core"
+        }
+      ],
+      "escape_boundaries": []
+    },
+    {
+      "kind": "contract_ir",
+      "option_carrier": "first_class_v1",
+      "contract_ref": "contract/Branch/sha256:a05c613538773fb80e6359ad",
+      "contract_name": "Branch",
+      "modifier": "pure",
+      "specialization_of": null,
+      "type_args": {},
+      "fragment_class": "core",
+      "inputs": [
+        {
+          "name": "n",
+          "type": {
+            "name": "Integer",
+            "params": []
+          },
+          "lifecycle": "local"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "result",
+          "type": {
+            "name": "Option",
+            "params": [
+              {
+                "name": "Integer",
+                "params": []
+              }
+            ]
+          },
+          "lifecycle": "session"
+        }
+      ],
+      "nodes": [
+        {
+          "kind": "compute",
+          "name": "__option_carrier_guard_v1",
+          "expr": {
+            "kind": "option_carrier_guard_v1",
+            "version": "first_class_v1",
+            "body": {
+              "kind": "literal",
+              "value": true
+            },
+            "resolved_type": {
+              "name": "Bool",
+              "params": []
+            }
+          },
+          "type": {
+            "name": "Bool",
+            "params": []
+          },
+          "deps": [],
+          "fragment": "core"
+        },
+        {
+          "kind": "compute",
+          "name": "result",
+          "expr": {
+            "kind": "if_expr",
+            "condition": {
+              "kind": "literal",
+              "value": true,
+              "literal_type": "bool",
+              "resolved_type": {
+                "name": "Bool",
+                "params": []
+              }
+            },
+            "then_branch": {
+              "kind": "option_value_construct",
+              "arm": "Some",
+              "value": {
+                "kind": "ref",
+                "name": "n",
+                "resolved_type": {
+                  "name": "Integer",
+                  "params": []
+                }
+              },
+              "resolved_type": {
+                "name": "Option",
+                "params": [
+                  {
+                    "name": "Integer",
+                    "params": []
+                  }
+                ]
+              }
+            },
+            "else_branch": {
+              "kind": "option_value_construct",
+              "arm": "None",
+              "resolved_type": {
+                "name": "Option",
+                "params": [
+                  {
+                    "name": "Integer",
+                    "params": []
+                  }
+                ]
+              }
+            },
+            "resolved_type": {
+              "name": "Option",
+              "params": [
+                {
+                  "name": "Integer",
+                  "params": []
+                }
+              ]
+            }
+          },
+          "type": {
+            "name": "Option",
+            "params": [
+              {
+                "name": "Integer",
+                "params": []
+              }
+            ]
+          },
+          "deps": [
+            "n"
+          ],
+          "fragment": "core"
+        }
+      ],
+      "escape_boundaries": []
+    },
+    {
+      "kind": "contract_ir",
+      "option_carrier": "first_class_v1",
+      "contract_ref": "contract/NestedSomeNone/sha256:8836545a1bca12fd14657e93",
+      "contract_name": "NestedSomeNone",
+      "modifier": "pure",
+      "specialization_of": null,
+      "type_args": {},
+      "fragment_class": "core",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "result",
+          "type": {
+            "name": "Option",
+            "params": [
+              {
+                "name": "Option",
+                "params": [
+                  {
+                    "name": "Integer",
+                    "params": []
+                  }
+                ]
+              }
+            ]
+          },
+          "lifecycle": "session"
+        }
+      ],
+      "nodes": [
+        {
+          "kind": "compute",
+          "name": "__option_carrier_guard_v1",
+          "expr": {
+            "kind": "option_carrier_guard_v1",
+            "version": "first_class_v1",
+            "body": {
+              "kind": "literal",
+              "value": true
+            },
+            "resolved_type": {
+              "name": "Bool",
+              "params": []
+            }
+          },
+          "type": {
+            "name": "Bool",
+            "params": []
+          },
+          "deps": [],
+          "fragment": "core"
+        },
+        {
+          "kind": "compute",
+          "name": "result",
+          "expr": {
+            "kind": "option_value_construct",
+            "arm": "Some",
+            "value": {
+              "kind": "option_value_construct",
+              "arm": "None",
+              "resolved_type": {
+                "name": "Option",
+                "params": [
+                  {
+                    "name": "Integer",
+                    "params": []
+                  }
+                ]
+              }
+            },
+            "resolved_type": {
+              "name": "Option",
+              "params": [
+                {
+                  "name": "Option",
+                  "params": [
+                    {
+                      "name": "Integer",
+                      "params": []
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "type": {
+            "name": "Option",
+            "params": [
+              {
+                "name": "Option",
+                "params": [
+                  {
+                    "kind": "type_ref",
+                    "name": "Integer",
+                    "params": []
+                  }
+                ]
+              }
+            ]
+          },
+          "deps": [],
+          "fragment": "core"
+        }
+      ],
+      "escape_boundaries": []
+    },
+    {
+      "kind": "contract_ir",
+      "option_carrier": "first_class_v1",
+      "contract_ref": "contract/FilterMap/sha256:978f18b301a646c6e5f26acd",
+      "contract_name": "FilterMap",
+      "modifier": "pure",
+      "specialization_of": null,
+      "type_args": {},
+      "fragment_class": "core",
+      "inputs": [
+        {
+          "name": "values",
+          "type": {
+            "name": "Collection",
+            "params": [
+              {
+                "name": "Integer",
+                "params": []
+              }
+            ]
+          },
+          "lifecycle": "local"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "result",
+          "type": {
+            "name": "Collection",
+            "params": [
+              {
+                "name": "Integer",
+                "params": []
+              }
+            ]
+          },
+          "lifecycle": "session"
+        }
+      ],
+      "nodes": [
+        {
+          "kind": "compute",
+          "name": "__option_carrier_guard_v1",
+          "expr": {
+            "kind": "option_carrier_guard_v1",
+            "version": "first_class_v1",
+            "body": {
+              "kind": "literal",
+              "value": true
+            },
+            "resolved_type": {
+              "name": "Bool",
+              "params": []
+            }
+          },
+          "type": {
+            "name": "Bool",
+            "params": []
+          },
+          "deps": [],
+          "fragment": "core"
+        },
+        {
+          "kind": "compute",
+          "name": "result",
+          "expr": {
+            "kind": "call",
+            "fn": "stdlib.collection.filter_map",
+            "args": [
+              {
+                "kind": "ref",
+                "name": "values",
+                "resolved_type": {
+                  "kind": "type_ref",
+                  "name": "Collection",
+                  "params": [
+                    {
+                      "kind": "type_ref",
+                      "name": "Integer",
+                      "params": []
+                    }
+                  ]
+                }
+              },
+              {
+                "kind": "lambda",
+                "params": [
+                  "value"
+                ],
+                "body": {
+                  "kind": "option_value_construct",
+                  "arm": "Some",
+                  "value": {
+                    "kind": "ref",
+                    "name": "value",
+                    "resolved_type": {
+                      "kind": "type_ref",
+                      "name": "Integer",
+                      "params": []
+                    }
+                  },
+                  "resolved_type": {
+                    "name": "Option",
+                    "params": [
+                      {
+                        "name": "Integer",
+                        "params": []
+                      }
+                    ]
+                  }
+                },
+                "resolved_type": {
+                  "name": "Option",
+                  "params": [
+                    {
+                      "kind": "type_ref",
+                      "name": "Integer",
+                      "params": []
+                    }
+                  ]
+                }
+              }
+            ],
+            "resolved_type": {
+              "name": "Collection",
+              "params": [
+                {
+                  "kind": "type_ref",
+                  "name": "Integer",
+                  "params": []
+                }
+              ]
+            }
+          },
+          "type": {
+            "name": "Collection",
+            "params": [
+              {
+                "kind": "type_ref",
+                "name": "Integer",
+                "params": []
+              }
+            ]
+          },
+          "deps": [
+            "values",
+            "value"
+          ],
+          "fragment": "core"
+        }
+      ],
+      "escape_boundaries": []
+    },
+    {
+      "kind": "contract_ir",
+      "option_carrier": "first_class_v1",
+      "contract_ref": "contract/CollectionMap/sha256:5c09e30a5b5a8092cb44829e",
+      "contract_name": "CollectionMap",
+      "modifier": "pure",
+      "specialization_of": null,
+      "type_args": {},
+      "fragment_class": "core",
+      "inputs": [
+        {
+          "name": "values",
+          "type": {
+            "name": "Collection",
+            "params": [
+              {
+                "name": "Integer",
+                "params": []
+              }
+            ]
+          },
+          "lifecycle": "local"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "result",
+          "type": {
+            "name": "Collection",
+            "params": [
+              {
+                "name": "Integer",
+                "params": []
+              }
+            ]
+          },
+          "lifecycle": "session"
+        }
+      ],
+      "nodes": [
+        {
+          "kind": "compute",
+          "name": "__option_carrier_guard_v1",
+          "expr": {
+            "kind": "option_carrier_guard_v1",
+            "version": "first_class_v1",
+            "body": {
+              "kind": "literal",
+              "value": true
+            },
+            "resolved_type": {
+              "name": "Bool",
+              "params": []
+            }
+          },
+          "type": {
+            "name": "Bool",
+            "params": []
+          },
+          "deps": [],
+          "fragment": "core"
+        },
+        {
+          "kind": "compute",
+          "name": "result",
+          "expr": {
+            "kind": "call",
+            "fn": "stdlib.collection.map",
+            "args": [
+              {
+                "kind": "ref",
+                "name": "values",
+                "resolved_type": {
+                  "kind": "type_ref",
+                  "name": "Collection",
+                  "params": [
+                    {
+                      "kind": "type_ref",
+                      "name": "Integer",
+                      "params": []
+                    }
+                  ]
+                }
+              },
+              {
+                "kind": "lambda",
+                "params": [
+                  "value"
+                ],
+                "body": {
+                  "kind": "ref",
+                  "name": "value",
+                  "resolved_type": {
+                    "kind": "type_ref",
+                    "name": "Integer",
+                    "params": []
+                  }
+                },
+                "resolved_type": {
+                  "kind": "type_ref",
+                  "name": "Integer",
+                  "params": []
+                }
+              }
+            ],
+            "resolved_type": {
+              "name": "Collection",
+              "params": [
+                {
+                  "kind": "type_ref",
+                  "name": "Integer",
+                  "params": []
+                }
+              ]
+            }
+          },
+          "type": {
+            "name": "Collection",
+            "params": [
+              {
+                "kind": "type_ref",
+                "name": "Integer",
+                "params": []
+              }
+            ]
+          },
+          "deps": [
+            "values",
+            "value"
+          ],
+          "fragment": "core"
+        }
+      ],
+      "escape_boundaries": []
+    },
+    {
+      "kind": "contract_ir",
+      "option_carrier": "first_class_v1",
+      "contract_ref": "contract/CollectionFlatMap/sha256:82cf0c7fa43901e7dc3db574",
+      "contract_name": "CollectionFlatMap",
+      "modifier": "pure",
+      "specialization_of": null,
+      "type_args": {},
+      "fragment_class": "core",
+      "inputs": [
+        {
+          "name": "values",
+          "type": {
+            "name": "Collection",
+            "params": [
+              {
+                "name": "Collection",
+                "params": [
+                  {
+                    "name": "Integer",
+                    "params": []
+                  }
+                ]
+              }
+            ]
+          },
+          "lifecycle": "local"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "result",
+          "type": {
+            "name": "Collection",
+            "params": [
+              {
+                "name": "Integer",
+                "params": []
+              }
+            ]
+          },
+          "lifecycle": "session"
+        }
+      ],
+      "nodes": [
+        {
+          "kind": "compute",
+          "name": "__option_carrier_guard_v1",
+          "expr": {
+            "kind": "option_carrier_guard_v1",
+            "version": "first_class_v1",
+            "body": {
+              "kind": "literal",
+              "value": true
+            },
+            "resolved_type": {
+              "name": "Bool",
+              "params": []
+            }
+          },
+          "type": {
+            "name": "Bool",
+            "params": []
+          },
+          "deps": [],
+          "fragment": "core"
+        },
+        {
+          "kind": "compute",
+          "name": "result",
+          "expr": {
+            "kind": "call",
+            "fn": "stdlib.collection.flat_map",
+            "args": [
+              {
+                "kind": "ref",
+                "name": "values",
+                "resolved_type": {
+                  "kind": "type_ref",
+                  "name": "Collection",
+                  "params": [
+                    {
+                      "kind": "type_ref",
+                      "name": "Collection",
+                      "params": [
+                        {
+                          "kind": "type_ref",
+                          "name": "Integer",
+                          "params": []
+                        }
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "kind": "lambda",
+                "params": [
+                  "value"
+                ],
+                "body": {
+                  "kind": "ref",
+                  "name": "value",
+                  "resolved_type": {
+                    "kind": "type_ref",
+                    "name": "Collection",
+                    "params": [
+                      {
+                        "kind": "type_ref",
+                        "name": "Integer",
+                        "params": []
+                      }
+                    ]
+                  }
+                },
+                "resolved_type": {
+                  "kind": "type_ref",
+                  "name": "Collection",
+                  "params": [
+                    {
+                      "kind": "type_ref",
+                      "name": "Integer",
+                      "params": []
+                    }
+                  ]
+                }
+              }
+            ],
+            "resolved_type": {
+              "kind": "type_ref",
+              "name": "Collection",
+              "params": [
+                {
+                  "kind": "type_ref",
+                  "name": "Integer",
+                  "params": []
+                }
+              ]
+            }
+          },
+          "type": {
+            "kind": "type_ref",
+            "name": "Collection",
+            "params": [
+              {
+                "kind": "type_ref",
+                "name": "Integer",
+                "params": []
+              }
+            ]
+          },
+          "deps": [
+            "values",
+            "value"
+          ],
+          "fragment": "core"
+        }
+      ],
+      "escape_boundaries": []
+    },
+    {
+      "kind": "contract_ir",
+      "option_carrier": "first_class_v1",
+      "contract_ref": "contract/NestedHistoryAt/sha256:1f49ebfc51924362a4397066",
+      "contract_name": "NestedHistoryAt",
+      "modifier": "observed",
+      "specialization_of": null,
+      "type_args": {},
+      "fragment_class": "temporal",
+      "inputs": [
+        {
+          "name": "model_key",
+          "type": {
+            "name": "Text",
+            "params": []
+          },
+          "lifecycle": "local"
+        },
+        {
+          "name": "points",
+          "type": {
+            "name": "Collection",
+            "params": [
+              {
+                "name": "DateTime",
+                "params": []
+              }
+            ]
+          },
+          "lifecycle": "local"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "result",
+          "type": {
+            "name": "Collection",
+            "params": [
+              {
+                "name": "Option",
+                "params": [
+                  {
+                    "name": "Integer",
+                    "params": []
+                  }
+                ]
+              }
+            ]
+          },
+          "lifecycle": "session"
+        }
+      ],
+      "nodes": [
+        {
+          "kind": "compute",
+          "name": "__option_carrier_guard_v1",
+          "expr": {
+            "kind": "option_carrier_guard_v1",
+            "version": "first_class_v1",
+            "body": {
+              "kind": "literal",
+              "value": true
+            },
+            "resolved_type": {
+              "name": "Bool",
+              "params": []
+            }
+          },
+          "type": {
+            "name": "Bool",
+            "params": []
+          },
+          "deps": [],
+          "fragment": "core"
+        },
+        {
+          "kind": "temporal_input_node",
+          "name": "prediction_history",
+          "type": {
+            "constructor": "History",
+            "element_type": "Integer"
+          },
+          "store_ref": "predictor/{model_key}",
+          "lifecycle": "durable",
+          "axis": "valid_time",
+          "node_fragment_class": "temporal",
+          "value_fragment_class": "core",
+          "required_capability": "history_read",
+          "required_caps": [
+            "history_read"
+          ],
+          "fragment": "temporal"
+        },
+        {
+          "kind": "compute",
+          "name": "result",
+          "expr": {
+            "kind": "call",
+            "fn": "stdlib.collection.map",
+            "args": [
+              {
+                "kind": "ref",
+                "name": "points",
+                "resolved_type": {
+                  "kind": "type_ref",
+                  "name": "Collection",
+                  "params": [
+                    {
+                      "kind": "type_ref",
+                      "name": "DateTime",
+                      "params": []
+                    }
+                  ]
+                }
+              },
+              {
+                "kind": "lambda",
+                "params": [
+                  "point"
+                ],
+                "body": {
+                  "kind": "temporal_read",
+                  "source_ref": "prediction_history",
+                  "store_ref": "predictor/{model_key}",
+                  "as_of_ref": "point",
+                  "resolved_type": {
+                    "name": "Option",
+                    "params": [
+                      {
+                        "name": "Integer",
+                        "params": []
+                      }
+                    ]
+                  }
+                },
+                "resolved_type": {
+                  "name": "Option",
+                  "params": [
+                    {
+                      "name": "Integer",
+                      "params": []
+                    }
+                  ]
+                }
+              }
+            ],
+            "resolved_type": {
+              "name": "Collection",
+              "params": [
+                {
+                  "name": "Option",
+                  "params": [
+                    {
+                      "name": "Integer",
+                      "params": []
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "type": {
+            "name": "Collection",
+            "params": [
+              {
+                "name": "Option",
+                "params": [
+                  {
+                    "name": "Integer",
+                    "params": []
+                  }
+                ]
+              }
+            ]
+          },
+          "deps": [
+            "points",
+            "prediction_history",
+            "point"
+          ],
+          "fragment": "core"
+        }
+      ],
+      "escape_boundaries": [
+        {
+          "name": "history_read",
+          "required_caps": [
+            "history_read"
+          ],
+          "produces": [
+            "history_access_observation"
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "contract_ir",
+      "option_carrier": "first_class_v1",
+      "contract_ref": "contract/Match/sha256:c55dd8d2f3cb54103139d90f",
+      "contract_name": "Match",
+      "modifier": "pure",
+      "specialization_of": null,
+      "type_args": {},
+      "fragment_class": "core",
+      "inputs": [
+        {
+          "name": "value",
+          "type": {
+            "name": "Option",
+            "params": [
+              {
+                "name": "Integer",
+                "params": []
+              }
+            ]
+          },
+          "lifecycle": "local"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "result",
+          "type": {
+            "name": "Integer",
+            "params": []
+          },
+          "lifecycle": "session"
+        }
+      ],
+      "nodes": [
+        {
+          "kind": "compute",
+          "name": "__option_carrier_guard_v1",
+          "expr": {
+            "kind": "option_carrier_guard_v1",
+            "version": "first_class_v1",
+            "body": {
+              "kind": "literal",
+              "value": true
+            },
+            "resolved_type": {
+              "name": "Bool",
+              "params": []
+            }
+          },
+          "type": {
+            "name": "Bool",
+            "params": []
+          },
+          "deps": [],
+          "fragment": "core"
+        },
+        {
+          "kind": "compute",
+          "name": "result",
+          "expr": {
+            "kind": "option_match",
+            "subject": {
+              "kind": "ref",
+              "name": "value",
+              "resolved_type": {
+                "kind": "type_ref",
+                "name": "Option",
+                "params": [
+                  {
+                    "kind": "type_ref",
+                    "name": "Integer",
+                    "params": []
+                  }
+                ]
+              }
+            },
+            "subject_type": "Option",
+            "arms": [
+              {
+                "pattern": {
+                  "wildcard": false,
+                  "arm": "Some",
+                  "bindings": [
+                    "value"
+                  ]
+                },
+                "body": {
+                  "kind": "ref",
+                  "name": "value",
+                  "resolved_type": {
+                    "kind": "type_ref",
+                    "name": "Integer",
+                    "params": []
+                  }
+                },
+                "resolved_type": {
+                  "name": "Integer",
+                  "params": []
+                }
+              },
+              {
+                "pattern": {
+                  "wildcard": false,
+                  "arm": "None",
+                  "bindings": []
+                },
+                "body": {
+                  "kind": "literal",
+                  "value": 0,
+                  "literal_type": "int",
+                  "resolved_type": {
+                    "name": "Integer",
+                    "params": []
+                  }
+                },
+                "resolved_type": {
+                  "name": "Integer",
+                  "params": []
+                }
+              }
+            ],
+            "exhaustive": true,
+            "has_wildcard": false,
+            "resolved_type": {
+              "name": "Integer",
+              "params": []
+            },
+            "sealed": true
+          },
+          "type": {
+            "name": "Integer",
+            "params": []
+          },
+          "deps": [
+            "value"
+          ],
+          "fragment": "core"
+        }
+      ],
+      "escape_boundaries": []
+    },
+    {
+      "kind": "contract_ir",
+      "option_carrier": "first_class_v1",
+      "contract_ref": "contract/NestedMatch/sha256:c8bc0959be4b3d1ae3e4ad6a",
+      "contract_name": "NestedMatch",
+      "modifier": "pure",
+      "specialization_of": null,
+      "type_args": {},
+      "fragment_class": "core",
+      "inputs": [
+        {
+          "name": "value",
+          "type": {
+            "name": "Option",
+            "params": [
+              {
+                "name": "Option",
+                "params": [
+                  {
+                    "name": "Integer",
+                    "params": []
+                  }
+                ]
+              }
+            ]
+          },
+          "lifecycle": "local"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "result",
+          "type": {
+            "name": "Integer",
+            "params": []
+          },
+          "lifecycle": "session"
+        }
+      ],
+      "nodes": [
+        {
+          "kind": "compute",
+          "name": "__option_carrier_guard_v1",
+          "expr": {
+            "kind": "option_carrier_guard_v1",
+            "version": "first_class_v1",
+            "body": {
+              "kind": "literal",
+              "value": true
+            },
+            "resolved_type": {
+              "name": "Bool",
+              "params": []
+            }
+          },
+          "type": {
+            "name": "Bool",
+            "params": []
+          },
+          "deps": [],
+          "fragment": "core"
+        },
+        {
+          "kind": "compute",
+          "name": "result",
+          "expr": {
+            "kind": "option_match",
+            "subject": {
+              "kind": "ref",
+              "name": "value",
+              "resolved_type": {
+                "kind": "type_ref",
+                "name": "Option",
+                "params": [
+                  {
+                    "kind": "type_ref",
+                    "name": "Option",
+                    "params": [
+                      {
+                        "kind": "type_ref",
+                        "name": "Integer",
+                        "params": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            "subject_type": "Option",
+            "arms": [
+              {
+                "pattern": {
+                  "wildcard": false,
+                  "arm": "Some",
+                  "bindings": [
+                    "value"
+                  ]
+                },
+                "body": {
+                  "kind": "option_match",
+                  "subject": {
+                    "kind": "ref",
+                    "name": "value",
+                    "resolved_type": {
+                      "kind": "type_ref",
+                      "name": "Option",
+                      "params": [
+                        {
+                          "kind": "type_ref",
+                          "name": "Integer",
+                          "params": []
+                        }
+                      ]
+                    }
+                  },
+                  "subject_type": "Option",
+                  "arms": [
+                    {
+                      "pattern": {
+                        "wildcard": false,
+                        "arm": "Some",
+                        "bindings": [
+                          "value"
+                        ]
+                      },
+                      "body": {
+                        "kind": "ref",
+                        "name": "value",
+                        "resolved_type": {
+                          "kind": "type_ref",
+                          "name": "Integer",
+                          "params": []
+                        }
+                      },
+                      "resolved_type": {
+                        "name": "Integer",
+                        "params": []
+                      }
+                    },
+                    {
+                      "pattern": {
+                        "wildcard": false,
+                        "arm": "None",
+                        "bindings": []
+                      },
+                      "body": {
+                        "kind": "literal",
+                        "value": 0,
+                        "literal_type": "int",
+                        "resolved_type": {
+                          "name": "Integer",
+                          "params": []
+                        }
+                      },
+                      "resolved_type": {
+                        "name": "Integer",
+                        "params": []
+                      }
+                    }
+                  ],
+                  "exhaustive": true,
+                  "has_wildcard": false,
+                  "resolved_type": {
+                    "name": "Integer",
+                    "params": []
+                  },
+                  "sealed": true
+                },
+                "resolved_type": {
+                  "name": "Integer",
+                  "params": []
+                }
+              },
+              {
+                "pattern": {
+                  "wildcard": false,
+                  "arm": "None",
+                  "bindings": []
+                },
+                "body": {
+                  "kind": "literal",
+                  "value": 0,
+                  "literal_type": "int",
+                  "resolved_type": {
+                    "name": "Integer",
+                    "params": []
+                  }
+                },
+                "resolved_type": {
+                  "name": "Integer",
+                  "params": []
+                }
+              }
+            ],
+            "exhaustive": true,
+            "has_wildcard": false,
+            "resolved_type": {
+              "name": "Integer",
+              "params": []
+            },
+            "sealed": true
+          },
+          "type": {
+            "name": "Integer",
+            "params": []
+          },
+          "deps": [
+            "value"
+          ],
+          "fragment": "core"
+        }
+      ],
+      "escape_boundaries": []
+    },
+    {
+      "kind": "contract_ir",
+      "option_carrier": "first_class_v1",
+      "contract_ref": "contract/Fallback/sha256:6f59286a5ac55f1d2ad9adf9",
+      "contract_name": "Fallback",
+      "modifier": "pure",
+      "specialization_of": null,
+      "type_args": {},
+      "fragment_class": "core",
+      "inputs": [
+        {
+          "name": "value",
+          "type": {
+            "name": "Option",
+            "params": [
+              {
+                "name": "Integer",
+                "params": []
+              }
+            ]
+          },
+          "lifecycle": "local"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "result",
+          "type": {
+            "name": "Integer",
+            "params": []
+          },
+          "lifecycle": "session"
+        }
+      ],
+      "nodes": [
+        {
+          "kind": "compute",
+          "name": "__option_carrier_guard_v1",
+          "expr": {
+            "kind": "option_carrier_guard_v1",
+            "version": "first_class_v1",
+            "body": {
+              "kind": "literal",
+              "value": true
+            },
+            "resolved_type": {
+              "name": "Bool",
+              "params": []
+            }
+          },
+          "type": {
+            "name": "Bool",
+            "params": []
+          },
+          "deps": [],
+          "fragment": "core"
+        },
+        {
+          "kind": "compute",
+          "name": "result",
+          "expr": {
+            "kind": "call",
+            "fn": "unwrap_or",
+            "args": [
+              {
+                "kind": "ref",
+                "name": "value",
+                "resolved_type": {
+                  "kind": "type_ref",
+                  "name": "Option",
+                  "params": [
+                    {
+                      "kind": "type_ref",
+                      "name": "Integer",
+                      "params": []
+                    }
+                  ]
+                }
+              },
+              {
+                "kind": "literal",
+                "value": 0,
+                "literal_type": "int",
+                "resolved_type": {
+                  "name": "Integer",
+                  "params": []
+                }
+              }
+            ],
+            "resolved_type": {
+              "kind": "type_ref",
+              "name": "Integer",
+              "params": []
+            }
+          },
+          "type": {
+            "kind": "type_ref",
+            "name": "Integer",
+            "params": []
+          },
+          "deps": [
+            "value"
+          ],
+          "fragment": "core"
+        }
+      ],
+      "escape_boundaries": []
+    },
+    {
+      "kind": "contract_ir",
+      "option_carrier": "first_class_v1",
+      "contract_ref": "contract/SourceFallback/sha256:0fc80df41a7aafd6e90c3bde",
+      "contract_name": "SourceFallback",
+      "modifier": "pure",
+      "specialization_of": null,
+      "type_args": {},
+      "fragment_class": "core",
+      "inputs": [
+        {
+          "name": "n",
+          "type": {
+            "name": "Integer",
+            "params": []
+          },
+          "lifecycle": "local"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "result",
+          "type": {
+            "name": "Integer",
+            "params": []
+          },
+          "lifecycle": "session"
+        }
+      ],
+      "nodes": [
+        {
+          "kind": "compute",
+          "name": "__option_carrier_guard_v1",
+          "expr": {
+            "kind": "option_carrier_guard_v1",
+            "version": "first_class_v1",
+            "body": {
+              "kind": "literal",
+              "value": true
+            },
+            "resolved_type": {
+              "name": "Bool",
+              "params": []
+            }
+          },
+          "type": {
+            "name": "Bool",
+            "params": []
+          },
+          "deps": [],
+          "fragment": "core"
+        },
+        {
+          "kind": "compute",
+          "name": "result",
+          "expr": {
+            "kind": "call",
+            "fn": "or_else",
+            "args": [
+              {
+                "kind": "option_value_construct",
+                "arm": "Some",
+                "value": {
+                  "kind": "ref",
+                  "name": "n",
+                  "resolved_type": {
+                    "name": "Integer",
+                    "params": []
+                  }
+                },
+                "resolved_type": {
+                  "name": "Option",
+                  "params": [
+                    {
+                      "name": "Integer",
+                      "params": []
+                    }
+                  ]
+                }
+              },
+              {
+                "kind": "literal",
+                "value": 0,
+                "literal_type": "int",
+                "resolved_type": {
+                  "name": "Integer",
+                  "params": []
+                }
+              }
+            ],
+            "resolved_type": {
+              "name": "Integer",
+              "params": []
+            }
+          },
+          "type": {
+            "name": "Integer",
+            "params": []
+          },
+          "deps": [
+            "n"
+          ],
+          "fragment": "core"
+        }
+      ],
+      "escape_boundaries": []
+    },
+    {
+      "kind": "contract_ir",
+      "option_carrier": "first_class_v1",
+      "contract_ref": "contract/PredicateSome/sha256:7a7888cb90e81ec732a23dc9",
+      "contract_name": "PredicateSome",
+      "modifier": "pure",
+      "specialization_of": null,
+      "type_args": {},
+      "fragment_class": "core",
+      "inputs": [
+        {
+          "name": "n",
+          "type": {
+            "name": "Integer",
+            "params": []
+          },
+          "lifecycle": "local"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "result",
+          "type": {
+            "name": "Bool",
+            "params": []
+          },
+          "lifecycle": "session"
+        }
+      ],
+      "nodes": [
+        {
+          "kind": "compute",
+          "name": "__option_carrier_guard_v1",
+          "expr": {
+            "kind": "option_carrier_guard_v1",
+            "version": "first_class_v1",
+            "body": {
+              "kind": "literal",
+              "value": true
+            },
+            "resolved_type": {
+              "name": "Bool",
+              "params": []
+            }
+          },
+          "type": {
+            "name": "Bool",
+            "params": []
+          },
+          "deps": [],
+          "fragment": "core"
+        },
+        {
+          "kind": "compute",
+          "name": "result",
+          "expr": {
+            "kind": "call",
+            "fn": "stdlib.option.is_some",
+            "args": [
+              {
+                "kind": "option_value_construct",
+                "arm": "Some",
+                "value": {
+                  "kind": "ref",
+                  "name": "n",
+                  "resolved_type": {
+                    "name": "Integer",
+                    "params": []
+                  }
+                },
+                "resolved_type": {
+                  "name": "Option",
+                  "params": [
+                    {
+                      "name": "Integer",
+                      "params": []
+                    }
+                  ]
+                }
+              }
+            ],
+            "resolved_type": {
+              "name": "Bool",
+              "params": []
+            }
+          },
+          "type": {
+            "name": "Bool",
+            "params": []
+          },
+          "deps": [
+            "n"
+          ],
+          "fragment": "core"
+        }
+      ],
+      "escape_boundaries": []
+    },
+    {
+      "kind": "contract_ir",
+      "option_carrier": "first_class_v1",
+      "contract_ref": "contract/PredicateNone/sha256:aacc15f6f02280fe856c1bf1",
+      "contract_name": "PredicateNone",
+      "modifier": "pure",
+      "specialization_of": null,
+      "type_args": {},
+      "fragment_class": "core",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "result",
+          "type": {
+            "name": "Bool",
+            "params": []
+          },
+          "lifecycle": "session"
+        }
+      ],
+      "nodes": [
+        {
+          "kind": "compute",
+          "name": "__option_carrier_guard_v1",
+          "expr": {
+            "kind": "option_carrier_guard_v1",
+            "version": "first_class_v1",
+            "body": {
+              "kind": "literal",
+              "value": true
+            },
+            "resolved_type": {
+              "name": "Bool",
+              "params": []
+            }
+          },
+          "type": {
+            "name": "Bool",
+            "params": []
+          },
+          "deps": [],
+          "fragment": "core"
+        },
+        {
+          "kind": "compute",
+          "name": "result",
+          "expr": {
+            "kind": "call",
+            "fn": "stdlib.option.is_none",
+            "args": [
+              {
+                "kind": "option_value_construct",
+                "arm": "None",
+                "resolved_type": {
+                  "name": "Option",
+                  "params": [
+                    {
+                      "name": "Unknown",
+                      "params": []
+                    }
+                  ]
+                }
+              }
+            ],
+            "resolved_type": {
+              "name": "Bool",
+              "params": []
+            }
+          },
+          "type": {
+            "name": "Bool",
+            "params": []
+          },
+          "deps": [],
+          "fragment": "core"
+        }
+      ],
+      "escape_boundaries": []
+    },
+    {
+      "kind": "contract_ir",
+      "option_carrier": "first_class_v1",
+      "contract_ref": "contract/OptionMap/sha256:d34434b052f9898396953263",
+      "contract_name": "OptionMap",
+      "modifier": "pure",
+      "specialization_of": null,
+      "type_args": {},
+      "fragment_class": "core",
+      "inputs": [
+        {
+          "name": "n",
+          "type": {
+            "name": "Integer",
+            "params": []
+          },
+          "lifecycle": "local"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "result",
+          "type": {
+            "name": "Option",
+            "params": [
+              {
+                "name": "Integer",
+                "params": []
+              }
+            ]
+          },
+          "lifecycle": "session"
+        }
+      ],
+      "nodes": [
+        {
+          "kind": "compute",
+          "name": "__option_carrier_guard_v1",
+          "expr": {
+            "kind": "option_carrier_guard_v1",
+            "version": "first_class_v1",
+            "body": {
+              "kind": "literal",
+              "value": true
+            },
+            "resolved_type": {
+              "name": "Bool",
+              "params": []
+            }
+          },
+          "type": {
+            "name": "Bool",
+            "params": []
+          },
+          "deps": [],
+          "fragment": "core"
+        },
+        {
+          "kind": "compute",
+          "name": "result",
+          "expr": {
+            "kind": "call",
+            "fn": "stdlib.option.map",
+            "args": [
+              {
+                "kind": "option_value_construct",
+                "arm": "Some",
+                "value": {
+                  "kind": "ref",
+                  "name": "n",
+                  "resolved_type": {
+                    "name": "Integer",
+                    "params": []
+                  }
+                },
+                "resolved_type": {
+                  "name": "Option",
+                  "params": [
+                    {
+                      "name": "Integer",
+                      "params": []
+                    }
+                  ]
+                }
+              },
+              {
+                "kind": "lambda",
+                "params": [
+                  "value"
+                ],
+                "body": {
+                  "kind": "ref",
+                  "name": "value",
+                  "resolved_type": {
+                    "name": "Integer",
+                    "params": []
+                  }
+                },
+                "resolved_type": {
+                  "name": "Integer",
+                  "params": []
+                }
+              }
+            ],
+            "resolved_type": {
+              "name": "Option",
+              "params": [
+                {
+                  "name": "Integer",
+                  "params": []
+                }
+              ]
+            }
+          },
+          "type": {
+            "name": "Option",
+            "params": [
+              {
+                "name": "Integer",
+                "params": []
+              }
+            ]
+          },
+          "deps": [
+            "n",
+            "value"
+          ],
+          "fragment": "core"
+        }
+      ],
+      "escape_boundaries": []
+    },
+    {
+      "kind": "contract_ir",
+      "option_carrier": "first_class_v1",
+      "contract_ref": "contract/OptionFlatMap/sha256:07eb0062515d8aadcc9b2e2f",
+      "contract_name": "OptionFlatMap",
+      "modifier": "pure",
+      "specialization_of": null,
+      "type_args": {},
+      "fragment_class": "core",
+      "inputs": [
+        {
+          "name": "n",
+          "type": {
+            "name": "Integer",
+            "params": []
+          },
+          "lifecycle": "local"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "result",
+          "type": {
+            "name": "Option",
+            "params": [
+              {
+                "name": "Integer",
+                "params": []
+              }
+            ]
+          },
+          "lifecycle": "session"
+        }
+      ],
+      "nodes": [
+        {
+          "kind": "compute",
+          "name": "__option_carrier_guard_v1",
+          "expr": {
+            "kind": "option_carrier_guard_v1",
+            "version": "first_class_v1",
+            "body": {
+              "kind": "literal",
+              "value": true
+            },
+            "resolved_type": {
+              "name": "Bool",
+              "params": []
+            }
+          },
+          "type": {
+            "name": "Bool",
+            "params": []
+          },
+          "deps": [],
+          "fragment": "core"
+        },
+        {
+          "kind": "compute",
+          "name": "result",
+          "expr": {
+            "kind": "call",
+            "fn": "stdlib.option.flat_map",
+            "args": [
+              {
+                "kind": "option_value_construct",
+                "arm": "Some",
+                "value": {
+                  "kind": "ref",
+                  "name": "n",
+                  "resolved_type": {
+                    "name": "Integer",
+                    "params": []
+                  }
+                },
+                "resolved_type": {
+                  "name": "Option",
+                  "params": [
+                    {
+                      "name": "Integer",
+                      "params": []
+                    }
+                  ]
+                }
+              },
+              {
+                "kind": "lambda",
+                "params": [
+                  "value"
+                ],
+                "body": {
+                  "kind": "option_value_construct",
+                  "arm": "Some",
+                  "value": {
+                    "kind": "ref",
+                    "name": "value",
+                    "resolved_type": {
+                      "name": "Integer",
+                      "params": []
+                    }
+                  },
+                  "resolved_type": {
+                    "name": "Option",
+                    "params": [
+                      {
+                        "name": "Integer",
+                        "params": []
+                      }
+                    ]
+                  }
+                },
+                "resolved_type": {
+                  "name": "Option",
+                  "params": [
+                    {
+                      "name": "Integer",
+                      "params": []
+                    }
+                  ]
+                }
+              }
+            ],
+            "resolved_type": {
+              "name": "Option",
+              "params": [
+                {
+                  "name": "Integer",
+                  "params": []
+                }
+              ]
+            }
+          },
+          "type": {
+            "name": "Option",
+            "params": [
+              {
+                "name": "Integer",
+                "params": []
+              }
+            ]
+          },
+          "deps": [
+            "n",
+            "value"
+          ],
+          "fragment": "core"
+        }
+      ],
+      "escape_boundaries": []
+    },
+    {
+      "kind": "contract_ir",
+      "option_carrier": "first_class_v1",
+      "contract_ref": "contract/OptionAndThen/sha256:745eda66e4301bc2d627f5eb",
+      "contract_name": "OptionAndThen",
+      "modifier": "pure",
+      "specialization_of": null,
+      "type_args": {},
+      "fragment_class": "core",
+      "inputs": [
+        {
+          "name": "n",
+          "type": {
+            "name": "Integer",
+            "params": []
+          },
+          "lifecycle": "local"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "result",
+          "type": {
+            "name": "Option",
+            "params": [
+              {
+                "name": "Integer",
+                "params": []
+              }
+            ]
+          },
+          "lifecycle": "session"
+        }
+      ],
+      "nodes": [
+        {
+          "kind": "compute",
+          "name": "__option_carrier_guard_v1",
+          "expr": {
+            "kind": "option_carrier_guard_v1",
+            "version": "first_class_v1",
+            "body": {
+              "kind": "literal",
+              "value": true
+            },
+            "resolved_type": {
+              "name": "Bool",
+              "params": []
+            }
+          },
+          "type": {
+            "name": "Bool",
+            "params": []
+          },
+          "deps": [],
+          "fragment": "core"
+        },
+        {
+          "kind": "compute",
+          "name": "result",
+          "expr": {
+            "kind": "call",
+            "fn": "stdlib.option.and_then",
+            "args": [
+              {
+                "kind": "option_value_construct",
+                "arm": "Some",
+                "value": {
+                  "kind": "ref",
+                  "name": "n",
+                  "resolved_type": {
+                    "name": "Integer",
+                    "params": []
+                  }
+                },
+                "resolved_type": {
+                  "name": "Option",
+                  "params": [
+                    {
+                      "name": "Integer",
+                      "params": []
+                    }
+                  ]
+                }
+              },
+              {
+                "kind": "lambda",
+                "params": [
+                  "value"
+                ],
+                "body": {
+                  "kind": "option_value_construct",
+                  "arm": "Some",
+                  "value": {
+                    "kind": "ref",
+                    "name": "value",
+                    "resolved_type": {
+                      "name": "Integer",
+                      "params": []
+                    }
+                  },
+                  "resolved_type": {
+                    "name": "Option",
+                    "params": [
+                      {
+                        "name": "Integer",
+                        "params": []
+                      }
+                    ]
+                  }
+                },
+                "resolved_type": {
+                  "name": "Option",
+                  "params": [
+                    {
+                      "name": "Integer",
+                      "params": []
+                    }
+                  ]
+                }
+              }
+            ],
+            "resolved_type": {
+              "name": "Option",
+              "params": [
+                {
+                  "name": "Integer",
+                  "params": []
+                }
+              ]
+            }
+          },
+          "type": {
+            "name": "Option",
+            "params": [
+              {
+                "name": "Integer",
+                "params": []
+              }
+            ]
+          },
+          "deps": [
+            "n",
+            "value"
+          ],
+          "fragment": "core"
+        }
+      ],
+      "escape_boundaries": []
+    },
+    {
+      "kind": "contract_ir",
+      "option_carrier": "first_class_v1",
+      "contract_ref": "contract/ResultFallback/sha256:ac5160018851becf339bcd2f",
+      "contract_name": "ResultFallback",
+      "modifier": "pure",
+      "specialization_of": null,
+      "type_args": {},
+      "fragment_class": "core",
+      "inputs": [
+        {
+          "name": "n",
+          "type": {
+            "name": "Integer",
+            "params": []
+          },
+          "lifecycle": "local"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "result",
+          "type": {
+            "name": "Integer",
+            "params": []
+          },
+          "lifecycle": "session"
+        }
+      ],
+      "nodes": [
+        {
+          "kind": "compute",
+          "name": "__option_carrier_guard_v1",
+          "expr": {
+            "kind": "option_carrier_guard_v1",
+            "version": "first_class_v1",
+            "body": {
+              "kind": "literal",
+              "value": true
+            },
+            "resolved_type": {
+              "name": "Bool",
+              "params": []
+            }
+          },
+          "type": {
+            "name": "Bool",
+            "params": []
+          },
+          "deps": [],
+          "fragment": "core"
+        },
+        {
+          "kind": "compute",
+          "name": "value",
+          "expr": {
+            "kind": "variant_construct",
+            "arm": "Ok",
+            "variant": "Result",
+            "fields": {
+              "value": {
+                "kind": "ref",
+                "name": "n",
+                "resolved_type": {
+                  "name": "Integer",
+                  "params": []
+                }
+              }
+            },
+            "resolved_type": {
+              "name": "Result",
+              "params": [
+                {
+                  "name": "Integer",
+                  "params": []
+                },
+                {
+                  "kind": "type_ref",
+                  "name": "Text",
+                  "params": []
+                }
+              ]
+            },
+            "sealed": true
+          },
+          "type": {
+            "name": "Result",
+            "params": [
+              {
+                "name": "Integer",
+                "params": []
+              },
+              {
+                "kind": "type_ref",
+                "name": "Text",
+                "params": []
+              }
+            ]
+          },
+          "deps": [
+            "n"
+          ],
+          "fragment": "core"
+        },
+        {
+          "kind": "compute",
+          "name": "result",
+          "expr": {
+            "kind": "call",
+            "fn": "result_unwrap_or",
+            "args": [
+              {
+                "kind": "ref",
+                "name": "value",
+                "resolved_type": {
+                  "name": "Result",
+                  "params": [
+                    {
+                      "name": "Integer",
+                      "params": []
+                    },
+                    {
+                      "kind": "type_ref",
+                      "name": "Text",
+                      "params": []
+                    }
+                  ]
+                }
+              },
+              {
+                "kind": "literal",
+                "value": 0,
+                "literal_type": "int",
+                "resolved_type": {
+                  "name": "Integer",
+                  "params": []
+                }
+              }
+            ],
+            "resolved_type": {
+              "name": "Integer",
+              "params": []
+            }
+          },
+          "type": {
+            "name": "Integer",
+            "params": []
+          },
+          "deps": [
+            "value"
+          ],
+          "fragment": "core"
+        }
+      ],
+      "escape_boundaries": []
+    },
+    {
+      "kind": "contract_ir",
+      "option_carrier": "first_class_v1",
+      "contract_ref": "contract/ResultMap/sha256:f833c50866e7e0df8a5080bc",
+      "contract_name": "ResultMap",
+      "modifier": "pure",
+      "specialization_of": null,
+      "type_args": {},
+      "fragment_class": "core",
+      "inputs": [
+        {
+          "name": "n",
+          "type": {
+            "name": "Integer",
+            "params": []
+          },
+          "lifecycle": "local"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "result",
+          "type": {
+            "name": "Result",
+            "params": [
+              {
+                "name": "Integer",
+                "params": []
+              },
+              {
+                "name": "Text",
+                "params": []
+              }
+            ]
+          },
+          "lifecycle": "session"
+        }
+      ],
+      "nodes": [
+        {
+          "kind": "compute",
+          "name": "__option_carrier_guard_v1",
+          "expr": {
+            "kind": "option_carrier_guard_v1",
+            "version": "first_class_v1",
+            "body": {
+              "kind": "literal",
+              "value": true
+            },
+            "resolved_type": {
+              "name": "Bool",
+              "params": []
+            }
+          },
+          "type": {
+            "name": "Bool",
+            "params": []
+          },
+          "deps": [],
+          "fragment": "core"
+        },
+        {
+          "kind": "compute",
+          "name": "value",
+          "expr": {
+            "kind": "variant_construct",
+            "arm": "Ok",
+            "variant": "Result",
+            "fields": {
+              "value": {
+                "kind": "ref",
+                "name": "n",
+                "resolved_type": {
+                  "name": "Integer",
+                  "params": []
+                }
+              }
+            },
+            "resolved_type": {
+              "name": "Result",
+              "params": [
+                {
+                  "name": "Integer",
+                  "params": []
+                },
+                {
+                  "kind": "type_ref",
+                  "name": "Text",
+                  "params": []
+                }
+              ]
+            },
+            "sealed": true
+          },
+          "type": {
+            "name": "Result",
+            "params": [
+              {
+                "name": "Integer",
+                "params": []
+              },
+              {
+                "kind": "type_ref",
+                "name": "Text",
+                "params": []
+              }
+            ]
+          },
+          "deps": [
+            "n"
+          ],
+          "fragment": "core"
+        },
+        {
+          "kind": "compute",
+          "name": "result",
+          "expr": {
+            "kind": "call",
+            "fn": "stdlib.result.map",
+            "args": [
+              {
+                "kind": "ref",
+                "name": "value",
+                "resolved_type": {
+                  "name": "Result",
+                  "params": [
+                    {
+                      "name": "Integer",
+                      "params": []
+                    },
+                    {
+                      "kind": "type_ref",
+                      "name": "Text",
+                      "params": []
+                    }
+                  ]
+                }
+              },
+              {
+                "kind": "lambda",
+                "params": [
+                  "item"
+                ],
+                "body": {
+                  "kind": "ref",
+                  "name": "item",
+                  "resolved_type": {
+                    "name": "Integer",
+                    "params": []
+                  }
+                },
+                "resolved_type": {
+                  "name": "Integer",
+                  "params": []
+                }
+              }
+            ],
+            "resolved_type": {
+              "name": "Result",
+              "params": [
+                {
+                  "name": "Integer",
+                  "params": []
+                },
+                {
+                  "kind": "type_ref",
+                  "name": "Text",
+                  "params": []
+                }
+              ]
+            }
+          },
+          "type": {
+            "name": "Result",
+            "params": [
+              {
+                "name": "Integer",
+                "params": []
+              },
+              {
+                "kind": "type_ref",
+                "name": "Text",
+                "params": []
+              }
+            ]
+          },
+          "deps": [
+            "value",
+            "item"
+          ],
+          "fragment": "core"
+        }
+      ],
+      "escape_boundaries": []
+    },
+    {
+      "kind": "contract_ir",
+      "option_carrier": "first_class_v1",
+      "contract_ref": "contract/ResultAndThen/sha256:ebaa06802b073a03abf87875",
+      "contract_name": "ResultAndThen",
+      "modifier": "pure",
+      "specialization_of": null,
+      "type_args": {},
+      "fragment_class": "core",
+      "inputs": [
+        {
+          "name": "n",
+          "type": {
+            "name": "Integer",
+            "params": []
+          },
+          "lifecycle": "local"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "result",
+          "type": {
+            "name": "Result",
+            "params": [
+              {
+                "name": "Integer",
+                "params": []
+              },
+              {
+                "name": "Text",
+                "params": []
+              }
+            ]
+          },
+          "lifecycle": "session"
+        }
+      ],
+      "nodes": [
+        {
+          "kind": "compute",
+          "name": "__option_carrier_guard_v1",
+          "expr": {
+            "kind": "option_carrier_guard_v1",
+            "version": "first_class_v1",
+            "body": {
+              "kind": "literal",
+              "value": true
+            },
+            "resolved_type": {
+              "name": "Bool",
+              "params": []
+            }
+          },
+          "type": {
+            "name": "Bool",
+            "params": []
+          },
+          "deps": [],
+          "fragment": "core"
+        },
+        {
+          "kind": "compute",
+          "name": "value",
+          "expr": {
+            "kind": "variant_construct",
+            "arm": "Ok",
+            "variant": "Result",
+            "fields": {
+              "value": {
+                "kind": "ref",
+                "name": "n",
+                "resolved_type": {
+                  "name": "Integer",
+                  "params": []
+                }
+              }
+            },
+            "resolved_type": {
+              "name": "Result",
+              "params": [
+                {
+                  "name": "Integer",
+                  "params": []
+                },
+                {
+                  "kind": "type_ref",
+                  "name": "Text",
+                  "params": []
+                }
+              ]
+            },
+            "sealed": true
+          },
+          "type": {
+            "name": "Result",
+            "params": [
+              {
+                "name": "Integer",
+                "params": []
+              },
+              {
+                "kind": "type_ref",
+                "name": "Text",
+                "params": []
+              }
+            ]
+          },
+          "deps": [
+            "n"
+          ],
+          "fragment": "core"
+        },
+        {
+          "kind": "compute",
+          "name": "result",
+          "expr": {
+            "kind": "call",
+            "fn": "stdlib.result.and_then",
+            "args": [
+              {
+                "kind": "ref",
+                "name": "value",
+                "resolved_type": {
+                  "name": "Result",
+                  "params": [
+                    {
+                      "name": "Integer",
+                      "params": []
+                    },
+                    {
+                      "kind": "type_ref",
+                      "name": "Text",
+                      "params": []
+                    }
+                  ]
+                }
+              },
+              {
+                "kind": "lambda",
+                "params": [
+                  "item"
+                ],
+                "body": {
+                  "kind": "variant_construct",
+                  "arm": "Ok",
+                  "variant": "Result",
+                  "fields": {
+                    "value": {
+                      "kind": "ref",
+                      "name": "item",
+                      "resolved_type": {
+                        "name": "Integer",
+                        "params": []
+                      }
+                    }
+                  },
+                  "resolved_type": {
+                    "name": "Result",
+                    "params": [
+                      {
+                        "name": "Integer",
+                        "params": []
+                      },
+                      {
+                        "kind": "type_ref",
+                        "name": "Text",
+                        "params": []
+                      }
+                    ]
+                  },
+                  "sealed": true
+                },
+                "resolved_type": {
+                  "name": "Result",
+                  "params": [
+                    {
+                      "name": "Integer",
+                      "params": []
+                    },
+                    {
+                      "kind": "type_ref",
+                      "name": "Text",
+                      "params": []
+                    }
+                  ]
+                }
+              }
+            ],
+            "resolved_type": {
+              "name": "Result",
+              "params": [
+                {
+                  "name": "Integer",
+                  "params": []
+                },
+                {
+                  "kind": "type_ref",
+                  "name": "Text",
+                  "params": []
+                }
+              ]
+            }
+          },
+          "type": {
+            "name": "Result",
+            "params": [
+              {
+                "name": "Integer",
+                "params": []
+              },
+              {
+                "kind": "type_ref",
+                "name": "Text",
+                "params": []
+              }
+            ]
+          },
+          "deps": [
+            "value",
+            "item"
+          ],
+          "fragment": "core"
+        }
+      ],
+      "escape_boundaries": []
+    },
+    {
+      "kind": "contract_ir",
+      "option_carrier": "first_class_v1",
+      "contract_ref": "contract/OptionalOmitted/sha256:d8f4df2ccdccc41318ba7061",
+      "contract_name": "OptionalOmitted",
+      "modifier": "pure",
+      "specialization_of": null,
+      "type_args": {},
+      "fragment_class": "core",
+      "inputs": [
+        {
+          "name": "label",
+          "type": {
+            "name": "Text",
+            "params": []
+          },
+          "lifecycle": "local"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "result",
+          "type": {
+            "name": "OptionalRow",
+            "params": []
+          },
+          "lifecycle": "session"
+        }
+      ],
+      "nodes": [
+        {
+          "kind": "compute",
+          "name": "__option_carrier_guard_v1",
+          "expr": {
+            "kind": "option_carrier_guard_v1",
+            "version": "first_class_v1",
+            "body": {
+              "kind": "literal",
+              "value": true
+            },
+            "resolved_type": {
+              "name": "Bool",
+              "params": []
+            }
+          },
+          "type": {
+            "name": "Bool",
+            "params": []
+          },
+          "deps": [],
+          "fragment": "core"
+        },
+        {
+          "kind": "compute",
+          "name": "result",
+          "expr": {
+            "kind": "record_literal",
+            "fields": {
+              "label": {
+                "kind": "ref",
+                "name": "label",
+                "resolved_type": {
+                  "name": "Text",
+                  "params": []
+                }
+              },
+              "note": {
+                "kind": "option_value_construct",
+                "arm": "None",
+                "resolved_type": {
+                  "name": "Option",
+                  "params": [
+                    {
+                      "name": "Text",
+                      "params": []
+                    }
+                  ]
+                }
+              }
+            },
+            "resolved_type": {
+              "name": "OptionalRow",
+              "params": []
+            }
+          },
+          "type": {
+            "name": "OptionalRow",
+            "params": []
+          },
+          "deps": [
+            "label"
+          ],
+          "fragment": "core"
+        }
+      ],
+      "escape_boundaries": []
+    },
+    {
+      "kind": "contract_ir",
+      "option_carrier": "first_class_v1",
+      "contract_ref": "contract/OptionalRaw/sha256:d471927ad3db70391d50cd6d",
+      "contract_name": "OptionalRaw",
+      "modifier": "pure",
+      "specialization_of": null,
+      "type_args": {},
+      "fragment_class": "core",
+      "inputs": [
+        {
+          "name": "label",
+          "type": {
+            "name": "Text",
+            "params": []
+          },
+          "lifecycle": "local"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "result",
+          "type": {
+            "name": "OptionalRow",
+            "params": []
+          },
+          "lifecycle": "session"
+        }
+      ],
+      "nodes": [
+        {
+          "kind": "compute",
+          "name": "__option_carrier_guard_v1",
+          "expr": {
+            "kind": "option_carrier_guard_v1",
+            "version": "first_class_v1",
+            "body": {
+              "kind": "literal",
+              "value": true
+            },
+            "resolved_type": {
+              "name": "Bool",
+              "params": []
+            }
+          },
+          "type": {
+            "name": "Bool",
+            "params": []
+          },
+          "deps": [],
+          "fragment": "core"
+        },
+        {
+          "kind": "compute",
+          "name": "result",
+          "expr": {
+            "kind": "record_literal",
+            "fields": {
+              "label": {
+                "kind": "ref",
+                "name": "label",
+                "resolved_type": {
+                  "name": "Text",
+                  "params": []
+                }
+              },
+              "note": {
+                "kind": "option_value_construct",
+                "arm": "Some",
+                "value": {
+                  "kind": "ref",
+                  "name": "label",
+                  "resolved_type": {
+                    "name": "Text",
+                    "params": []
+                  }
+                },
+                "resolved_type": {
+                  "name": "Option",
+                  "params": [
+                    {
+                      "name": "Text",
+                      "params": []
+                    }
+                  ]
+                }
+              }
+            },
+            "resolved_type": {
+              "name": "OptionalRow",
+              "params": []
+            }
+          },
+          "type": {
+            "name": "OptionalRow",
+            "params": []
+          },
+          "deps": [
+            "label"
+          ],
+          "fragment": "core"
+        }
+      ],
+      "escape_boundaries": []
+    },
+    {
+      "kind": "contract_ir",
+      "option_carrier": "first_class_v1",
+      "contract_ref": "contract/OptionalPresent/sha256:beaf589d153f4ebadcfd39e4",
+      "contract_name": "OptionalPresent",
+      "modifier": "pure",
+      "specialization_of": null,
+      "type_args": {},
+      "fragment_class": "core",
+      "inputs": [
+        {
+          "name": "label",
+          "type": {
+            "name": "Text",
+            "params": []
+          },
+          "lifecycle": "local"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "result",
+          "type": {
+            "name": "OptionalRow",
+            "params": []
+          },
+          "lifecycle": "session"
+        }
+      ],
+      "nodes": [
+        {
+          "kind": "compute",
+          "name": "__option_carrier_guard_v1",
+          "expr": {
+            "kind": "option_carrier_guard_v1",
+            "version": "first_class_v1",
+            "body": {
+              "kind": "literal",
+              "value": true
+            },
+            "resolved_type": {
+              "name": "Bool",
+              "params": []
+            }
+          },
+          "type": {
+            "name": "Bool",
+            "params": []
+          },
+          "deps": [],
+          "fragment": "core"
+        },
+        {
+          "kind": "compute",
+          "name": "note",
+          "expr": {
+            "kind": "option_value_construct",
+            "arm": "Some",
+            "value": {
+              "kind": "ref",
+              "name": "label",
+              "resolved_type": {
+                "name": "Text",
+                "params": []
+              }
+            },
+            "resolved_type": {
+              "name": "Option",
+              "params": [
+                {
+                  "name": "Text",
+                  "params": []
+                }
+              ]
+            }
+          },
+          "type": {
+            "name": "Option",
+            "params": [
+              {
+                "name": "Text",
+                "params": []
+              }
+            ]
+          },
+          "deps": [
+            "label"
+          ],
+          "fragment": "core"
+        },
+        {
+          "kind": "compute",
+          "name": "result",
+          "expr": {
+            "kind": "record_literal",
+            "fields": {
+              "label": {
+                "kind": "ref",
+                "name": "label",
+                "resolved_type": {
+                  "name": "Text",
+                  "params": []
+                }
+              },
+              "note": {
+                "kind": "ref",
+                "name": "note",
+                "resolved_type": {
+                  "name": "Option",
+                  "params": [
+                    {
+                      "name": "Text",
+                      "params": []
+                    }
+                  ]
+                }
+              }
+            },
+            "resolved_type": {
+              "name": "OptionalRow",
+              "params": []
+            }
+          },
+          "type": {
+            "name": "OptionalRow",
+            "params": []
+          },
+          "deps": [
+            "label",
+            "note"
+          ],
+          "fragment": "core"
+        }
+      ],
+      "escape_boundaries": []
+    }
+  ],
+  "type_declarations": [
+    {
+      "kind": "type_decl",
+      "name": "Envelope",
+      "fields": [
+        {
+          "name": "direct",
+          "type": {
+            "name": "Option",
+            "params": [
+              {
+                "name": "Payload",
+                "params": []
+              }
+            ]
+          }
+        },
+        {
+          "name": "nested",
+          "type": {
+            "name": "Option",
+            "params": [
+              {
+                "name": "Option",
+                "params": [
+                  {
+                    "name": "Integer",
+                    "params": []
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "values",
+          "type": {
+            "name": "Collection",
+            "params": [
+              {
+                "name": "Option",
+                "params": [
+                  {
+                    "name": "Integer",
+                    "params": []
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "kind": "type_decl",
+      "name": "OptionalRow",
+      "fields": [
+        {
+          "name": "label",
+          "type": {
+            "name": "Text",
+            "params": []
+          }
+        },
+        {
+          "name": "note",
+          "type": {
+            "name": "Option",
+            "params": [
+              {
+                "name": "Text",
+                "params": []
+              }
+            ],
+            "optional": true
+          }
+        }
+      ]
+    },
+    {
+      "kind": "type_decl",
+      "name": "Payload",
+      "fields": [
+        {
+          "name": "__arm",
+          "type": {
+            "name": "Text",
+            "params": []
+          }
+        },
+        {
+          "name": "__variant",
+          "type": {
+            "name": "Text",
+            "params": []
+          }
+        },
+        {
+          "name": "value",
+          "type": {
+            "name": "Integer",
+            "params": []
+          }
+        }
+      ]
+    }
+  ]
+}

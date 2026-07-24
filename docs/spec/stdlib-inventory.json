@@ -1,8 +1,8 @@
 {
   "kind": "stdlib_inventory",
   "format_version": "v0",
-  "stdlib_surface_digest": "ad4e310817c10603483377fca89190dc88487587df12d86e92e734d9e5286d45",
-  "note": "Normatively referenced by Ch8. Digest is computed from canonical re-serialization of entries sorted by canonical_name with entry_digest fields stripped — never from raw file bytes. P3 proof verifies determinism. P5 adds stdlib.collection.map + stdlib.collection.filter entries and updates stdlib.collection.count proof_lineage. CONSTRUCT-P1 adds stdlib.decimal.decimal (explicit Decimal constructor) and recomputes the digest. FLATMAP-P5 adds stdlib.collection.flat_map and recomputes the digest. PREDICATE-OPS-P4 adds stdlib.collection.find/any/all and recomputes the digest. LANG-STDLIB-NUMERIC-TEXT-CONVERSION-P1 adds stdlib.integer.parse_int/int_to_text/modulo (category numeric) and recomputes the digest. LANG-STDLIB-TEXT-ESCAPE-DELIMITED-P2 adds stdlib.text.encode_delimited/decode_delimited (escape-aware delimited row codec; decode -> Option[Collection[Text]]) and recomputes the digest. LANG-STDLIB-COLLECTION-AT-INVENTORY-P5 adds stdlib.collection.at (Collection[T] x Integer -> Option[T], zero-based, total) and recomputes the digest. LANG-STDLIB-TEXT-JOIN-P1 adds stdlib.text.join (Collection[Text] x Text -> Text, inverse of split) and recomputes the digest. LANG-STDLIB-WIRE-FRAME-CODEC-P2 adds stdlib.text.encode_frame (Text -> Text) and stdlib.text.decode_frame (Text -> Option[FrameDecode], length-prefixed netstring frame codec) and recomputes the digest. LANG-STDLIB-COLLECTION-SORT-BY-P3 adds stdlib.collection.sort_by (Collection[T] x (T -> K) -> Collection[T], stable ascending, K in {Integer, Text, Decimal}, OOF-COL11 fail-closed on Float and every other key shape) and recomputes the digest. LANG-STDLIB-MAP-RUNTIME-P1 makes stdlib.map.empty/stdlib.map.from_pairs ACTUALLY EXECUTABLE in the VM (bytecode OP_CALL + eval_ast HOF-dispatch, shared pair-validation/last-input-wins helper) — both entries previously claimed `production-implemented` with no live VM constructor arm (readers only); reconciles their signatures to Map[String, V] (v0 keys are exactly String, never a generic K), fixes stdlib.map.get's stale Option[V]/totality/diagnostics fields, and documents the LAST-INPUT-WINS duplicate-key law and Pair{first,second} shape; recomputes the digest. LANG-STDLIB-INVENTORY-QUALIFIED-IMPORT-SURFACE-P2 adds the additive import_surface field (absent/default = bare_alias, preserving every existing row's behavior) and registers the 13 canon Ch8 §8.11 stdlib.bytes.* pure operations as qualified_only — discoverable via inventory/help/MCP, callable only through qualified names, bare/named import refused (OOF-IMP3), compat aliases text_to_bytes/bytes_to_text recorded but not importable; capability/effect modules (stdlib.IO.*, stdlib.net.*) deliberately stay OUT of this canon inventory; recomputes the digest. LANG-STDLIB-COLLECTION-TAKE-CANON-P5 adds stdlib.collection.take (Collection[T] x Integer -> Collection[T], prefix-bounded reader, n<=0 -> [], n>=count(xs) -> all input, OOF-COL12 fail-closed on a non-Integer/non-lambda second argument) and recomputes the digest. LANG-STDLIB-MAP-PUT-P2 adds stdlib.map.put (immutable Map[String,V] update, absent insert/existing overwrite, last-write-wins, sorted-key JSON, O(n) carrier copy) and recomputes the digest. LANG-STDLIB-BYTES-HEX-CODEC-P1 adds stdlib.bytes.encode_hex (Bytes -> Text, total, canonical lower-case hex) and stdlib.bytes.decode_hex (Text -> Result[Bytes, BytesError], even-length 0-9/a-f/A-F only; invalid_length/invalid_hex fail-closed as data) as the explicit application-level crossing named by OOF-BY1/§8.11.4; both qualified_only, both production-implemented; base64 remains deferred; recomputes the digest. LANG-STDLIB-COLLECTION-SORT-BY-DESC-P4 adds stdlib.collection.sort_by_desc (Collection[T] x (T -> K) -> Collection[T], stable DESCENDING with equal keys preserving authored order, K in {Integer, Text, Decimal}, OOF-COL11 reused in the sort_by_desc spelling) and recomputes the digest. LANG-FLOAT-OPERATOR-FAMILY-P2 preserves stdlib.integer.neg and records that Float/Decimal negation now lower to their own type-resolved identities; recomputes the digest. LANG-FLOAT-OPERATOR-FAMILY-P2 + LANG-NUMERIC-LAMBDA-OPERATOR-IDENTITY-P3 add the monomorphic Float/Decimal ordering and unary-negation rows (stdlib.float.{lt,lte,gt,gte,neg}, stdlib.decimal.{lt,lte,gt,gte,neg}): homogeneous operands only, identity keyed on operand type in direct AND collection-HOF lambda positions, IEEE signed zero for Float, exact scale-aware comparison and checked minor-unit negation for Decimal; recomputes the digest. LANG-STDLIB-MATH-SURFACE-CANON-ADMISSION-P2 admits the 15-name stdlib.math surface in three reproducibility tiers (ch8 §8.15): N0 scalar helpers deterministic by construction (abs/min/max/clamp/sign, homogeneous Integer|Float, no coercion, sign(-0.0)==0), F1 fast platform-f64 with NO cross-ISA bit-identity claim (sin/cos/sqrt/pi, finite-only, sqrt(x<0) refused), and D1 deterministic fixed-carrier (det_sin/det_cos/det_sqrt/det_ln/ det_exp/det_tan, function-specific carriers + golden-bit locks, domain and non-finite refusals); recomputes the digest.",
+  "stdlib_surface_digest": "d81931da7d85feb3fc02f92393db82cad08db5fff02ecbba70e7d9d907189961",
+  "note": "Normatively referenced by Ch8. Digest is computed from canonical re-serialization of entries sorted by canonical_name with entry_digest fields stripped — never from raw file bytes. P3 proof verifies determinism. P5 adds stdlib.collection.map + stdlib.collection.filter entries and updates stdlib.collection.count proof_lineage. CONSTRUCT-P1 adds stdlib.decimal.decimal (explicit Decimal constructor) and recomputes the digest. FLATMAP-P5 adds stdlib.collection.flat_map and recomputes the digest. PREDICATE-OPS-P4 adds stdlib.collection.find/any/all and recomputes the digest. LANG-STDLIB-NUMERIC-TEXT-CONVERSION-P1 adds stdlib.integer.parse_int/int_to_text/modulo (category numeric) and recomputes the digest. LANG-STDLIB-TEXT-ESCAPE-DELIMITED-P2 adds stdlib.text.encode_delimited/decode_delimited (escape-aware delimited row codec; decode -> Option[Collection[Text]]) and recomputes the digest. LANG-STDLIB-COLLECTION-AT-INVENTORY-P5 adds stdlib.collection.at (Collection[T] x Integer -> Option[T], zero-based, total) and recomputes the digest. LANG-STDLIB-TEXT-JOIN-P1 adds stdlib.text.join (Collection[Text] x Text -> Text, inverse of split) and recomputes the digest. LANG-STDLIB-WIRE-FRAME-CODEC-P2 adds stdlib.text.encode_frame (Text -> Text) and stdlib.text.decode_frame (Text -> Option[FrameDecode], length-prefixed netstring frame codec) and recomputes the digest. LANG-STDLIB-COLLECTION-SORT-BY-P3 adds stdlib.collection.sort_by (Collection[T] x (T -> K) -> Collection[T], stable ascending, K in {Integer, Text, Decimal}, OOF-COL11 fail-closed on Float and every other key shape) and recomputes the digest. LANG-STDLIB-MAP-RUNTIME-P1 makes stdlib.map.empty/stdlib.map.from_pairs ACTUALLY EXECUTABLE in the VM (bytecode OP_CALL + eval_ast HOF-dispatch, shared pair-validation/last-input-wins helper) — both entries previously claimed `production-implemented` with no live VM constructor arm (readers only); reconciles their signatures to Map[String, V] (v0 keys are exactly String, never a generic K), fixes stdlib.map.get's stale Option[V]/totality/diagnostics fields, and documents the LAST-INPUT-WINS duplicate-key law and Pair{first,second} shape; recomputes the digest. LANG-STDLIB-INVENTORY-QUALIFIED-IMPORT-SURFACE-P2 adds the additive import_surface field (absent/default = bare_alias, preserving every existing row's behavior) and registers the 13 canon Ch8 §8.11 stdlib.bytes.* pure operations as qualified_only — discoverable via inventory/help/MCP, callable only through qualified names, bare/named import refused (OOF-IMP3), compat aliases text_to_bytes/bytes_to_text recorded but not importable; capability/effect modules (stdlib.IO.*, stdlib.net.*) deliberately stay OUT of this canon inventory; recomputes the digest. LANG-STDLIB-COLLECTION-TAKE-CANON-P5 adds stdlib.collection.take (Collection[T] x Integer -> Collection[T], prefix-bounded reader, n<=0 -> [], n>=count(xs) -> all input, OOF-COL12 fail-closed on a non-Integer/non-lambda second argument) and recomputes the digest. LANG-STDLIB-MAP-PUT-P2 adds stdlib.map.put (immutable Map[String,V] update, absent insert/existing overwrite, last-write-wins, sorted-key JSON, O(n) carrier copy) and recomputes the digest. LANG-STDLIB-BYTES-HEX-CODEC-P1 adds stdlib.bytes.encode_hex (Bytes -> Text, total, canonical lower-case hex) and stdlib.bytes.decode_hex (Text -> Result[Bytes, BytesError], even-length 0-9/a-f/A-F only; invalid_length/invalid_hex fail-closed as data) as the explicit application-level crossing named by OOF-BY1/§8.11.4; both qualified_only, both production-implemented; base64 remains deferred; recomputes the digest. LANG-STDLIB-COLLECTION-SORT-BY-DESC-P4 adds stdlib.collection.sort_by_desc (Collection[T] x (T -> K) -> Collection[T], stable DESCENDING with equal keys preserving authored order, K in {Integer, Text, Decimal}, OOF-COL11 reused in the sort_by_desc spelling) and recomputes the digest. LANG-FLOAT-OPERATOR-FAMILY-P2 preserves stdlib.integer.neg and records that Float/Decimal negation now lower to their own type-resolved identities; recomputes the digest. LANG-FLOAT-OPERATOR-FAMILY-P2 + LANG-NUMERIC-LAMBDA-OPERATOR-IDENTITY-P3 add the monomorphic Float/Decimal ordering and unary-negation rows (stdlib.float.{lt,lte,gt,gte,neg}, stdlib.decimal.{lt,lte,gt,gte,neg}): homogeneous operands only, identity keyed on operand type in direct AND collection-HOF lambda positions, IEEE signed zero for Float, exact scale-aware comparison and checked minor-unit negation for Decimal; recomputes the digest. LANG-STDLIB-MATH-SURFACE-CANON-ADMISSION-P2 admits the 15-name stdlib.math surface in three reproducibility tiers (ch8 §8.15): N0 scalar helpers deterministic by construction (abs/min/max/clamp/sign, homogeneous Integer|Float, no coercion, sign(-0.0)==0), F1 fast platform-f64 with NO cross-ISA bit-identity claim (sin/cos/sqrt/pi, finite-only, sqrt(x<0) refused), and D1 deterministic fixed-carrier (det_sin/det_cos/det_sqrt/det_ln/ det_exp/det_tan, function-specific carriers + golden-bit locks, domain and non-finite refusals); recomputes the digest. LANG-OPTION-RUNTIME-CARRIER-CONVERGENCE-P2 removes stdlib.option.wrap; publishes exact Option predicate/HOF/fallback identities and separate Result map/and_then/unwrap_or owners; all families are selected statically and the digest is recomputed.",
   "entries": [
     {
       "canonical_name": "stdlib.text.byte_length",
@@ -717,19 +717,19 @@
       ],
       "output_signature": "Option[V]",
       "diagnostics": [],
-      "failure_behavior": "none — absent key returns None (runtime Nil, no wrapper); present key returns Some(v) (the raw value, no wrapper). LANG-STDLIB-MAP-RUNTIME-P1 reconciliation: this entry previously claimed 'key not found -> OOF-MAP1 diagnostic at typecheck or runtime error' and `output_signature: V` — both stale. OOF-MAP1 is a Map ANNOTATION diagnostic (non-String key in a declared Map[K,V] type), never raised by a map_get call itself; a missing key is the ordinary Option[V]::None path, not an error.",
+      "failure_behavior": "Absent key returns nominal None; present key returns nominal Some(v). A missing key is data, not OOF-MAP1 and not a runtime error.",
       "authority_surface": "none",
       "proof_lineage": [
         "PROP-043",
         "MAP_STDLIB_FNS ruby dispatch",
         "Rust VM stdlib.map.get",
-        "LANG-STDLIB-MAP-RUNTIME-P1 — reconciled totality/output_signature/diagnostics/failure_behavior against the live VM reader (vm.rs `map_get` arm: `Value::Record(map) => map.get(key).cloned().unwrap_or(Value::Nil)`); reader semantics themselves unchanged"
+        "LANG-OPTION-RUNTIME-CARRIER-CONVERGENCE-P2 — nominal producer convergence"
       ],
       "examples": [
-        "map_get({a: 1}, \"a\") -> 1",
+        "map_get({a: 1}, \"a\") -> Some(1)",
         "map_get({a: 1}, \"b\") -> None"
       ],
-      "compatibility_note": null,
+      "compatibility_note": "Direct bytecode and nested eval-AST use one map reader and return the first_class_v1 carrier; no host null or unwrapped payload represents Option.",
       "owner_surface": "PROP-043",
       "entry_digest": null
     },
@@ -853,20 +853,414 @@
         "V"
       ],
       "output_signature": "V",
-      "diagnostics": [],
-      "failure_behavior": "none; default value required",
+      "diagnostics": [
+        "OOF-VM-OPTION-CARRIER"
+      ],
+      "failure_behavior": "Some(v) returns v; None returns the fallback. A non-Option runtime carrier fails closed with OOF-VM-OPTION-CARRIER.",
       "authority_surface": "none",
       "proof_lineage": [
         "Ch8 §8.3 option operations",
         "or_else ruby dispatch (typechecker.rb)",
-        "Rust VM or_else"
+        "Rust VM or_else",
+        "LANG-OPTION-RUNTIME-CARRIER-CONVERGENCE-P2 — nominal carrier consumer convergence"
       ],
       "examples": [
         "or_else(some(42), 0) -> 42",
         "or_else(none(), 0) -> 0"
       ],
-      "compatibility_note": "DRIFT D1: emitted as bare 'or_else' in SIR, not 'stdlib.option.or_else'. This is the sole legacy_sir exception across the inventory. semantic_ir_name intentionally records the current emission target. P4 will migrate emission to canonical qualified name and add dual-accept window. Invariant: exactly one non-null legacy_sir entry in the inventory.",
+      "compatibility_note": "The canonical function remains stdlib.option.or_else and the emitted SIR remains bare `or_else`, the inventory's sole grandfathered legacy_sir exception. P2 changes only the runtime operand law to first_class_v1; a future identity migration remains a separate card.",
       "owner_surface": "Ch8 §8.3",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.option.and_then",
+      "semantic_ir_name": "stdlib.option.and_then",
+      "legacy_sir": null,
+      "aliases": [
+        {
+          "kind": "source_alias",
+          "name": "and_then"
+        }
+      ],
+      "category": "option",
+      "lifecycle_status": "production-implemented",
+      "semantic_stability": "design-locked",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "total when the lambda is total and returns Option[U]",
+      "type_params": [
+        "T",
+        "U"
+      ],
+      "input_signature": [
+        "Option[T]",
+        "(T) -> Option[U]"
+      ],
+      "output_signature": "Option[U]",
+      "diagnostics": [
+        "OOF-TY0",
+        "OOF-VM-OPTION-CARRIER"
+      ],
+      "failure_behavior": "Exact semantic alias of Option flat_map; wrong input/output carriers fail closed.",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "LANG-OPTION-RUNTIME-CARRIER-CONVERGENCE-P2 — static family selection + nominal carrier"
+      ],
+      "examples": [
+        "and_then(some(1), x -> some(x)) -> some(1)"
+      ],
+      "compatibility_note": "The source alias is retained, but SIR is collision-free from stdlib.result.and_then.",
+      "owner_surface": "Ch8 §8.3 / §8.4",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.option.flat_map",
+      "semantic_ir_name": "stdlib.option.flat_map",
+      "legacy_sir": null,
+      "aliases": [
+        {
+          "kind": "source_alias",
+          "name": "flat_map"
+        }
+      ],
+      "category": "option",
+      "lifecycle_status": "production-implemented",
+      "semantic_stability": "design-locked",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "total when the lambda is total and returns Option[U]",
+      "type_params": [
+        "T",
+        "U"
+      ],
+      "input_signature": [
+        "Option[T]",
+        "(T) -> Option[U]"
+      ],
+      "output_signature": "Option[U]",
+      "diagnostics": [
+        "OOF-TY0",
+        "OOF-VM-OPTION-CARRIER"
+      ],
+      "failure_behavior": "None bypasses the lambda; Some(v) returns fn(v); wrong input/output carriers fail closed.",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "LANG-OPTION-RUNTIME-CARRIER-CONVERGENCE-P2 — static family selection + nominal carrier"
+      ],
+      "examples": [
+        "flat_map(some(1), x -> some(x)) -> some(1)"
+      ],
+      "compatibility_note": "Option flat_map is statically distinct from stdlib.collection.flat_map; Result flat_map remains refused.",
+      "owner_surface": "Ch8 §8.3 / §8.4",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.option.is_none",
+      "semantic_ir_name": "stdlib.option.is_none",
+      "legacy_sir": null,
+      "aliases": [
+        {
+          "kind": "source_alias",
+          "name": "is_none"
+        }
+      ],
+      "category": "option",
+      "lifecycle_status": "production-implemented",
+      "semantic_stability": "design-locked",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "total for a well-typed nominal Option",
+      "type_params": [
+        "T"
+      ],
+      "input_signature": [
+        "Option[T]"
+      ],
+      "output_signature": "Bool",
+      "diagnostics": [
+        "OOF-TY0",
+        "OOF-VM-OPTION-CARRIER"
+      ],
+      "failure_behavior": "None returns true; Some(_) returns false; any non-Option carrier fails closed.",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "LANG-OPTION-RUNTIME-CARRIER-CONVERGENCE-P2 — static family selection + nominal carrier"
+      ],
+      "examples": [
+        "is_none(none()) -> true"
+      ],
+      "compatibility_note": "Only the nominal Option carrier is inspected; nil/raw values and Record keys are never predicates.",
+      "owner_surface": "Ch8 §8.3 / §8.4",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.option.is_some",
+      "semantic_ir_name": "stdlib.option.is_some",
+      "legacy_sir": null,
+      "aliases": [
+        {
+          "kind": "source_alias",
+          "name": "is_some"
+        }
+      ],
+      "category": "option",
+      "lifecycle_status": "production-implemented",
+      "semantic_stability": "design-locked",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "total for a well-typed nominal Option",
+      "type_params": [
+        "T"
+      ],
+      "input_signature": [
+        "Option[T]"
+      ],
+      "output_signature": "Bool",
+      "diagnostics": [
+        "OOF-TY0",
+        "OOF-VM-OPTION-CARRIER"
+      ],
+      "failure_behavior": "Some(_) returns true; None returns false; any non-Option carrier fails closed.",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "LANG-OPTION-RUNTIME-CARRIER-CONVERGENCE-P2 — static family selection + nominal carrier"
+      ],
+      "examples": [
+        "is_some(some(1)) -> true"
+      ],
+      "compatibility_note": "Only the nominal Option carrier is inspected; nil/raw values and Record keys are never predicates.",
+      "owner_surface": "Ch8 §8.3 / §8.4",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.option.map",
+      "semantic_ir_name": "stdlib.option.map",
+      "legacy_sir": null,
+      "aliases": [
+        {
+          "kind": "source_alias",
+          "name": "map"
+        }
+      ],
+      "category": "option",
+      "lifecycle_status": "production-implemented",
+      "semantic_stability": "design-locked",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "total when the lambda is total",
+      "type_params": [
+        "T",
+        "U"
+      ],
+      "input_signature": [
+        "Option[T]",
+        "(T) -> U"
+      ],
+      "output_signature": "Option[U]",
+      "diagnostics": [
+        "OOF-TY0",
+        "OOF-VM-OPTION-CARRIER"
+      ],
+      "failure_behavior": "None bypasses the lambda; Some(v) returns Some(fn(v)); wrong carriers fail closed.",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "LANG-OPTION-RUNTIME-CARRIER-CONVERGENCE-P2 — static family selection + nominal carrier"
+      ],
+      "examples": [
+        "map(some(1), x -> x) -> some(1)"
+      ],
+      "compatibility_note": "The compiler selects Option by static subject type; Collection and Result map have distinct SIR identities.",
+      "owner_surface": "Ch8 §8.3 / §8.4",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.option.unwrap_or",
+      "semantic_ir_name": "unwrap_or",
+      "legacy_sir": null,
+      "aliases": [
+        {
+          "kind": "source_alias",
+          "name": "unwrap_or"
+        }
+      ],
+      "category": "option",
+      "lifecycle_status": "production-implemented",
+      "semantic_stability": "design-locked",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "total for a well-typed nominal Option",
+      "type_params": [
+        "V"
+      ],
+      "input_signature": [
+        "Option[V]",
+        "V"
+      ],
+      "output_signature": "V",
+      "diagnostics": [
+        "OOF-VM-OPTION-CARRIER"
+      ],
+      "failure_behavior": "Some(v) returns v; None returns the fallback. A non-Option runtime carrier fails closed with OOF-VM-OPTION-CARRIER and no payload or complete host object is echoed.",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "LANG-SUMTYPE-CONSTRUCT-MATCH-P3 — dual-toolchain source typing",
+        "LANG-OPTION-RUNTIME-CARRIER-CONVERGENCE-P2 — nominal carrier consumer convergence"
+      ],
+      "examples": [
+        "unwrap_or(some(42), 0) -> 42",
+        "unwrap_or(none(), 0) -> 0"
+      ],
+      "compatibility_note": "The Option SIR spelling remains `unwrap_or`; a statically resolved Result subject emits the separate `result_unwrap_or` identity. Runtime dispatch never guesses from Record keys.",
+      "owner_surface": "Ch8 §8.3",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.result.and_then",
+      "semantic_ir_name": "stdlib.result.and_then",
+      "legacy_sir": null,
+      "aliases": [
+        {
+          "kind": "source_alias",
+          "name": "and_then"
+        }
+      ],
+      "category": "result",
+      "lifecycle_status": "production-implemented",
+      "semantic_stability": "design-locked",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "total when the lambda is total and returns Result[U,E]",
+      "type_params": [
+        "T",
+        "E",
+        "U"
+      ],
+      "input_signature": [
+        "Result[T,E]",
+        "(T) -> Result[U,E]"
+      ],
+      "output_signature": "Result[U,E]",
+      "diagnostics": [
+        "OOF-TY0"
+      ],
+      "failure_behavior": "Ok(v) evaluates the lambda; Err(e) is preserved in the same error family.",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "LANG-OPTION-RUNTIME-CARRIER-CONVERGENCE-P2 — static family selection + nominal carrier"
+      ],
+      "examples": [
+        "and_then(ok(1), x -> ok(x)) -> ok(1)"
+      ],
+      "compatibility_note": "Statically distinct from stdlib.option.and_then; Result flat_map remains refused.",
+      "owner_surface": "Ch8 §8.3 / §8.4",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.result.map",
+      "semantic_ir_name": "stdlib.result.map",
+      "legacy_sir": null,
+      "aliases": [
+        {
+          "kind": "source_alias",
+          "name": "map"
+        }
+      ],
+      "category": "result",
+      "lifecycle_status": "production-implemented",
+      "semantic_stability": "design-locked",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "total when the lambda is total",
+      "type_params": [
+        "T",
+        "E",
+        "U"
+      ],
+      "input_signature": [
+        "Result[T,E]",
+        "(T) -> U"
+      ],
+      "output_signature": "Result[U,E]",
+      "diagnostics": [
+        "OOF-TY0"
+      ],
+      "failure_behavior": "Ok(v) maps its payload; Err(e) is preserved; no Record-shape dispatch.",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "LANG-OPTION-RUNTIME-CARRIER-CONVERGENCE-P2 — static family selection + nominal carrier"
+      ],
+      "examples": [
+        "map(ok(1), x -> x) -> ok(1)"
+      ],
+      "compatibility_note": "Ch8 Result map is statically selected and no longer shares a bare runtime owner with Option/Collection.",
+      "owner_surface": "Ch8 §8.3 / §8.4",
+      "entry_digest": null
+    },
+    {
+      "canonical_name": "stdlib.result.unwrap_or",
+      "semantic_ir_name": "result_unwrap_or",
+      "legacy_sir": null,
+      "aliases": [
+        {
+          "kind": "source_alias",
+          "name": "unwrap_or"
+        }
+      ],
+      "category": "result",
+      "lifecycle_status": "production-implemented",
+      "semantic_stability": "design-locked",
+      "lowering_status": "dual-toolchain",
+      "compatibility_status": "pre-v1-none",
+      "fragment_class": "core",
+      "purity": "pure",
+      "deterministic": true,
+      "totality": "total for a well-typed Result",
+      "type_params": [
+        "T",
+        "E"
+      ],
+      "input_signature": [
+        "Result[T,E]",
+        "T"
+      ],
+      "output_signature": "T",
+      "diagnostics": [
+        "OOF-TY0"
+      ],
+      "failure_behavior": "Ok(v) returns v; Err(_) returns the fallback; arbitrary Records are not Result.",
+      "authority_surface": "none",
+      "proof_lineage": [
+        "LANG-OPTION-RUNTIME-CARRIER-CONVERGENCE-P2 — static family selection + nominal carrier"
+      ],
+      "examples": [
+        "unwrap_or(ok(1), 0) -> 1"
+      ],
+      "compatibility_note": "The compiler emits result_unwrap_or; the Option subject emits unwrap_or.",
+      "owner_surface": "Ch8 §8.3 / §8.4",
       "entry_digest": null
     },
     {
@@ -944,13 +1338,14 @@
         "Ch8 §8.2 collection operations",
         "LANG-STDLIB-COLLECTION-FIRST-LAST-OPTION-P1 readiness proof 54/54 PASS",
         "LANG-STDLIB-COLLECTION-FIRST-LAST-P2 Ruby parity proof",
-        "Rust TC stdlib.collection.first existing behavior"
+        "Rust TC stdlib.collection.first existing behavior",
+        "LANG-OPTION-RUNTIME-CARRIER-CONVERGENCE-P2 — nominal producer convergence"
       ],
       "examples": [
         "first([1, 2, 3]) -> Some(1)",
         "first([]) -> None"
       ],
-      "compatibility_note": "Ruby P2 mirrors current Rust TC behavior: first(Collection[T]) returns Option[T]; malformed, missing, or non-inferable first argument falls back to Option[Unknown] without adding OOF-COL diagnostics. Source match on Option remains deferred; callers can read ergonomically only through dual-clean or_else until LANG-SUMTYPE-CONSTRUCT-MATCH-P3+.",
+      "compatibility_note": "first(Collection[T]) returns nominal Option[T] in direct and nested execution. Empty returns None and a present element returns Some(value); sealed Option match and fallback consumers use the same carrier.",
       "owner_surface": "LANG-STDLIB-COLLECTION-FIRST-LAST-P2",
       "entry_digest": null
     },
@@ -987,13 +1382,14 @@
         "Ch8 §8.2 collection operations",
         "LANG-STDLIB-COLLECTION-FIRST-LAST-OPTION-P1 readiness proof 54/54 PASS",
         "LANG-STDLIB-COLLECTION-FIRST-LAST-P2 Ruby parity proof",
-        "Rust TC stdlib.collection.last existing behavior"
+        "Rust TC stdlib.collection.last existing behavior",
+        "LANG-OPTION-RUNTIME-CARRIER-CONVERGENCE-P2 — nominal producer convergence"
       ],
       "examples": [
         "last([1, 2, 3]) -> Some(3)",
         "last([]) -> None"
       ],
-      "compatibility_note": "Ruby P2 mirrors current Rust TC behavior: last(Collection[T]) returns Option[T]; malformed, missing, or non-inferable first argument falls back to Option[Unknown] without adding OOF-COL diagnostics. Source match on Option remains deferred; callers can read ergonomically only through dual-clean or_else until LANG-SUMTYPE-CONSTRUCT-MATCH-P3+.",
+      "compatibility_note": "last(Collection[T]) returns nominal Option[T] in direct and nested execution. Empty returns None and a present element returns Some(value); sealed Option match and fallback consumers use the same carrier.",
       "owner_surface": "LANG-STDLIB-COLLECTION-FIRST-LAST-P2",
       "entry_digest": null
     },
@@ -1036,7 +1432,8 @@
         "LANG-STDLIB-COLLECTION-AT-PROP-P1 admission packet — at (not nth), Option[T], negative/out-of-range/empty -> None",
         "LANG-STDLIB-COLLECTION-AT-RUBY-P3 canon Ruby typechecker.rb — infer_collection_at_call, OOF-COL10 (proof 19/19 PASS)",
         "LANG-STDLIB-COLLECTION-AT-RUST-VM-P4 lab Rust parity + VM direct array index, eval_ast<->bytecode parity (compiler 8/8, VM 8/8)",
-        "LANG-STDLIB-COLLECTION-AT-INVENTORY-P5 inventory integration + digest recompute"
+        "LANG-STDLIB-COLLECTION-AT-INVENTORY-P5 inventory integration + digest recompute",
+        "LANG-OPTION-RUNTIME-CARRIER-CONVERGENCE-P2 — nominal producer convergence"
       ],
       "examples": [
         "at([10, 20, 30], 1) -> Some(20)",
@@ -1044,7 +1441,7 @@
         "at([10, 20, 30], -1) -> None",
         "at([], 0) -> None"
       ],
-      "compatibility_note": "Zero-based, total indexed reader — the generalization of first/last. Element type is extracted from Collection[T] and wrapped Option[T]; Collection[Unknown]/non-inferable first arg -> Option[Unknown] (permissive like first/last). Negative index and out-of-range return None (NOT from-end aliasing); empty collection returns None. OOF-COL1 (arity), OOF-COL2 (non-Collection first arg), OOF-COL10 (index not Integer) are compile-time; None is the runtime 'reject'. Like first/last, the lab Rust toolchain emits the bare SIR name `at` while canon Ruby emits qualified stdlib.collection.at; the VM resolves both. Runtime uses the same nullable-Nil Option representation as first/last (sealed Some/None normalization is a separate authorized card). Consume via or_else or sealed match; no source Some/None syntax.",
+      "compatibility_note": "Zero-based total reader. Negative, out-of-range, and empty cases return nominal None; an in-range element returns nominal Some(value). Direct/eval-AST and sealed match share the same first_class_v1 carrier.",
       "owner_surface": "LANG-STDLIB-COLLECTION-AT-PROP-P1",
       "entry_digest": null
     },
@@ -1232,16 +1629,18 @@
         "OOF-COL2",
         "OOF-COL3"
       ],
-      "failure_behavior": "compile-time diagnostics for arity, first argument, and predicate shape",
+      "failure_behavior": "No match or an empty collection returns nominal None; the first match returns nominal Some(value). Arity, collection, and predicate-shape errors remain compile-time diagnostics.",
       "authority_surface": "none",
       "proof_lineage": [
         "LANG-STDLIB-COLLECTION-PREDICATE-OPS-P2",
-        "LANG-STDLIB-COLLECTION-PREDICATE-OPS-P3"
+        "LANG-STDLIB-COLLECTION-PREDICATE-OPS-P3",
+        "LANG-OPTION-RUNTIME-CARRIER-CONVERGENCE-P2 — nominal producer convergence"
       ],
       "examples": [
-        "find(xs, x -> x > 0) -> Option[T]"
+        "find([1, 2], x -> x > 1) -> Some(2)",
+        "find([1, 2], x -> x > 9) -> None"
       ],
-      "compatibility_note": "Predicate must return Bool; OOF-COL3 raised otherwise. Unknown predicate bodies are permissive. Empty or no-match runtime behavior returns None through the existing Option surface.",
+      "compatibility_note": "The predicate must return Bool. Direct and nested HOF execution return the same first_class_v1 carrier; no Record or host-null shape selects Option.",
       "owner_surface": "stdlib.collection",
       "entry_digest": null
     },
@@ -1901,12 +2300,13 @@
       "diagnostics": [
         "OOF-TY0"
       ],
-      "failure_behavior": "total; malformed or overflowing input returns None (runtime Nil) — never a runtime error",
+      "failure_behavior": "Total; malformed or overflowing input returns nominal None and a valid base-10 integer returns nominal Some(value), never a runtime error.",
       "authority_surface": "none",
       "proof_lineage": [
         "LANG-STDLIB-NUMERIC-TEXT-CONVERSION-P1 Ruby NUMERIC_STDLIB_FNS dispatch + infer_numeric_call",
         "LANG-STDLIB-NUMERIC-TEXT-CONVERSION-P1 Rust TC stdlib.integer.parse_int arm + emitter qualification",
-        "LANG-STDLIB-NUMERIC-TEXT-CONVERSION-P1 Rust VM eval_integer_call (bytecode OP_CALL + eval_ast parity)"
+        "LANG-STDLIB-NUMERIC-TEXT-CONVERSION-P1 Rust VM eval_integer_call (bytecode OP_CALL + eval_ast parity)",
+        "LANG-OPTION-RUNTIME-CARRIER-CONVERGENCE-P2 — nominal producer convergence"
       ],
       "examples": [
         "parse_int(\"42\") -> Some(42)",
@@ -1914,7 +2314,7 @@
         "parse_int(\"\") -> None",
         "parse_int(\"+1\") -> None"
       ],
-      "compatibility_note": "Base-10 only. Optional single leading '-' iff followed by >=1 digit; no leading '+', no whitespace, no other base. Overflow is fail-closed None. Runtime nullable-Option convention: None -> Nil, Some(v) -> Integer(v). Recognized source aliases: bare parse_int and stdlib.numeric.parse_int; canonical SIR name stdlib.integer.parse_int (consistent with stdlib.integer.gt/lt/add).",
+      "compatibility_note": "Base-10 only: one optional leading '-' followed by at least one digit; no leading '+', whitespace, or alternate base. Direct/eval-AST return first_class_v1 Some/None. Bare parse_int and stdlib.numeric.parse_int resolve to canonical stdlib.integer.parse_int.",
       "owner_surface": "LANG-STDLIB-NUMERIC-TEXT-CONVERSION-P1",
       "entry_digest": null
     },
@@ -2011,40 +2411,6 @@
       ],
       "compatibility_note": "TRUNCATED remainder (Rust `%`): the result takes the sign of the DIVIDEND. Divisor zero is a fail-closed operational error (v0), not a panic. Integer/Integer only. Distinct from stdlib.math.mod, which is the Euclidean (always-non-negative) remainder; modulo is truncated. Recognized source aliases: bare modulo and stdlib.numeric.modulo; canonical SIR name stdlib.integer.modulo.",
       "owner_surface": "LANG-STDLIB-NUMERIC-TEXT-CONVERSION-P1",
-      "entry_digest": null
-    },
-    {
-      "canonical_name": "stdlib.option.wrap",
-      "semantic_ir_name": "stdlib.option.wrap",
-      "legacy_sir": null,
-      "aliases": [],
-      "category": "option",
-      "lifecycle_status": "orphaned",
-      "semantic_stability": "sketch",
-      "lowering_status": "single-toolchain",
-      "compatibility_status": "pre-v1-none",
-      "fragment_class": "core",
-      "purity": "pure",
-      "deterministic": true,
-      "totality": "total",
-      "type_params": [
-        "V"
-      ],
-      "input_signature": [
-        "V"
-      ],
-      "output_signature": "Option[V]",
-      "diagnostics": [],
-      "failure_behavior": "none",
-      "authority_surface": "none",
-      "proof_lineage": [
-        "Rust VM dispatch only; no Ruby TC counterpart"
-      ],
-      "examples": [
-        "stdlib.option.wrap(42) -> some(42)"
-      ],
-      "compatibility_note": "Rust VM-only; no Ruby TC dispatch. Canon names Option constructors as some/none (Ch8), not wrap. No Ruby dispatch found. Option category is READY-for-reconciliation (LAB-STDLIB-FOUNDATION-P1). Triage route required before promotion.",
-      "owner_surface": "orphan",
       "entry_digest": null
     },
     {
@@ -2922,12 +3288,13 @@
       "proof_lineage": [
         "LANG-STDLIB-TEXT-ESCAPE-DELIMITED-P2",
         "TEXT_STDLIB_FNS ruby dispatch",
-        "Rust VM eval_text_call"
+        "Rust VM eval_text_call",
+        "LANG-OPTION-RUNTIME-CARRIER-CONVERGENCE-P2 — nominal producer convergence"
       ],
       "examples": [
         "decode_delimited(\"a%@b@c\", \"@\", \"%\") -> Some([\"a@b\", \"c\"]); decode_delimited(\"x%\", \"@\", \"%\") -> None"
       ],
-      "compatibility_note": null,
+      "compatibility_note": "Successful decoding returns nominal Some(Collection[Text]); dangling or unknown escape returns nominal None. Direct and eval-AST use the same first_class_v1 carrier.",
       "owner_surface": "LANG-STDLIB-TEXT-ESCAPE-DELIMITED-P2",
       "entry_digest": null
     },
@@ -2999,14 +3366,15 @@
       "authority_surface": "none",
       "proof_lineage": [
         "LANG-STDLIB-WIRE-FRAME-CODEC-P2 canon Ruby TEXT_STDLIB_FNS (decode_frame => Text -> Option[FrameDecode])",
-        "LANG-STDLIB-WIRE-FRAME-CODEC-P2 Rust emitter (TEXT_STDLIB_OPS) + typechecker + VM eval_text_call"
+        "LANG-STDLIB-WIRE-FRAME-CODEC-P2 Rust emitter (TEXT_STDLIB_OPS) + typechecker + VM eval_text_call",
+        "LANG-OPTION-RUNTIME-CARRIER-CONVERGENCE-P2 — nominal producer convergence"
       ],
       "examples": [
         "decode_frame(\"12:beta|;#~%mid\") -> Some({payload: \"beta|;#~%mid\", rest: \"\"})",
         "decode_frame(\"3:abc4:wxyz\") -> Some({payload: \"abc\", rest: \"4:wxyz\"})  # frame stream via rest",
         "decode_frame(\"9:hi\") -> None  # short header (claims 9 runes, 2 present)"
       ],
-      "compatibility_note": "FrameDecode is a synthetic record { payload: Text, rest: Text } (like Pair from zip — no type_shapes entry, resolved via a field-access special-case). `rest` enables decoding a stream of concatenated frames by re-decoding it. Additive; does NOT change decode_delimited.",
+      "compatibility_note": "FrameDecode is { payload: Text, rest: Text }. A valid frame returns nominal Some(FrameDecode); malformed or short input returns nominal None. Direct and eval-AST use the same first_class_v1 carrier.",
       "owner_surface": "LANG-STDLIB-WIRE-FRAME-CODEC-P2",
       "entry_digest": null
     },

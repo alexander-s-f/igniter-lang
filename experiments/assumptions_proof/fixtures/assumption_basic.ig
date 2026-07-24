@@ -1,5 +1,9 @@
 module Risk.Scoring
 
+type Signal {
+  value: Integer
+}
+
 assumptions {
   assumption homophily {
     kind :heuristic

@@ -1,67 +1,63 @@
 {
-  "program_id": "prog_polymorphic_add_semanticir_proof",
-  "artifact_hash": "sha256:26336b7f5103859c4ce6f06981c7323770e4e4ca64dbe019b53b761521993600",
-  "language_version": "0.1.0",
-  "grammar_version": "polymorphic-v0",
-  "schema_version": "1.0.0",
-  "axiom_descriptor_ref": "1.0.0",
-  "format": "igapp_dir",
+  "artifact_hash": "sha256:7a6604deabbaee13b23274a5b4becc9747f902e1668aa25901801c26bf6a72f8",
+  "assembler": "igapp-assembler-proof-stage1-v0",
+  "compilation_report_ref": "compilation_report/49ae94eca6a4b50d",
   "compiled_at": "2026-05-06T00:00:00Z",
-  "source": {
-    "source_path": "igniter-lang/source/polymorphic_add.ig",
-    "parsed_program_ref": "igniter-lang/source/polymorphic_add.parsed_program.expected.json",
-    "source_hash": "sha256:49ae94eca6a4b50da2910af861d204d7a778a6c298dca8948ff60e79c249ee34"
-  },
-  "semantic_ir_ref": "semantic_ir.json",
-  "specialization_manifest_ref": "specialization_manifest.json",
-  "classified_metadata_ref": "classified_ast.json",
-  "contracts": [
-    "Lang.Examples.PolymorphicAdd.Add[Integer]",
-    "Lang.Examples.PolymorphicAdd.Add[Float]"
-  ],
-  "contract_files": {
-    "Lang.Examples.PolymorphicAdd.Add[Integer]": "contracts/add_integer.json",
-    "Lang.Examples.PolymorphicAdd.Add[Float]": "contracts/add_float.json"
-  },
-  "specializations": [
-    {
-      "contract": "Add",
-      "type_args": {
-        "T": "Integer"
-      },
-      "requested_by": "build",
-      "emitted_contract_id": "Lang.Examples.PolymorphicAdd.Add[Integer]"
+  "contract_index": {
+    "Lang.Examples.PolymorphicAdd.Add[Float]": {
+      "contract_path": "contracts/lang.examples.polymorphic_add.add[float].json",
+      "contract_ref": "contract/Lang.Examples.PolymorphicAdd.Add[Float]/sha256:6942ee59f77f6dcef8ca35f7",
+      "fragment_class": "core"
     },
-    {
-      "contract": "Add",
-      "type_args": {
-        "T": "Float"
-      },
-      "requested_by": "build",
-      "emitted_contract_id": "Lang.Examples.PolymorphicAdd.Add[Float]"
+    "Lang.Examples.PolymorphicAdd.Add[Integer]": {
+      "contract_path": "contracts/lang.examples.polymorphic_add.add[integer].json",
+      "contract_ref": "contract/Lang.Examples.PolymorphicAdd.Add[Integer]/sha256:08d1b8abcc8a89e9d782abc9",
+      "fragment_class": "core"
     }
+  },
+  "contract_refs": {
+    "Lang.Examples.PolymorphicAdd.Add[Float]": "contract/Lang.Examples.PolymorphicAdd.Add[Float]/sha256:6942ee59f77f6dcef8ca35f7",
+    "Lang.Examples.PolymorphicAdd.Add[Integer]": "contract/Lang.Examples.PolymorphicAdd.Add[Integer]/sha256:08d1b8abcc8a89e9d782abc9"
+  },
+  "contracts": [
+    "Lang.Examples.PolymorphicAdd.Add[Float]",
+    "Lang.Examples.PolymorphicAdd.Add[Integer]"
   ],
+  "diagnostics": [],
+  "format": "igapp_dir",
+  "format_version": "0.1.0",
+  "fragment_class": "core",
+  "fragment_summary": {
+    "fragment_classes": [
+      "core"
+    ],
+    "max_fragment_class": "core",
+    "precedence_high_to_low": [
+      "oof",
+      "temporal",
+      "stream",
+      "escape",
+      "core"
+    ]
+  },
+  "grammar_version": "0.1.0",
+  "kind": "igapp_manifest",
+  "language_version": "0.1.0",
   "metadata_only_templates": [
     "Lang.Examples.PolymorphicAdd.Add"
   ],
-  "fragment_class": "core",
+  "option_carrier": "first_class_v1",
+  "program_id": "semanticir/49ae94eca6a4b50d",
   "schema_descriptor": {
-    "trait_bounds": [
-      {
-        "param": "T",
-        "constraint": "Additive",
-        "resolved_as": "Integer",
-        "emitted_contract_id": "Lang.Examples.PolymorphicAdd.Add[Integer]"
-      },
-      {
-        "param": "T",
-        "constraint": "Additive",
-        "resolved_as": "Float",
-        "emitted_contract_id": "Lang.Examples.PolymorphicAdd.Add[Float]"
-      }
-    ],
-    "migrations": []
+    "migrations": [],
+    "trait_bounds": []
   },
-  "warnings": [],
-  "diagnostics": []
+  "schema_version": "0.1.0",
+  "semantic_hash": "sha256:a71c591d81b5ec058239b25d3ec52a388be5898c6f1217b9659dca883b6c86e8",
+  "semantic_hash_law": "igniter.semantic-hash.v2",
+  "semantic_ir_ref": "semanticir/49ae94eca6a4b50d",
+  "source_hash": "sha256:49ae94eca6a4b50da2910af861d204d7a778a6c298dca8948ff60e79c249ee34",
+  "source_path": "source/polymorphic_add.ig",
+  "specialization_manifest_ref": "specialization_manifest.json",
+  "warnings": []
 }

@@ -1,9 +1,9 @@
 {
   "kind": "compilation_report",
   "format_version": "0.1.0",
-  "program_id": "compilation_report/0062b2632b2656b2",
+  "program_id": "compilation_report/3e87525c00b99e80",
   "grammar_version": "assumptions-v0",
-  "source_hash": "sha256:0062b2632b2656b2c910b1b64eebd4c472f1f0ee074a7d303a6f93fde1e3da40",
+  "source_hash": "sha256:3e87525c00b99e80f638a10d819fd9739141014d86af17e7f3408856bbb709d2",
   "source_path": "experiments/assumptions_proof/fixtures/epistemic_only_pure.ig",
   "pass_result": "ok",
   "stages": {
@@ -13,5 +13,5 @@
     "emit": "ok"
   },
   "diagnostics": [],
-  "semantic_ir_ref": "semanticir/0062b2632b2656b2"
+  "semantic_ir_ref": "semanticir/3e87525c00b99e80"
 }

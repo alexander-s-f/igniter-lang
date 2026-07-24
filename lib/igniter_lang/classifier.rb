@@ -247,7 +247,13 @@ module IgniterLang
           fragment = temporal_type?(node["type_annotation"]) ? "temporal" : "escape"
           symbol_fragments[node.fetch("name")] = fragment == "temporal" ? "core" : "escape"
           symbol_kinds[node.fetch("name")] = fragment == "temporal" ? "temporal_read" : "read"
-          declarations << classified_decl(node, fragment, [], []).merge(value_fragment_metadata(fragment, node["type_annotation"]))
+          read_decl =
+            classified_decl(node, fragment, [], [])
+              .merge(value_fragment_metadata(fragment, node["type_annotation"]))
+          %w[from lifecycle].each do |key|
+            read_decl[key] = node.fetch(key) if node.key?(key)
+          end
+          declarations << read_decl
         when "window"
           window_declarations << node
           declarations << classified_decl(node.merge("name" => node.fetch("label", "_window")), "stream", [], [])

@@ -1,39 +1,141 @@
 {
-  "contract_id": "add",
-  "name": "Add",
-  "fragment_class": "core",
-  "escape_set": [],
-  "lifecycle": "session",
-  "input_ports": [
-    { "name": "a", "type_tag": "Integer", "lifecycle": "local", "required": true },
-    { "name": "b", "type_tag": "Integer", "lifecycle": "local", "required": true }
-  ],
-  "output_ports": [
-    { "name": "sum", "type_tag": "Integer", "lifecycle": "session", "required": true }
-  ],
+  "artifact_hash": "sha256:68f0e8145e051faa2672f37d9ca72c908573239ba37c4d5a1b6c0c368e65077d",
+  "capabilities": [],
   "compute_nodes": [
     {
-      "node_id": "node_sum",
-      "name": "sum",
-      "kind": "compute",
+      "dependencies": [],
+      "expr": {
+        "body": {
+          "kind": "literal",
+          "value": true
+        },
+        "kind": "option_carrier_guard_v1",
+        "resolved_type": {
+          "name": "Bool",
+          "params": []
+        },
+        "version": "first_class_v1"
+      },
+      "expression": {
+        "body": {
+          "kind": "literal",
+          "value": true
+        },
+        "kind": "option_carrier_guard_v1",
+        "resolved_type": {
+          "name": "Bool",
+          "params": []
+        },
+        "version": "first_class_v1"
+      },
       "fragment_class": "core",
-      "type_tag": "Integer",
+      "kind": "compute",
       "lifecycle": "session",
+      "name": "__option_carrier_guard_v1",
+      "node_id": "node___option_carrier_guard_v1",
       "obs_kind": "value_observation",
-      "dependencies": ["input:a", "input:b"],
+      "type": {
+        "name": "Bool",
+        "params": []
+      },
+      "type_tag": "Bool"
+    },
+    {
+      "dependencies": [
+        "input:a",
+        "input:b"
+      ],
+      "expr": {
+        "kind": "apply",
+        "operands": [
+          {
+            "kind": "ref",
+            "name": "a"
+          },
+          {
+            "kind": "ref",
+            "name": "b"
+          }
+        ],
+        "operator": "stdlib.integer.add"
+      },
       "expression": {
         "kind": "apply",
-        "operator": "stdlib.integer.add",
         "operands": [
-          { "kind": "ref", "name": "a" },
-          { "kind": "ref", "name": "b" }
-        ]
-      }
+          {
+            "kind": "ref",
+            "name": "a"
+          },
+          {
+            "kind": "ref",
+            "name": "b"
+          }
+        ],
+        "operator": "stdlib.integer.add"
+      },
+      "fragment_class": "core",
+      "kind": "compute",
+      "lifecycle": "session",
+      "name": "sum",
+      "node_id": "node_sum",
+      "obs_kind": "value_observation",
+      "type": {
+        "name": "Integer",
+        "params": []
+      },
+      "type_tag": "Integer"
     }
   ],
+  "contract_id": "Add",
+  "effects": [],
+  "escape_set": [],
+  "fragment_class": "core",
+  "input_ports": [
+    {
+      "lifecycle": "local",
+      "name": "a",
+      "required": true,
+      "type": {
+        "name": "Integer",
+        "params": []
+      },
+      "type_tag": "Integer"
+    },
+    {
+      "lifecycle": "local",
+      "name": "b",
+      "required": true,
+      "type": {
+        "name": "Integer",
+        "params": []
+      },
+      "type_tag": "Integer"
+    }
+  ],
+  "lifecycle": "session",
+  "modifier": "pure",
+  "name": "Add",
+  "option_carrier": "first_class_v1",
+  "output_ports": [
+    {
+      "lifecycle": "session",
+      "name": "sum",
+      "required": true,
+      "type": {
+        "name": "Integer",
+        "params": []
+      },
+      "type_tag": "Integer"
+    }
+  ],
+  "source_contract_ref": "contract/Add/sha256:e0677d9cfcafa1e7f5057123",
   "type_signature": {
-    "inputs":  { "a": "Integer", "b": "Integer" },
-    "outputs": { "sum": "Integer" }
-  },
-  "artifact_hash": "sha256:4e2a1b9c7f3d5086e1a4c2b8f9d7e3a5c1b4f2e8a9d7c3b5f1e2a4d8c7b9f3"
+    "inputs": {
+      "a": "Integer",
+      "b": "Integer"
+    },
+    "outputs": {
+      "sum": "Integer"
+    }
+  }
 }

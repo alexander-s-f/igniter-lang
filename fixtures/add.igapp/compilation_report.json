@@ -1,0 +1,17 @@
+{
+  "diagnostics": [],
+  "format_version": "0.1.0",
+  "grammar_version": "0.1.0",
+  "kind": "compilation_report",
+  "pass_result": "ok",
+  "program_id": "compilation_report/fe9a2479eb3f4d5d",
+  "semantic_ir_ref": "semanticir/fe9a2479eb3f4d5d",
+  "source_hash": "sha256:fe9a2479eb3f4d5d5b99e5263f691f0d4d2efb38f69ce0e082be71eca97773e1",
+  "source_path": "source/add.ig",
+  "stages": {
+    "classify": "ok",
+    "emit": "ok",
+    "parse": "ok",
+    "typecheck": "ok"
+  }
+}

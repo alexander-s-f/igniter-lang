@@ -1,16 +1,18 @@
 {
   "kind": "semantic_ir_program",
   "format_version": "0.1.0",
-  "program_id": "semanticir/c8c6bf2061c23bcd",
+  "option_carrier": "first_class_v1",
+  "program_id": "semanticir/981abc06cc02f1da",
   "grammar_version": "assumptions-v0",
-  "source_hash": "sha256:c8c6bf2061c23bcdbc5ee47039c0545372603e7689400bd9aaccefec2ce26fd8",
+  "source_hash": "sha256:981abc06cc02f1daf2e898970a96ff4462167a77816d04e562c29dc91b023188",
   "source_path": "experiments/assumptions_proof/fixtures/assumption_basic.ig",
   "module": "Risk.Scoring",
-  "compilation_report_ref": "compilation_report/c8c6bf2061c23bcd",
+  "compilation_report_ref": "compilation_report/981abc06cc02f1da",
   "contracts": [
     {
       "kind": "contract_ir",
-      "contract_ref": "contract/ScoreInteraction/sha256:50946554f742b4727a202b6a",
+      "option_carrier": "first_class_v1",
+      "contract_ref": "contract/ScoreInteraction/sha256:bdd7978cd06bda5edfd80766",
       "contract_name": "ScoreInteraction",
       "modifier": "observed",
       "specialization_of": null,
@@ -50,6 +52,28 @@
         }
       ],
       "nodes": [
+        {
+          "kind": "compute",
+          "name": "__option_carrier_guard_v1",
+          "expr": {
+            "kind": "option_carrier_guard_v1",
+            "version": "first_class_v1",
+            "body": {
+              "kind": "literal",
+              "value": true
+            },
+            "resolved_type": {
+              "name": "Bool",
+              "params": []
+            }
+          },
+          "type": {
+            "name": "Bool",
+            "params": []
+          },
+          "deps": [],
+          "fragment": "core"
+        },
         {
           "kind": "assumption_ref_node",
           "name": "homophily",
@@ -105,6 +129,21 @@
         "strength": 0.7
       },
       "declared_in_module": "Risk.Scoring"
+    }
+  ],
+  "type_declarations": [
+    {
+      "kind": "type_decl",
+      "name": "Signal",
+      "fields": [
+        {
+          "name": "value",
+          "type": {
+            "name": "Integer",
+            "params": []
+          }
+        }
+      ]
     }
   ]
 }

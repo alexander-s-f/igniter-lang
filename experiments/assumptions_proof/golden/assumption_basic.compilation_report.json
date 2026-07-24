@@ -1,9 +1,9 @@
 {
   "kind": "compilation_report",
   "format_version": "0.1.0",
-  "program_id": "compilation_report/c8c6bf2061c23bcd",
+  "program_id": "compilation_report/981abc06cc02f1da",
   "grammar_version": "assumptions-v0",
-  "source_hash": "sha256:c8c6bf2061c23bcdbc5ee47039c0545372603e7689400bd9aaccefec2ce26fd8",
+  "source_hash": "sha256:981abc06cc02f1daf2e898970a96ff4462167a77816d04e562c29dc91b023188",
   "source_path": "experiments/assumptions_proof/fixtures/assumption_basic.ig",
   "pass_result": "ok",
   "stages": {
@@ -13,5 +13,5 @@
     "emit": "ok"
   },
   "diagnostics": [],
-  "semantic_ir_ref": "semanticir/c8c6bf2061c23bcd"
+  "semantic_ir_ref": "semanticir/981abc06cc02f1da"
 }

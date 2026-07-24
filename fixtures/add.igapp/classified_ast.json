@@ -1,13 +1,18 @@
 {
+  "compilation_report_ref": "compilation_report/fe9a2479eb3f4d5d",
+  "contracts": [
+    "Add"
+  ],
+  "format_version": "0.1.0",
   "fragment_class": "core",
-  "pass0_version": "0.1.0",
-  "contracts": ["Add"],
+  "kind": "classified_program",
+  "loadable_contracts": [
+    "Add"
+  ],
   "oof_count": 0,
-  "oof_nodes": [],
-  "nodes": {
-    "input:a":   { "node_id": "input:a",   "kind": "input",   "fragment": "core", "escape_name": null, "oof_reason": null },
-    "input:b":   { "node_id": "input:b",   "kind": "input",   "fragment": "core", "escape_name": null, "oof_reason": null },
-    "node_sum":  { "node_id": "node_sum",  "kind": "compute", "fragment": "core", "escape_name": null, "oof_reason": null },
-    "output:sum":{ "node_id": "output:sum","kind": "output",  "fragment": "core", "escape_name": null, "oof_reason": null }
-  }
+  "pass_result": "ok",
+  "program_id": "semanticir/fe9a2479eb3f4d5d",
+  "semantic_ir_ref": "semanticir/fe9a2479eb3f4d5d",
+  "source_hash": "sha256:fe9a2479eb3f4d5d5b99e5263f691f0d4d2efb38f69ce0e082be71eca97773e1",
+  "source_path": "source/add.ig"
 }
