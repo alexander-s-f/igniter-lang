@@ -220,6 +220,9 @@ module IgniterLang
     #   ret spec: either a plain type name, or [ok, "BytesError"] for Result-shaped ops.
     BYTES_STDLIB_FNS = {
       "stdlib.bytes.length"        => { args: %w[B],     ret: "Integer" },
+      # LANG-STDLIB-BYTES-ZEROS-P2: qualified-only zero-filled allocation. Runtime collection
+      # budget enforcement remains VM authority; both toolchains pin Integer -> Bytes here.
+      "stdlib.bytes.zeros"         => { args: %w[I],     ret: "Bytes" },
       "stdlib.bytes.equal"         => { args: %w[B B],   ret: "Bool" },
       "stdlib.bytes.concat"        => { args: %w[B B],   ret: "Bytes" },
       "stdlib.bytes.slice"         => { args: %w[B I I], ret: %w[Bytes BytesError] },

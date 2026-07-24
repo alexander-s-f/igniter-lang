@@ -347,13 +347,14 @@ depend on the internal carrier; every admitted operation is carrier-invariant.
 ### 8.11.2 Qualified pure algebra (exact signatures)
 
 `stdlib.bytes.*` is a qualified language module: qualified names, never bare-imported.
-Since LANG-STDLIB-INVENTORY-QUALIFIED-IMPORT-SURFACE-P2 the 15 operations ARE canon inventory
+Since LANG-STDLIB-INVENTORY-QUALIFIED-IMPORT-SURFACE-P2 the 17 operations ARE canon inventory
 entries with `import_surface: "qualified_only"` — discoverable via inventory/help/MCP, callable
 only through their qualified names; a bare/named import is refused (OOF-IMP3). Capability/effect
 modules (`stdlib.IO.*`, `stdlib.net.*`) remain OUT of the inventory (see 8.11.6):
 
 ```
 stdlib.bytes.length(Bytes)                     -> Integer
+stdlib.bytes.zeros(Integer)                    -> Bytes                        -- zero-filled; collection-budget bounded
 stdlib.bytes.equal(Bytes, Bytes)               -> Bool
 stdlib.bytes.concat(Bytes, Bytes)              -> Bytes
 stdlib.bytes.slice(Bytes, Integer, Integer)    -> Result[Bytes, BytesError]    -- (offset, length), half-open, checked
@@ -370,6 +371,23 @@ stdlib.bytes.encode_hex(Bytes)                 -> Text                        --
 stdlib.bytes.decode_hex(Text)                  -> Result[Bytes, BytesError]   -- even-length 0-9/a-f/A-F only; rejects 0x/whitespace/separators
 stdlib.bytes.sha256(Bytes)                     -> Text                        -- total, exactly 64 lower-case hex digits, NO prefix
 ```
+
+**`zeros` — qualified zero-filled allocation
+(LANG-STDLIB-BYTES-ZEROS-P2, 2026-07-24).** The exact law is:
+
+- `stdlib.bytes.zeros(length)` returns empty `Bytes` when `length <= 0`;
+- for `1 <= length <= MAX_COLLECTION_ELEMENTS`, it returns exactly `length` octets and every
+  octet is `0x00`;
+- for `length > MAX_COLLECTION_ELEMENTS`, evaluation fails before allocation with
+  `OOF-VM-COLLECTION-BUDGET: stdlib.bytes.zeros would create <length> element(s), max 1000000`.
+
+The signed `length <= 0` check precedes conversion to an allocation size. The positive budget
+check precedes capacity calculation and allocation. `MAX_COLLECTION_ELEMENTS` is the same shared
+VM limit used by collection construction; `zeros` does not define a Bytes-specific second limit.
+The result is the existing opaque, sealed `Bytes` carrier: authored code can observe it only
+through the public Bytes algebra, and `OOF-BY1` applies unchanged at direct and nested ports.
+There is no bare `zeros`, named import, generic `bytes.fill`, non-zero fill byte, or second
+embedded/carrier representation admitted by this operation.
 
 **`sha256` — content-addressed evidence an application can author itself
 (LANG-STDLIB-CONTENT-DIGEST-P1, 2026-07-23).** SHA-256 over the exact ordered octets of the
@@ -449,7 +467,7 @@ seal. **Execution is VM authority** — the canon toolchain has no Bytes runtime
 | Item | Status |
 |------|--------|
 | Positional IO (`read_at`/`write_at`/`file_size`) | NOT admitted — lab capability surface |
-| `stdlib-inventory.json` entries for qualified modules | RESOLVED for pure Bytes (15 rows, `import_surface: "qualified_only"`, LANG-STDLIB-INVENTORY-QUALIFIED-IMPORT-SURFACE-P2, LANG-STDLIB-BYTES-HEX-CODEC-P1); capability/effect modules (`stdlib.IO.*`, `stdlib.net.*`) stay OUT — the separately-owned capability catalog remains a named follow-up |
+| `stdlib-inventory.json` entries for qualified modules | RESOLVED for pure Bytes (17 rows, `import_surface: "qualified_only"`, LANG-STDLIB-INVENTORY-QUALIFIED-IMPORT-SURFACE-P2, LANG-STDLIB-BYTES-HEX-CODEC-P1, LANG-STDLIB-CONTENT-DIGEST-P1, LANG-STDLIB-BYTES-ZEROS-P2); capability/effect modules (`stdlib.IO.*`, `stdlib.net.*`) stay OUT — the separately-owned capability catalog remains a named follow-up |
 | `Bytes[N]` fixed-length refinement | absent; future refinement over dynamic `Bytes`, kept compatible, no dependent types pretended |
 | `_be` / native-endian families | closed until demanded; naming law fixed above |
 | hex as identity or default representation | closed — `encode_hex`/`decode_hex` (LANG-STDLIB-BYTES-HEX-CODEC-P1) are explicit codecs, not a default representation |
