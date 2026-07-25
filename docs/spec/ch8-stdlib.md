@@ -65,6 +65,7 @@ sort_by(xs, fn: T -> K) -> Collection[T]
 take(xs, n: Integer) -> Collection[T]
 first(xs) -> Option[T]
 last(xs) -> Option[T]
+set_at(xs: Collection[T], index: Integer, value: T) -> Option[Collection[T]]
 ```
 
 **avg([]) = None** — never OOF; zero-guard is a language invariant.
@@ -111,7 +112,7 @@ Current admitted Option-producing families are:
 source constructors: some, none
 optional Record field normalization
 stdlib.map.get / map_get_string
-stdlib.collection.first / last / at / find
+stdlib.collection.first / last / at / set_at / find
 stdlib.integer.parse_int
 stdlib.text.decode_delimited / decode_frame
 History[T] read shaping within its separately authorized runtime scope
@@ -563,8 +564,9 @@ sort_by key must have a total order; expected Integer, Text, or Decimal
 ```
 
 The `Float` variant of the message additionally routes to the fix: convert to `Decimal` or
-`Integer`. `OOF-COL10` is `at`'s index-type check and is **not** reused. `OOF-COL1` (arity) and
-`OOF-COL2` (non-Collection first argument) are shared with the rest of the collection HOF family.
+`Integer`. `OOF-COL10` is the indexed-position type check shared by `at` and `set_at`; it is
+**not** reused by unrelated collection operations. `OOF-COL1` (arity) and `OOF-COL2`
+(non-Collection first argument) are shared with the rest of the collection family.
 
 ### 8.12.3 Closed (v0)
 
@@ -622,10 +624,10 @@ by the new diagnostic `OOF-COL12`:
 stdlib.collection.take: second argument must be Integer, got <Type>
 ```
 
-`OOF-COL10` is `at`'s index-type check and `OOF-COL11` is `sort_by`'s key-type check — neither is
-reused. `OOF-COL1` (arity) and `OOF-COL2` (non-Collection first argument) are shared with the rest
-of the collection HOF family. Runtime bounds (`n<=0`, `n>=count(xs)`) are never diagnostics — they
-are total, clamped VM semantics.
+`OOF-COL10` is the indexed-position type check shared by `at` and `set_at`, while `OOF-COL11` is
+`sort_by`'s key-type check; neither is reused by `take`. `OOF-COL1` (arity) and `OOF-COL2`
+(non-Collection first argument) are shared with the rest of the collection family. Runtime bounds
+(`n<=0`, `n>=count(xs)`) are never diagnostics — they are total, clamped VM semantics.
 
 ### 8.13.3 Closed (v0)
 
@@ -713,7 +715,8 @@ sort_by_desc key must have a total order; expected Integer, Text, or Decimal
 
 The `Float` variant of the message routes to the fix (convert to `Decimal` or `Integer`), exactly
 as in §8.12.2. `OOF-COL1` (arity) and `OOF-COL2` (non-Collection first argument) are shared with
-the rest of the collection HOF family. `OOF-COL10` (`at`) and `OOF-COL12` (`take`) are not reused.
+the rest of the collection HOF family. `OOF-COL10` (indexed position for `at`/`set_at`) and
+`OOF-COL12` (`take`) are not reused.
 
 ### 8.14.4 Closed (v0)
 
@@ -848,3 +851,85 @@ types, result type, the three OOF-MATH families) and the `stdlib-inventory.json`
 is Rust VM authority** — the same boundary as every other stdlib family; the VM owns the single
 math semantic owner that both the bytecode and eval-AST paths call, and it owns the domain and
 finite-value refusals stated above.
+
+## 8.16 Collection `set_at` — immutable positional replacement (LANG-STDLIB-COLLECTION-SET-AT-P2, 2026-07-25)
+
+`set_at` is the bounded positional-update sibling of the zero-based `at` reader. It replaces one
+position in a finite collection value and returns the result through the nominal Option carrier:
+
+```text
+set_at(xs: Collection[T], index: Integer, value: T) -> Option[Collection[T]]
+```
+
+### 8.16.1 Normative law
+
+For an input collection `xs` of length `n`, a signed zero-based index `i`, and replacement
+`value`:
+
+| Condition | Result |
+| --- | --- |
+| `0 <= i < n` | `Some(updated)` |
+| `i < 0` | `None` |
+| `i >= n` | `None` |
+| `n == 0` | `None` |
+
+When the result is `Some(updated)`:
+
+- `count(updated) == count(xs)`;
+- `updated[i] == value`;
+- every position `j != i` preserves `updated[j] == xs[j]`;
+- authored order is stable;
+- `xs` remains unchanged;
+- exactly one position is replaced;
+- replacing an element with an equal value still returns `Some(updated)`.
+
+The index is a collection position, not a domain key. Record fields such as `member.id`,
+`seat_id`, `origin`, or `layer.id` are not searched or interpreted by this operation.
+
+### 8.16.2 Type and diagnostics
+
+The first argument owns `T`. `Collection[Unknown]` and Unknown-bearing replacement values remain
+permissive without inferring a new element type from one replacement. A concrete replacement must
+be structurally assignable to the concrete element type.
+
+- `OOF-COL1`: arity is not exactly three;
+- `OOF-COL2`: the first argument is neither `Collection` nor `Unknown`;
+- `OOF-COL10`: the index is neither `Integer` nor `Unknown`;
+- `OOF-COL6`: a concrete replacement is not structurally assignable to concrete `T`.
+
+`OOF-COL10` owns the indexed-position rule shared only with `at`; it is not a generic diagnostic
+for unrelated collection operations. `OOF-COL6` remains the Collection-element compatibility
+rule already used by `append`; neither change alters the existing `at` or `append` behavior.
+
+Authored source uses the bare alias `set_at`, including selective
+`import stdlib.collection.{ set_at }`. Both compilers emit exactly
+`stdlib.collection.set_at` in direct and collection-HOF-nested positions. The operation is a
+three-value call, not a lambda-taking HOF. Ruby/canon owns typing, diagnostics, import, and
+qualified SemanticIR parity only; execution is Rust VM authority.
+
+### 8.16.3 Resource and carrier law
+
+The VM validates arity and carrier types, then checks the shared
+`MAX_COLLECTION_ELEMENTS = 1_000_000` ceiling before validating the signed index or allocating an
+output. A crafted input above that ceiling fails exactly with:
+
+```text
+OOF-VM-COLLECTION-BUDGET: stdlib.collection.set_at would create <length> element(s), max 1000000
+```
+
+For the required `1_000_001`-element specimen, `<length>` is rendered as `1000001`. A negative or
+out-of-range index returns nominal `None` before output allocation. A valid index allocates one
+immutable output collection, copies the current flat carrier, replaces exactly one slot, and
+returns nominal `Some(updated)`. Direct bytecode and nested eval-AST execution must call one shared
+semantic helper and the same Option consumer; nullable/raw values and structural `__arm` records
+are not compatibility carriers.
+
+The current flat carrier may perform an O(n) copy for a successful update. That is an
+implementation fact, not a language guarantee. There is no public complexity, zero-copy,
+structural-sharing, or persistent-vector promise.
+
+### 8.16.4 Closed (v1)
+
+Mutation or in-place update, a lambda-taking `update_at`, insert/remove/splice/prepend/reverse,
+keyed or domain-id upsert, automatic index lookup, mutable vectors or buffers, persistent-vector
+redesign, optimizer/asymptotic guarantees, and application migration are outside this operation.

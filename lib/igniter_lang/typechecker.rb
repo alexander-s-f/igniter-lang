@@ -2327,6 +2327,12 @@ module IgniterLang
         # Option[T]. A reader, not a HOF (no lambda). Element type via the first/last path; index
         # validated like char_at. Negative/out-of-range/empty are RUNTIME None (P4 VM), not diagnostics.
         infer_collection_at_call(args, symbol_types, type_errors, type_warnings, node_name)
+      when "set_at"
+        # LANG-STDLIB-COLLECTION-SET-AT-P2: immutable positional replacement.
+        # This is a three-value call, not a lambda HOF. The first argument owns T;
+        # valid runtime positions produce Some(Collection[T]), while invalid
+        # positions produce None through the shared nominal Option carrier.
+        infer_collection_set_at_call(args, symbol_types, type_errors, type_warnings, node_name)
       when "sort_by"
         # LANG-STDLIB-COLLECTION-SORT-BY-P3: sort_by(Collection[T], (T -> K)) -> Collection[T].
         # Stable ascending sort by a total-scalar key (Integer|Text|Decimal); OOF-COL11 refuses
@@ -5597,6 +5603,100 @@ module IgniterLang
 
       typed_expr("call", option_type_ir(inner_type), deps,
                  "fn" => qualified, "args" => typed_args)
+    end
+
+    # LANG-STDLIB-COLLECTION-SET-AT-P2:
+    # set_at(Collection[T], Integer, T) -> Option[Collection[T]].
+    #
+    # The first argument is the sole owner of T. Collection[Unknown] and an
+    # Unknown-bearing replacement remain permissive; a concrete replacement is
+    # checked structurally so nested generic parameters cannot pass on a
+    # top-level-name match alone. Runtime bounds, immutable-copy behavior and
+    # the nominal Some/None carrier are VM authority.
+    def infer_collection_set_at_call(args, symbol_types, type_errors, type_warnings, node_name)
+      qualified = "stdlib.collection.set_at"
+      unknown_collection = collection_type_ir_from(type_ir("Unknown"))
+
+      unless args.length == 3
+        typed_args = args.map do |arg|
+          infer_expr(arg, symbol_types, type_errors, type_warnings, node_name)
+        end
+        deps = typed_args.flat_map { |arg| arg.fetch("deps", []) }.uniq
+        recovery_collection =
+          if typed_args.any? && type_name(typed_args[0].fetch("resolved_type")) == "Collection"
+            collection_type_ir_from(
+              element_type_from_collection(typed_args[0].fetch("resolved_type"))
+            )
+          else
+            unknown_collection
+          end
+        type_errors << oof(
+          "OOF-COL1",
+          "#{qualified}: expected 3 arguments (collection, index, value), got #{args.length}",
+          node_name
+        )
+        return typed_expr(
+          "call",
+          option_type_ir(recovery_collection),
+          deps,
+          "fn" => qualified,
+          "args" => typed_args
+        )
+      end
+
+      collection_arg = infer_expr(args[0], symbol_types, type_errors, type_warnings, node_name)
+      index_arg = infer_expr(args[1], symbol_types, type_errors, type_warnings, node_name)
+      replacement_arg = infer_expr(args[2], symbol_types, type_errors, type_warnings, node_name)
+      typed_args = [collection_arg, index_arg, replacement_arg]
+      deps = typed_args.flat_map { |arg| arg.fetch("deps", []) }.uniq
+
+      collection_type = collection_arg.fetch("resolved_type")
+      collection_name = type_name(collection_type)
+      unless %w[Collection Unknown].include?(collection_name)
+        type_errors << oof(
+          "OOF-COL2",
+          "#{qualified}: first argument must be Collection[T], got #{collection_name}",
+          node_name
+        )
+      end
+
+      index_type = index_arg.fetch("resolved_type")
+      index_name = type_name(index_type)
+      unless %w[Integer Unknown].include?(index_name)
+        type_errors << oof(
+          "OOF-COL10",
+          "#{qualified}: index argument must be Integer, got #{index_name}",
+          node_name
+        )
+      end
+
+      element_type = element_type_from_collection(collection_type)
+      replacement_type = replacement_arg.fetch("resolved_type")
+      unless unknown_or_unknown_bearing?(element_type) ||
+             unknown_or_unknown_bearing?(replacement_type) ||
+             structurally_assignable?(replacement_type, element_type)
+        type_errors << oof(
+          "OOF-COL6",
+          "#{qualified}: replacement type #{type_display(replacement_type)} " \
+          "does not match collection element type #{type_display(element_type)}",
+          node_name
+        )
+      end
+
+      result_collection =
+        if collection_name == "Collection"
+          collection_type_ir_from(element_type)
+        else
+          unknown_collection
+        end
+
+      typed_expr(
+        "call",
+        option_type_ir(result_collection),
+        deps,
+        "fn" => qualified,
+        "args" => typed_args
+      )
     end
 
     # LANG-STDLIB-COLLECTION-ZIP-RUBY-PARITY-P3: zip(Collection[A], Collection[B]) ->
