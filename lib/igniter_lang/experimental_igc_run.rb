@@ -240,7 +240,30 @@ module IgniterLang
       "sha256:#{Digest::SHA256.hexdigest(file_digests.join(":"))}"
     end
 
+    # LAB-IGNITER-STREAM-ARTIFACT-EXECUTABILITY-P2 (H law): the delegated
+    # experimental runtime has NO stream runtime. Any artifact whose contracts
+    # carry a non-empty stream surface is refused at admission, BEFORE any
+    # evaluate — no more `status: ok, outputs: null` on stream artifacts.
+    OOF_ST1_MESSAGE = "OOF-ST1: artifact declares a stream surface (stream_nodes) " \
+                      "but this VM has no stream runtime; admission refused"
+
+    def refuse_stream_surface!(artifact_path)
+      contracts_dir = artifact_path.join("contracts")
+      return unless contracts_dir.directory?
+
+      contracts_dir.glob("*.json").sort.each do |path|
+        contract = JSON.parse(path.read(encoding: "utf-8"))
+        next unless contract.is_a?(Hash)
+
+        stream_nodes = contract.fetch("stream_nodes", nil)
+        next if stream_nodes.nil? || (stream_nodes.respond_to?(:empty?) && stream_nodes.empty?)
+
+        raise RunFailure.new("OOF-ST1", OOF_ST1_MESSAGE)
+      end
+    end
+
     def execute_with_delegated_runtime(artifact_path, contract_name, input)
+      refuse_stream_surface!(artifact_path)
       require PROOF_RUNTIME_PATH.to_s
 
       program = RuntimeMachineMemoryProof::CompiledProgram.load_igapp(artifact_path)

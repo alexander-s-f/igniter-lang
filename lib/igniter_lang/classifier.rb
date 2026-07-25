@@ -935,11 +935,30 @@ module IgniterLang
       end
     end
 
+    # LAB-IGNITER-STREAM-ARTIFACT-EXECUTABILITY-P2 (D law — determinability):
+    # a contract that folds a stream needs exactly ONE window to bind to.
+    # Zero windows → OOF-S2 as before. More than one window → OOF-S2 ambiguity
+    # refusal: the grammar has no stream↔window association form yet, so any
+    # binding would be a guess — refuse instead of guessing.
     def stream_missing_window_oofs(fold_stream_stream_refs, window_declarations)
-      return [] unless window_declarations.empty?
+      return [] if fold_stream_stream_refs.empty?
 
-      fold_stream_stream_refs.keys.sort.map do |stream_name|
-        oof("OOF-S2", "stream '#{stream_name}' has no window - every stream must declare a window", stream_name)
+      if window_declarations.empty?
+        fold_stream_stream_refs.keys.sort.map do |stream_name|
+          oof("OOF-S2", "stream '#{stream_name}' has no window - every stream must declare a window", stream_name)
+        end
+      elsif window_declarations.length > 1
+        count = window_declarations.length
+        fold_stream_stream_refs.keys.sort.map do |stream_name|
+          oof(
+            "OOF-S2",
+            "ambiguous window binding for stream '#{stream_name}': #{count} windows declared " \
+            "and no association form exists — declare exactly one window",
+            stream_name
+          )
+        end
+      else
+        []
       end
     end
 

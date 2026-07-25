@@ -8,6 +8,7 @@ module IgniterLang
     FORMAT_VERSION = "0.1.0"
 
     def emit(parsed_program, sample_input:)
+      @callables = {}
       @types = type_shapes(parsed_program)
       semantic_contracts = parsed_program.fetch("contracts").map do |contract|
         emit_contract(parsed_program, contract, sample_input)
@@ -24,6 +25,7 @@ module IgniterLang
     alias compile emit
 
     def emit_typed(typed_program)
+      @callables = {}
       diagnostics = typed_program.fetch("type_errors", [])
       semantic_ir = diagnostics.empty? ? typed_semantic_ir_program(typed_program) : nil
 
@@ -89,6 +91,14 @@ module IgniterLang
         "compilation_report_ref" => report_id,
         "contracts" => typed_program.fetch("contracts").map { |contract| typed_contract_ir(contract) }
       }
+      # LAB-IGNITER-STREAM-ARTIFACT-EXECUTABILITY-P2 (A law): the callable
+      # registry is present at the SIR root ONLY when the program contains
+      # fold_stream nodes (byte-compat for every non-stream program). Key =
+      # fn_ref, value = {"kind"=>"callable_v1","params"=>…,"body"=>…} in the
+      # shared expr grammar; populated during fold_stream_node emission.
+      unless @callables.nil? || @callables.empty?
+        result["callables"] = @callables.keys.sort.to_h { |ref| [ref, @callables.fetch(ref)] }
+      end
       assumptions = typed_assumption_registry(typed_program)
       result["assumption_registry"] = assumptions unless assumptions.empty?
       result["olap_points"] = typed_program.fetch("olap_points") if typed_program.key?("olap_points")
@@ -1008,9 +1018,13 @@ module IgniterLang
         "kind" => "stream_input_node",
         "name" => decl.fetch("name"),
         "type" => type_display(decl.fetch("type")),
-        "window_ref" => decl.fetch("window_ref", first_window_ref(declarations)),
+        # LAB-IGNITER-STREAM-ARTIFACT-EXECUTABILITY-P2 (D law): the window binding
+        # is explicit — the single declared window's ref, never a first-match guess.
+        "window_ref" => decl.fetch("window_ref") { resolved_window_ref(declarations) },
         "escape_capability" => "stream_input",
-        "fragment" => decl.fetch("fragment_class", "escape")
+        # K law (PROP-023 §3.1): the stream declaration classifies ESCAPE at the
+        # emitted node — both emitters converge on this value.
+        "fragment" => "escape"
       }
     end
 
@@ -1035,36 +1049,48 @@ module IgniterLang
       {
         "kind" => "fold_stream_node",
         "name" => decl.fetch("name"),
+        # LAB-IGNITER-STREAM-ARTIFACT-EXECUTABILITY-P2 (K law, canon ch4:96):
+        # bounded fold_stream is a STREAM node whose VALUE is CORE — both
+        # emitters converge on these values.
+        "fragment" => "stream",
         "stream_ref" => decl.fetch("stream_ref", ref_name(args[0])),
-        "init" => decl.fetch("init", literal_node(args[1])),
-        "fn_ref" => decl.fetch("fn_ref", lambda_ref(args[2])),
+        # C law step 2: the init is emitted through the same compute-expr path
+        # as ordinary compute nodes (the typed init when the TypeChecker
+        # supplied one). No literal-only lowering, no silent defaults.
+        "init" => semantic_expr(decl.fetch("init", args[1])),
+        "fn_ref" => decl.fetch("fn_ref") { lambda_ref(args[2]) },
         "bound" => fold_stream_bound(decl, declarations),
         "event_binding" => stream_event_binding(args[2]),
         "result_type" => decl.fetch("type"),
         "escape_capability" => "stream_input",
-        "result_fragment" => decl.fetch("fragment_class", "core")
+        "result_fragment" => "core"
       }
     end
 
-    def first_window_ref(declarations)
-      window_decl = declarations.find { |decl| decl.fetch("kind") == "window" }
-      window_decl && window_ref(window_decl)
+    # LAB-IGNITER-STREAM-ARTIFACT-EXECUTABILITY-P2 (D law): explicit stream↔window
+    # binding. The classifier refuses zero windows (OOF-S2 absent) and >1 windows
+    # (OOF-S2 ambiguous) for any contract that folds a stream, so exactly one
+    # window can reach emission — resolve it explicitly and REFUSE (never guess)
+    # anything else.
+    def resolved_window_ref(declarations)
+      windows = declarations.select { |decl| decl.fetch("kind") == "window" }
+      unless windows.length == 1
+        raise "stream window binding unresolvable: #{windows.length} windows reached emission " \
+              "(classifier OOF-S2 must refuse this program)"
+      end
+      window_ref(windows.first)
     end
 
     def window_ref(decl)
       decl.fetch("window_ref", decl.fetch("ref", decl.fetch("name")))
     end
 
-    def stream_bound(decl, declarations)
-      {
-        "kind" => decl.fetch("bound_kind", "window_bounded"),
-        "window_ref" => decl.fetch("window_ref", first_window_ref(declarations))
-      }
-    end
-
     def fold_stream_bound(decl, declarations)
-      bound = decl.fetch("bound", stream_bound(decl, declarations)).dup
-      bound["window_ref"] ||= decl.fetch("window_ref", first_window_ref(declarations))
+      # B law: the parsed bound reaches the artifact verbatim (OOF-S1/OOF-S5
+      # guarantee presence and a valid n); the resolved window ref is attached
+      # explicitly — never guessed (D law).
+      bound = decl.fetch("bound").dup
+      bound["window_ref"] ||= decl.fetch("window_ref") { resolved_window_ref(declarations) }
       bound
     end
 
@@ -1072,12 +1098,16 @@ module IgniterLang
       %w[size period idle].any? { |key| window.fetch(key, nil) }
     end
 
+    # LAB-IGNITER-STREAM-ARTIFACT-EXECUTABILITY-P2 (B law): event_binding names
+    # the accumulator lambda's VALUE parameter explicitly; the fabricated
+    # value_path ["value"] demo relic is REMOVED (consumed by nothing). The
+    # fold lambda names no event parameter, so event_ref keeps the "event"
+    # fallback.
     def stream_event_binding(lambda_expr)
       params = lambda_expr.is_a?(Hash) ? lambda_expr.fetch("params", []) : []
       {
         "event_ref" => "event",
-        "value_ref" => params[1],
-        "value_path" => ["value"]
+        "value_ref" => params[1]
       }.compact
     end
 
@@ -1088,31 +1118,24 @@ module IgniterLang
       nil
     end
 
-    def literal_node(expr)
-      return expr unless expr.is_a?(Hash) && expr.fetch("kind", nil) == "literal"
-
-      type_tag = expr.fetch("type_tag", "Unknown")
-      {
-        "kind" => "#{type_tag.downcase}_literal",
-        "value" => expr.fetch("value")
-      }
-    end
-
+    # LAB-IGNITER-STREAM-ARTIFACT-EXECUTABILITY-P2 (A law): every fold_stream
+    # accumulator gets a REAL content-addressed fn_ref plus a callable registry
+    # entry (the integer_sum_lambda magic name is RETIRED). The address is
+    # computed over the full callable value in the shared expr grammar:
+    #   fn_ref = "lambda/" + hex(SHA256(canonical_json(callable_value)))[0,16]
+    # with callable_value = {"kind"=>"callable_v1","params"=>…,"body"=>…}.
+    # No captures field — closure conversion stays a VM concern.
     def lambda_ref(expr)
-      return "integer_sum_lambda" if integer_sum_lambda?(expr)
-      return nil unless expr.is_a?(Hash)
+      return nil unless expr.is_a?(Hash) && expr.fetch("kind", nil) == "lambda"
 
-      "lambda/#{Digest::SHA256.hexdigest(canonical_json(expr))[0, 16]}"
-    end
-
-    def integer_sum_lambda?(expr)
-      return false unless expr.is_a?(Hash) && expr.fetch("kind", nil) == "lambda"
-
-      params = expr.fetch("params", [])
-      body = expr.fetch("body", {})
-      body.fetch("kind", nil) == "binary_op" &&
-        body.fetch("op", nil) == "+" &&
-        ref_name(body.fetch("left", {})) == params[0]
+      callable = {
+        "kind" => "callable_v1",
+        "params" => expr.fetch("params", []),
+        "body" => expr.fetch("body", nil)
+      }
+      fn_ref = "lambda/#{Digest::SHA256.hexdigest(canonical_json(callable))[0, 16]}"
+      (@callables ||= {})[fn_ref] = callable
+      fn_ref
     end
 
     def atom_value(value)

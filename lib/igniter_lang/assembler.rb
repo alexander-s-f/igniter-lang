@@ -229,7 +229,8 @@ module IgniterLang
         compiler_profile_source.fetch("compiler_profile_id")
       end
 
-      contracts = semantic_ir.fetch("contracts").map { |contract| contract_file(contract) }
+      callable_registry = semantic_ir.fetch("callables", {})
+      contracts = semantic_ir.fetch("contracts").map { |contract| contract_file(contract, callable_registry, case_name) }
       contract_ids = contracts.map { |contract| contract.fetch("contract_id") }.sort
       fragment_classes = contracts.map { |contract| contract.fetch("fragment_class") }.uniq
       fragment_class = fragment_classes.length == 1 ? fragment_classes.first : "mixed"
@@ -312,7 +313,7 @@ module IgniterLang
       }
     end
 
-    def contract_file(contract_ir)
+    def contract_file(contract_ir, callable_registry, case_name)
       contract_id = contract_ir.fetch("contract_name")
       input_ports = ports(contract_ir.fetch("inputs"))
       output_ports = ports(contract_ir.fetch("outputs"))
@@ -332,6 +333,21 @@ module IgniterLang
         next unless stream_node?(node)
 
         stream_node_file(node)
+      end
+      # LAB-IGNITER-STREAM-ARTIFACT-EXECUTABILITY-P2 (A law): the contract file
+      # carries exactly the callable entries its fold_stream fn_refs reference.
+      # A fold_stream_node whose fn_ref has no registry entry REFUSES assembly —
+      # an unresolvable fn_ref is impossible by construction.
+      contract_callables = {}
+      stream_nodes.select { |node| node.fetch("kind") == "fold_stream_node" }.each do |node|
+        fn_ref = node.fetch("fn_ref", nil)
+        entry = fn_ref.is_a?(String) ? callable_registry.fetch(fn_ref, nil) : nil
+        unless entry
+          refuse!(case_name,
+                  "OOF-VM-CALLABLE: fold_stream_node '#{node.fetch("name")}' fn_ref " \
+                  "#{fn_ref.inspect} has no callables registry entry")
+        end
+        contract_callables[fn_ref] = entry
       end
 
       result = {
@@ -356,6 +372,9 @@ module IgniterLang
       result["effect_surface"] = contract_ir.fetch("effect_surface") if contract_ir.key?("effect_surface")
       result["temporal_nodes"] = temporal_nodes unless temporal_nodes.empty?
       result["stream_nodes"] = stream_nodes unless stream_nodes.empty?
+      unless contract_callables.empty?
+        result["callables"] = contract_callables.keys.sort.to_h { |ref| [ref, contract_callables.fetch(ref)] }
+      end
       result
     end
 

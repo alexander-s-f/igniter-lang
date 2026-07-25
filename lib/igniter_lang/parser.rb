@@ -1862,12 +1862,27 @@ module IgniterLang
         )
         skip_until_body_boundary
       end
-      bound = parse_optional_stream_bound if expr.fetch("kind", nil) == "call" && expr.fetch("fn", nil) == "fold_stream"
-      if bound
-        node = { "kind" => "fold_stream", "name" => name, "expr" => expr }
-        node["type_annotation"] = type_ref if type_ref
-        node["bound"] = bound
-        return node
+      if expr.fetch("kind", nil) == "call" && expr.fetch("fn", nil) == "fold_stream"
+        bound = parse_optional_stream_bound
+        if bound
+          node = { "kind" => "fold_stream", "name" => name, "expr" => expr }
+          node["type_annotation"] = type_ref if type_ref
+          node["bound"] = bound
+          return node
+        end
+        # LAB-IGNITER-STREAM-ARTIFACT-EXECUTABILITY-P2 (F law): the compute-alias
+        # spelling of fold_stream without a bound annotation is the SAME unbounded
+        # fold as the keyword form — fire OOF-S1 with the identical message law
+        # instead of silently degrading to a plain compute (which then mis-fired
+        # OOF-S4 "direct stream use" downstream).
+        tok = peek
+        add_parse_error(
+          rule: "OOF-S1",
+          message: "fold_stream '#{name}' is unbounded — must declare @window_bounded or @count_bounded(n)",
+          token: name,
+          line: tok&.line || 0,
+          col: tok&.col || 0
+        )
       end
       node = { "kind" => "compute", "name" => name, "expr" => expr }
       node["type_annotation"] = type_ref if type_ref
@@ -1921,19 +1936,78 @@ module IgniterLang
       node
     end
 
+    # LAB-IGNITER-STREAM-ARTIFACT-EXECUTABILITY-P2 (E law / PROP-023 §2.2): the
+    # window option vocabulary is a CLOSED set validated at parse time.
+    WINDOW_KINDS       = %w[count calendar session].freeze
+    WINDOW_ON_CLOSE    = %w[snapshot emit discard].freeze
+    WINDOW_KIND_OPTION = { "count" => "size", "calendar" => "period", "session" => "idle" }.freeze
+
     def parse_window_decl
-      label = expect_type!(:string_lit).value
+      label_tok = expect_type!(:string_lit)
+      label = label_tok.value
       expect_type!(:lbrace)
       opts = {}
+      opt_tokens = {}
       until peek_type?(:rbrace) || peek_type?(:eof)
+        key_tok = peek
         key = name_token!(%i[ident keyword])
         advance if peek_type?(:colon)  # consume optional : separator between key and value
         val = parse_window_value
         opts[key] = val
+        opt_tokens[key] = key_tok
         advance if peek_type?(:comma)
       end
       expect_type!(:rbrace)
+      validate_window_options!(label, label_tok, opts, opt_tokens)
       { "kind" => "window", "label" => label, "options" => opts }
+    end
+
+    # E law: kind ∈ {count, calendar, session} REQUIRED; on_close ∈ {snapshot,
+    # emit, discard} REQUIRED; the kind selects exactly one sizing option
+    # (count → positive Integer size, calendar → period, session → idle);
+    # unknown/extra option keys refuse. calendar/session remain VALID
+    # DECLARATIONS here — execution refusal is the runtime admission gate
+    # (OOF-ST1), never the parser. Refusals ride the parser's existing
+    # parse-error machinery (OOF-P0 surface rule; no new OOF-S numbers).
+    def validate_window_options!(label, label_tok, opts, opt_tokens)
+      window_err = lambda do |message, tok|
+        at = tok || label_tok
+        add_parse_error(rule: "OOF-P0", message: message, token: label, line: at.line, col: at.col)
+      end
+
+      kind = opts["kind"]
+      kind_ok = WINDOW_KINDS.include?(kind)
+      unless kind_ok
+        detail = kind.nil? ? " (kind is required)" : ", got :#{kind}"
+        window_err.call("window '#{label}' kind must be one of :count, :calendar, :session#{detail}", opt_tokens["kind"])
+      end
+
+      on_close = opts["on_close"]
+      unless WINDOW_ON_CLOSE.include?(on_close)
+        detail = on_close.nil? ? " (on_close is required)" : ", got :#{on_close}"
+        window_err.call("window '#{label}' on_close must be one of :snapshot, :emit, :discard#{detail}", opt_tokens["on_close"])
+      end
+
+      if kind_ok
+        required = WINDOW_KIND_OPTION.fetch(kind)
+        value = opts[required]
+        if required == "size"
+          unless value.is_a?(Integer) && value >= 1
+            window_err.call("window '#{label}' kind :count requires a positive Integer size", opt_tokens["size"])
+          end
+        elsif value.nil?
+          window_err.call("window '#{label}' kind :#{kind} requires #{required}", opt_tokens[required])
+        end
+        allowed = ["kind", "on_close", required]
+      else
+        allowed = %w[kind on_close] + WINDOW_KIND_OPTION.values
+      end
+      (opts.keys - allowed).each do |extra|
+        window_err.call(
+          "window '#{label}' option '#{extra}' is not in the window vocabulary (allowed: #{allowed.join(", ")})",
+          opt_tokens[extra]
+        )
+      end
     end
 
     def parse_window_value
@@ -2586,13 +2660,16 @@ module IgniterLang
       when "count_bounded"
         expect_type!(:lparen)
         n_tok = peek
-        if peek_type?(:int_lit)
+        # LAB-IGNITER-STREAM-ARTIFACT-EXECUTABILITY-P2 (B law): n must be a static
+        # Integer literal >= 1 — zero/negative/non-literal all refuse with OOF-S5.
+        if peek_type?(:int_lit) && n_tok.value.is_a?(Integer) && n_tok.value >= 1
           n = advance.value
           bound = { "kind" => "count_bounded", "n" => n }
         else
+          advance if peek_type?(:int_lit) # consume the non-positive literal so ')' still closes
           add_parse_error(
             rule: "OOF-S5",
-            message: "@count_bounded requires a statically-known Integer literal",
+            message: "count bound must be a positive static Integer literal",
             token: n_tok&.value.to_s,
             line: n_tok&.line || 0,
             col: n_tok&.col || 0

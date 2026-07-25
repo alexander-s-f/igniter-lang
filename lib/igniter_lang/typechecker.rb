@@ -1071,9 +1071,45 @@ module IgniterLang
           # OOF-S3: ESCAPE construct (stream ref) inside fold_stream accumulator function body
           stream_symbols = stream_symbol_names(classified_contract)
           check_fold_stream_body(decl, stream_symbols, type_errors)
-          result_type = fold_stream_result_type(decl)
-          symbol_types[decl.fetch("name")] = result_type
-          typed_decls << typed_decl(decl, result_type, decl.fetch("expr", nil), decl.fetch("deps", []))
+          fold_name = decl.fetch("name")
+          # LAB-IGNITER-STREAM-ARTIFACT-EXECUTABILITY-P2 (C law step 1): the fold
+          # result type is the STATIC type of the init expression via the SAME
+          # inference compute nodes use (record-literal inference included) —
+          # the old plain-literal type_tag peek returned Unknown for every
+          # record/collection init and refused it with a derivative output-port
+          # mismatch. An untypeable init refuses NAMING THE INIT, not the port.
+          init_expr = fold_stream_init_expr(decl)
+          temp_hint_installed = false
+          if decl["type_annotation"] && init_expr.is_a?(Hash) &&
+             init_expr.fetch("kind", nil) == "record_literal"
+            declared_type = type_ir(decl["type_annotation"])
+            tn = type_name(declared_type)
+            if @type_shapes.key?(tn) && !@output_type_hints.key?(fold_name)
+              @output_type_hints[fold_name] = declared_type
+              temp_hint_installed = true
+            end
+          end
+          errors_before = type_errors.length
+          typed_init =
+            begin
+              init_expr ? infer_expr(init_expr, symbol_types, type_errors, type_warnings, fold_name) : nil
+            ensure
+              @output_type_hints.delete(fold_name) if temp_hint_installed
+            end
+          result_type = typed_init ? typed_init.fetch("resolved_type") : type_ir("Unknown")
+          if type_name(result_type) == "Unknown" && type_errors.length == errors_before
+            type_errors << oof(
+              "OOF-TY0",
+              "fold_stream '#{fold_name}' init is untypeable - the init expression must have a static type",
+              fold_name
+            )
+          end
+          symbol_types[fold_name] = result_type
+          typed = typed_decl(decl, result_type, decl.fetch("expr", nil), decl.fetch("deps", []))
+          # C law step 2 carrier: the TYPED init reaches the emitter so the init
+          # is emitted through the same compute-expr path as ordinary computes.
+          typed["init"] = typed_init if typed_init
+          typed_decls << typed
         when "uses_assumptions"
           type = type_ir("Assumption")
           symbol_types[decl.fetch("name")] = type
@@ -3588,17 +3624,13 @@ module IgniterLang
       end.uniq
     end
 
-    # Determine the fold_stream result type from the init literal or annotation.
-    # Returns Unknown if the init expression does not carry a type_tag.
-    def fold_stream_result_type(decl)
+    # Extract the init argument from the fold_stream call expression.
+    # args[0]=stream_ref, args[1]=init, args[2]=lambda.
+    def fold_stream_init_expr(decl)
       expr = decl.fetch("expr", nil)
-      return type_ir("Unknown") unless expr&.fetch("kind", nil) == "call"
+      return nil unless expr&.fetch("kind", nil) == "call"
 
-      args = expr.fetch("args", [])
-      init_arg = args[1] # args[0]=stream_ref, args[1]=init, args[2]=lambda
-      return type_ir("Unknown") unless init_arg&.fetch("kind", nil) == "literal"
-
-      type_ir(init_arg.fetch("type_tag", "Unknown"))
+      expr.fetch("args", [])[1]
     end
 
     def dedupe_errors(errors)
