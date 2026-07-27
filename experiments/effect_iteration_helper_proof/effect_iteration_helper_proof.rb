@@ -7,7 +7,7 @@
 #
 # The P2 direct-IO placement fence, lifted interprocedurally: an app-local helper
 # `def` whose call graph transitively reaches a host-IO sink (stdlib.IO.* /
-# stdlib.net.request) may not be called from an ITERATION context — a collection-HOF
+# stdlib.net.request / stdlib.ledger.*) may not be called from an ITERATION context — a collection-HOF
 # lambda body, or a managed-loop body (finite or budgeted). One root OOF-EC6 teaches
 # the pure-Collection[EffectIntent] + single-invoke rewrite. The reachability decision
 # is the shared deterministic transitive summary (compute_io_helper_summary) built over
@@ -64,7 +64,7 @@ def m(body) = "module Proof.EffectHelper\n#{body}\n"
 # (classifier IterIoHit::Helper / effect_call_tests::helper_ec6_message).
 def helper_msg(name, locus)
   "helper '#{name}' called inside #{locus} reaches host IO through its call " \
-  "graph (a shipped stdlib.IO.* / stdlib.net.request sink is transitively " \
+  "graph (a shipped stdlib.IO.* / stdlib.net.request / stdlib.ledger.* sink is transitively " \
   "reachable) — an app-local helper that performs an external effect is not " \
   "allowed in iteration position; build a pure Collection[EffectIntent] and " \
   "perform ONE declaration-position invoke outside the iteration (PROP-050)"
@@ -197,6 +197,43 @@ IG
 check("net.request through helper in map lambda => [OOF-EC6], exact Rust-parity wording") do
   all_rules(NET_HELPER) == ["OOF-EC6"] &&
     ec6_messages(NET_HELPER) == [helper_msg("hit", "a lambda body in compute 'rs'")]
+end
+
+LEDGER_TYPES = <<~IG
+  type LedgerLatestRequest { store: Text, key: Text }
+  type LedgerFact {
+    store: Text
+    id: Text
+    key: Text
+    value_canonical_json: Text
+    schema_version: Integer
+    producer: Text
+    value_hash: Text
+    seq_id: Integer
+  }
+  variant LedgerError {
+    Conflict { existing_key: Text, existing_value_hash: Text }
+    Unavailable { reason: Text }
+    Failed { reason: Text, retryable: Bool }
+    CompactionGap { compaction_floor: Integer }
+  }
+IG
+
+LEDGER_HELPER = m(LEDGER_TYPES + <<~IG)
+  def lookup(req: LedgerLatestRequest, ledger_cap: IO.LedgerCapability) -> Result[Option[LedgerFact], LedgerError] {
+    return stdlib.ledger.latest(req, ledger_cap)
+  }
+  observed contract Caller {
+    capability ledger_cap: IO.LedgerCapability
+    effect read_file using ledger_cap
+    input reqs: Collection[LedgerLatestRequest]
+    compute rs = map(reqs, (req) -> lookup(req, ledger_cap))
+    output rs: Collection[Result[Option[LedgerFact], LedgerError]]
+  }
+IG
+check("ledger.latest through helper in map lambda => [OOF-EC6], exact Rust-parity wording") do
+  all_rules(LEDGER_HELPER) == ["OOF-EC6"] &&
+    ec6_messages(LEDGER_HELPER) == [helper_msg("lookup", "a lambda body in compute 'rs'")]
 end
 
 # ── Controls / ownership boundaries ──────────────────────────────────────────

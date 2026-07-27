@@ -225,6 +225,23 @@ module IgniterLang
       "stdlib.IO.write_at"            => { args: %w[S I B C], ret: "WriteAtReceipt" },
     }.freeze
 
+    # LAB-STDLIB-LEDGER-APPEND-READ-SEAM-P8: qualified-only durable-ledger seam.
+    # Like the shipped net seam, every request/result/error species is app-declared and nominal;
+    # the compiler recognizes ONLY these three exact call identities. The value carrier is an
+    # explicitly named canonical-JSON Text field inside LedgerAppendRequest/LedgerFact — no
+    # Any/JsonValue widening and no Ruby runtime implementation claim.
+    LEDGER_STDLIB_FNS = {
+      "stdlib.ledger.append_once" => {
+        request: "LedgerAppendRequest", result: "LedgerAppendOutcome"
+      },
+      "stdlib.ledger.latest" => {
+        request: "LedgerLatestRequest", result: "Option[LedgerFact]"
+      },
+      "stdlib.ledger.facts_by_seq" => {
+        request: "LedgerSeqRequest", result: "LedgerSeqPage"
+      },
+    }.freeze
+
     # LANG-STDLIB-BYTES-CANON-ADMISSION-P7 Stage 2: canon COMPILE-parity typing for the pure
     # `stdlib.bytes.*` algebra (P4 semantic core + P5 explicit little-endian pack/unpack family).
     # Signatures mirror the LIVE Rust compiler arms (igniter-lab stdlib_calls.rs) exactly. Ruby
@@ -781,6 +798,34 @@ module IgniterLang
       # OOF-EC7 can print the actual capability when the mapping is unique.
       @current_contract_capabilities = classified_contract.fetch("declarations", [])
         .select { |d| d["kind"] == "capability" }.map { |d| d["name"] }
+      # P8: Ruby's CR-001 carrier deliberately normalizes every IO.* capability symbol to the
+      # `IO.Capability` sentinel below. Keep that established SIR law unchanged, but retain the
+      # authored nominal type in a narrow side table so ledger calls can prove that arg 1 is
+      # specifically IO.LedgerCapability (and name a wrong concrete capability in diagnostics).
+      @current_contract_capability_types = classified_contract.fetch("declarations", [])
+        .select { |d| d["kind"] == "capability" }
+        .to_h do |d|
+          raw = d.fetch("type_annotation", "IO.Capability")
+          [d.fetch("name"), raw.is_a?(Hash) ? raw.fetch("name", "IO.Capability") : raw.to_s]
+        end
+      # P8 direct authority gate: use the same exact host-IO census as iteration/helper
+      # placement. This catches direct ledger/net calls in pure contracts and ambient calls
+      # without a declared capability context; nominal argument typing remains below.
+      direct_host_io_call_names(classified_contract.fetch("declarations", [])).each do |fn|
+        if contract_modifier == "pure"
+          type_errors << oof(
+            "E-IO-AMBIENT-BLOCKED",
+            "I/O calls are blocked in pure contract '#{contract_name_str}'",
+            contract_name_str
+          )
+        elsif @current_contract_capabilities.empty?
+          type_errors << oof(
+            "E-IO-AMBIENT-BLOCKED",
+            "Ambient call to standard I/O function '#{fn}' is blocked without capability context",
+            contract_name_str
+          )
+        end
+      end
       # LANG-CONTRACT-SINGLE-OUTPUT-LAW-P2: a v0 contract returns exactly ONE value. Multiple
       # authored `output` declarations were silent data loss (the VM loads only the first) —
       # refused at DECLARATION so every invocation form inherits the law. Zero-output contracts
@@ -2349,6 +2394,10 @@ module IgniterLang
         # -> Result[NetResponse, NetError]. NetRequest/NetResponse/NetError are app-declared types
         # named by the signature (the same stringly convention IO uses for WriteReceipt/IoError).
         infer_net_request_call(args, symbol_types, type_errors, type_warnings, node_name)
+      when *LEDGER_STDLIB_FNS.keys
+        # LAB-STDLIB-LEDGER-APPEND-READ-SEAM-P8: exact qualified names, nominal request/capability
+        # checks, and the three sealed Result shapes. No bare aliases.
+        infer_ledger_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
       when *BYTES_STDLIB_FNS.keys
         # LANG-STDLIB-BYTES-CANON-ADMISSION-P7: the pure Bytes algebra (typing parity; VM executes).
         infer_bytes_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
@@ -3379,7 +3428,7 @@ module IgniterLang
     # OOF-L4 recursion gate — one machinery, no second graph.
     #
     #   Seed:        a `def` body that directly calls a host-IO sink (`find_host_io`,
-    #                whose census is IO_STDLIB_FNS + stdlib.net.request — the P2 census).
+    #                whose census is IO_STDLIB_FNS + net + ledger — the P8 census).
     #   Propagation: Tarjan emits SCCs callees-before-callers, so ONE forward pass over
     #                the emission order finalizes each callee before its callers. Every
     #                member of an SCC shares one value (IO iff any member touches IO
@@ -3446,7 +3495,7 @@ module IgniterLang
     def oof_ec6_helper_iteration_io(helper, locus, node_name)
       oof("OOF-EC6",
         "helper '#{helper}' called inside #{locus} reaches host IO through its call " \
-        "graph (a shipped stdlib.IO.* / stdlib.net.request sink is transitively " \
+        "graph (a shipped stdlib.IO.* / stdlib.net.request / stdlib.ledger.* sink is transitively " \
         "reachable) — an app-local helper that performs an external effect is not " \
         "allowed in iteration position; build a pure Collection[EffectIntent] and " \
         "perform ONE declaration-position invoke outside the iteration (PROP-050)",
@@ -4082,13 +4131,28 @@ module IgniterLang
     # then perform ONE declaration-position `invoke` OUTSIDE the iteration
     # (PROP-050 placement law). Top-level direct IO is untouched by this fence.
     #
-    # Census predicate: membership in the host-IO family comes from the live
-    # IO_STDLIB_FNS census plus `stdlib.net.request` (capability-bearing, not in
-    # the file-IO table) — never from a capability variable's name or a substring.
+    # Census predicate: membership in the host-IO family comes from the live IO_STDLIB_FNS
+    # census plus the exact net and ledger qualified names (capability-bearing, not in the
+    # file-IO table) — never from a capability variable's name or a substring.
     def host_io_call_node?(node)
       return false unless node.is_a?(Hash) && node.fetch("kind", nil) == "call"
       fn = node.fetch("fn", nil)
-      IO_STDLIB_FNS.key?(fn) || fn == "stdlib.net.request"
+      IO_STDLIB_FNS.key?(fn) || fn == "stdlib.net.request" || LEDGER_STDLIB_FNS.key?(fn)
+    end
+
+    # Exact host-IO call names anywhere under a contract declaration tree, in
+    # deterministic source traversal order. Used only for direct pure/ambient
+    # authority admission; app-local helper bodies have their separate summary.
+    def direct_host_io_call_names(node, names = [])
+      if node.is_a?(Array)
+        node.each { |value| direct_host_io_call_names(value, names) }
+        return names
+      end
+      return names unless node.is_a?(Hash)
+
+      names << node.fetch("fn") if host_io_call_node?(node)
+      node.each_value { |value| direct_host_io_call_names(value, names) }
+      names
     end
 
     # First host-IO fn name found ANYWHERE within `node` (full generic descent —
@@ -5415,6 +5479,66 @@ module IgniterLang
       end
       result_type = { "name" => "Result", "params" => [type_ir("NetResponse"), type_ir("NetError")] }
       typed_expr("call", result_type, deps, "fn" => "stdlib.net.request", "args" => typed_args)
+    end
+
+    # LAB-STDLIB-LEDGER-APPEND-READ-SEAM-P8: type the exact qualified ledger family.
+    # The outer request species and IO.LedgerCapability are nominal; the VM owns structural
+    # request validation and sealed result shaping. Unknown is tolerated only as cascade
+    # suppression — unresolved references keep their own root diagnostic.
+    def infer_ledger_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
+      spec = LEDGER_STDLIB_FNS.fetch(fn)
+      typed_args = args.map { |arg| infer_expr(arg, symbol_types, type_errors, type_warnings, node_name) }
+      deps = typed_args.flat_map { |arg| arg.fetch("deps", []) }.uniq
+
+      if typed_args.length != 2
+        type_errors << oof(
+          "OOF-TM1",
+          "#{fn} expects exactly 2 arguments (request, capability), got #{typed_args.length}",
+          node_name
+        )
+      else
+        request_name = type_name(typed_args[0].fetch("resolved_type"))
+        unless request_name == "Unknown" || request_name == spec.fetch(:request)
+          type_errors << oof(
+            "OOF-TY0",
+            "#{fn} arg 0: expected #{spec.fetch(:request)}, got #{request_name}",
+            node_name
+          )
+        end
+
+        # CR-001 keeps direct capability refs typed as IO.Capability in Ruby SIR. Recover only
+        # their authored declaration name here; function parameters and other expressions retain
+        # their ordinary resolved type.
+        raw_cap_arg = args[1]
+        capability_name =
+          if raw_cap_arg.is_a?(Hash) && raw_cap_arg.fetch("kind", nil) == "ref"
+            (@current_contract_capability_types || {}).fetch(
+              raw_cap_arg.fetch("name", ""),
+              type_name(typed_args[1].fetch("resolved_type"))
+            )
+          else
+            type_name(typed_args[1].fetch("resolved_type"))
+          end
+        unless capability_name == "Unknown" || capability_name == "IO.LedgerCapability"
+          type_errors << oof(
+            "OOF-TY0",
+            "#{fn} arg 1: expected IO.LedgerCapability, got #{capability_name}",
+            node_name
+          )
+        end
+      end
+
+      success_type =
+        if spec.fetch(:result) == "Option[LedgerFact]"
+          { "name" => "Option", "params" => [type_ir("LedgerFact")] }
+        else
+          type_ir(spec.fetch(:result))
+        end
+      result_type = {
+        "name" => "Result",
+        "params" => [success_type, type_ir("LedgerError")]
+      }
+      typed_expr("call", result_type, deps, "fn" => fn, "args" => typed_args)
     end
 
     def infer_io_call(fn, args, symbol_types, type_errors, type_warnings, node_name)

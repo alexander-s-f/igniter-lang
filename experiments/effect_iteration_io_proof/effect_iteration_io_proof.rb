@@ -5,7 +5,7 @@
 #
 # LANG-EFFECT-ITERATION-DIRECT-IO-FAIL-CLOSED-P2 — Ruby canon slice.
 #
-# A direct host-IO call (stdlib.IO.* / stdlib.net.request) inside an ITERATION
+# A direct host-IO call (stdlib.IO.* / stdlib.net.request / stdlib.ledger.*) inside an ITERATION
 # context — a collection-HOF lambda body, or a managed-loop body (finite or
 # budgeted; any nesting, incl. under if/match) — fails closed with ONE root
 # OOF-EC6 teaching the pure-Collection[EffectIntent] + single-invoke remedy.
@@ -142,6 +142,38 @@ NET_LOOP = m(<<~IG)
   }
 IG
 check("stdlib.net.request in loop => OOF-EC6 present") { uniq_rules(NET_LOOP).include?("OOF-EC6") }
+
+LEDGER_LOOP = m(<<~IG)
+  type LedgerLatestRequest { store: Text, key: Text }
+  type LedgerFact {
+    store: Text
+    id: Text
+    key: Text
+    value_canonical_json: Text
+    schema_version: Integer
+    producer: Text
+    value_hash: Text
+    seq_id: Integer
+  }
+  variant LedgerError {
+    Conflict { existing_key: Text, existing_value_hash: Text }
+    Unavailable { reason: Text }
+    Failed { reason: Text, retryable: Bool }
+    CompactionGap { compaction_floor: Integer }
+  }
+  observed contract LedgerLoop {
+    capability ledger_cap: IO.LedgerCapability
+    effect read_file using ledger_cap
+    input req: LedgerLatestRequest
+    compute idxs = range(0, 3)
+    loop Scan i in idxs max_steps: 10 {
+      lead seen: Integer = 0
+      compute seen = if is_ok(stdlib.ledger.latest(req, ledger_cap)) { seen + 1 } else { seen }
+    }
+    output req: LedgerLatestRequest
+  }
+IG
+check("stdlib.ledger.latest in loop => OOF-EC6 present") { uniq_rules(LEDGER_LOOP).include?("OOF-EC6") }
 
 # ── Controls: unaffected ─────────────────────────────────────────────────────
 section "Controls stay green / earlier roots preserved"
