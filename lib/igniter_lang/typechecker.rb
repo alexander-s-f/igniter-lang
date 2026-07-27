@@ -225,11 +225,13 @@ module IgniterLang
       "stdlib.IO.write_at"            => { args: %w[S I B C], ret: "WriteAtReceipt" },
     }.freeze
 
-    # LAB-STDLIB-LEDGER-APPEND-READ-SEAM-P8: qualified-only durable-ledger seam.
-    # Like the shipped net seam, every request/result/error species is app-declared and nominal;
-    # the compiler recognizes ONLY these three exact call identities. The value carrier is an
-    # explicitly named canonical-JSON Text field inside LedgerAppendRequest/LedgerFact — no
-    # Any/JsonValue widening and no Ruby runtime implementation claim.
+    # LAB-STDLIB-LEDGER-APPEND-READ-SEAM-P8 + LAB-STDLIB-LEDGER-TYPED-VALUE-CARRIER-P2:
+    # qualified-only durable-ledger seams. Like the shipped net seam, every
+    # request/result/error species is app-declared and nominal; the compiler recognizes ONLY
+    # these exact call identities. The legacy family keeps its explicitly named canonical-JSON
+    # Text carrier byte-compatible. The additive `_fields` family carries exactly one flat
+    # Map[String,Text] and has distinct nominal request/result/error species — no overload,
+    # content sniffing, Any/JsonValue widening or Ruby runtime implementation claim.
     LEDGER_STDLIB_FNS = {
       "stdlib.ledger.append_once" => {
         request: "LedgerAppendRequest", result: "LedgerAppendOutcome"
@@ -239,6 +241,21 @@ module IgniterLang
       },
       "stdlib.ledger.facts_by_seq" => {
         request: "LedgerSeqRequest", result: "LedgerSeqPage"
+      },
+      "stdlib.ledger.append_once_fields" => {
+        request: "LedgerFieldsAppendRequest", result: "LedgerFieldsAppendOutcome",
+        error: "LedgerFieldsError",
+        value_fields_shape: "LedgerFieldsAppendRequest", value_fields_role: "request"
+      },
+      "stdlib.ledger.latest_fields" => {
+        request: "LedgerFieldsLatestRequest", result: "Option[LedgerFieldsFact]",
+        error: "LedgerFieldsError",
+        value_fields_shape: "LedgerFieldsFact", value_fields_role: "result fact"
+      },
+      "stdlib.ledger.facts_by_seq_fields" => {
+        request: "LedgerFieldsSeqRequest", result: "LedgerFieldsSeqPage",
+        error: "LedgerFieldsError",
+        value_fields_shape: "LedgerFieldsFact", value_fields_role: "result fact"
       },
     }.freeze
 
@@ -5481,9 +5498,12 @@ module IgniterLang
       typed_expr("call", result_type, deps, "fn" => "stdlib.net.request", "args" => typed_args)
     end
 
-    # LAB-STDLIB-LEDGER-APPEND-READ-SEAM-P8: type the exact qualified ledger family.
-    # The outer request species and IO.LedgerCapability are nominal; the VM owns structural
-    # request validation and sealed result shaping. Unknown is tolerated only as cascade
+    # LAB-STDLIB-LEDGER-APPEND-READ-SEAM-P8 + LAB-STDLIB-LEDGER-TYPED-VALUE-CARRIER-P2:
+    # type the exact qualified opaque and typed ledger families. The outer request species and
+    # IO.LedgerCapability are nominal; the VM owns closed runtime request validation and sealed
+    # result shaping. For the additive family, the compiler pins both the append request and
+    # the fact returned by either read to Map[String,Text], preventing nominal type names from
+    # laundering a dynamic/wrong element carrier. Unknown is tolerated only as cascade
     # suppression — unresolved references keep their own root diagnostic.
     def infer_ledger_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
       spec = LEDGER_STDLIB_FNS.fetch(fn)
@@ -5504,6 +5524,25 @@ module IgniterLang
             "#{fn} arg 0: expected #{spec.fetch(:request)}, got #{request_name}",
             node_name
           )
+        end
+        if spec.key?(:value_fields_shape) && request_name == spec.fetch(:request)
+          fields_shape_name = spec.fetch(:value_fields_shape)
+          fields_shape = @type_shapes[fields_shape_name]
+          actual_fields_type = fields_shape && fields_shape["value_fields"]
+          expected_fields_type = {
+            "name" => "Map",
+            "params" => [type_ir("String"), type_ir("Text")]
+          }
+          if fields_shape.nil? ||
+             actual_fields_type.nil? ||
+             !structurally_assignable?(actual_fields_type, expected_fields_type)
+            got = actual_fields_type ? type_display(actual_fields_type) : "missing"
+            type_errors << oof(
+              "OOF-TY0",
+              "#{fn} #{spec.fetch(:value_fields_role)} field value_fields: expected Map[String,Text], got #{got}",
+              node_name
+            )
+          end
         end
 
         # CR-001 keeps direct capability refs typed as IO.Capability in Ruby SIR. Recover only
@@ -5528,15 +5567,17 @@ module IgniterLang
         end
       end
 
+      result_name = spec.fetch(:result)
       success_type =
-        if spec.fetch(:result) == "Option[LedgerFact]"
-          { "name" => "Option", "params" => [type_ir("LedgerFact")] }
+        if result_name.start_with?("Option[") && result_name.end_with?("]")
+          inner_name = result_name.delete_prefix("Option[").delete_suffix("]")
+          { "name" => "Option", "params" => [type_ir(inner_name)] }
         else
-          type_ir(spec.fetch(:result))
+          type_ir(result_name)
         end
       result_type = {
         "name" => "Result",
-        "params" => [success_type, type_ir("LedgerError")]
+        "params" => [success_type, type_ir(spec.fetch(:error, "LedgerError"))]
       }
       typed_expr("call", result_type, deps, "fn" => fn, "args" => typed_args)
     end
