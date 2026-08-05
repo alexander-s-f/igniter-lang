@@ -63,12 +63,32 @@ produce a report and no `SemanticIRProgram`.
   "module": "Lang.Examples.Add",
   "compilation_report_ref": "compilation_report/<prefix16>",
   "type_declarations": ["<TypeDeclIR>"],
-  "contracts": ["<ContractIR>"]
+  "contracts": ["<ContractIR>"],
+  "functions": ["<FunctionIR>"]
 }
 ```
 
 OOF diagnostics do not live in `SemanticIRProgram`; they live in
 `CompilationReport`.
+
+`functions` (PROP-051) is the top-level app-local `def` registry, emitted only
+when non-empty. Each entry carries exactly the keys
+`{kind: "function_ir", name, params: [{name, type}], return_type, decreases?,
+body}`, where:
+
+- `name` is the emitted identity `user.<module>.<name>` — the `user.` prefix is
+  reserved: no stdlib re-qualification pass may rewrite it, and no stdlib
+  identity may ever begin with `user.`;
+- `params` entries and `return_type` carry display-text types;
+- `decreases` is optional, present only when the `def` declares the literal
+  `decreases fuel` recursion-law token;
+- `body` is the right-nested `let` lowering of the block (bare statements bind
+  `__seq__`).
+
+Resolved `def` call sites lower to
+`{"kind": "call", "fn": "user.<module>.<name>", "args": […]}` — registry
+emission plus call lowering, not inlining (PROP-051 supersedes PROP-015
+§Part 1's inlining claim).
 
 `type_declarations`, when non-empty, is sorted by declaration name; each
 `type_decl.fields` array is sorted by field name and carries the complete field

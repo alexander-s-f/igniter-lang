@@ -99,6 +99,12 @@ module IgniterLang
       unless @callables.nil? || @callables.empty?
         result["callables"] = @callables.keys.sort.to_h { |ref| [ref, @callables.fetch(ref)] }
       end
+      # LANG-APP-LOCAL-DEF-CALL-CANON-ADOPTION-P2 (PROP-051 §1.7): top-level
+      # `functions` array (present only when the program declares defs) — the
+      # typed registry entries lowered to function_ir nodes carrying the
+      # reserved `user.<module>.<name>` identity.
+      typed_functions = typed_program.fetch("functions", [])
+      result["functions"] = typed_functions.map { |fn| function_ir(fn) } unless typed_functions.empty?
       assumptions = typed_assumption_registry(typed_program)
       result["assumption_registry"] = assumptions unless assumptions.empty?
       result["olap_points"] = typed_program.fetch("olap_points") if typed_program.key?("olap_points")
@@ -463,6 +469,58 @@ module IgniterLang
       contracts.flat_map do |contract|
         contract.fetch("nodes").select { |node| node.fetch("kind") == "invariant_node" }
       end
+    end
+
+    # LANG-APP-LOCAL-DEF-CALL-CANON-ADOPTION-P2 (PROP-051 §1.7): one app-local
+    # def as SIR. Keys exactly {kind, name, params, return_type, decreases?,
+    # body}; `name` is the emitted identity `user.<module>.<name>`; types are
+    # display text; `body` is the right-nested `let` lowering of the block
+    # through the SAME `semantic_expr` contracts use (bare statements bind
+    # `__seq__`). Rust twin: emit_function_ir (LAB-FUNCTION-SIR-RUNTIME-P1).
+    def function_ir(fn)
+      node = {
+        "kind" => "function_ir",
+        "name" => fn.fetch("emitted_name"),
+        "params" => fn.fetch("params", []).map do |param|
+          {
+            "name" => param.fetch("name"),
+            "type" => function_type_display(param.fetch("type_annotation", "Unknown"))
+          }
+        end,
+        "return_type" => function_type_display(fn.fetch("return_type", "Unknown"))
+      }
+      node["decreases"] = fn.fetch("decreases") if fn.key?("decreases")
+      node["body"] = function_body_ir(fn.fetch("body", {}))
+      node
+    end
+
+    # Right-nested let chain over the block: each statement wraps the rest as
+    # {kind: "let", name, expr, body}; a bare statement binds `__seq__`; the
+    # chain ends in the return expression.
+    def function_body_ir(body)
+      return_expr = body.fetch("return_expr", nil)
+      acc = return_expr ? semantic_expr(return_expr) : nil
+      body.fetch("stmts", []).reverse_each do |stmt|
+        acc = {
+          "kind" => "let",
+          "name" => stmt.fetch("name", "__seq__"),
+          "expr" => semantic_expr(stmt.fetch("expr", nil)),
+          "body" => acc
+        }
+      end
+      acc
+    end
+
+    # Display text for a source type annotation ("Name" or "Name[P,...]") —
+    # twin of the Rust emitter's semantic_type_display.
+    def function_type_display(annotation)
+      return annotation.to_s unless annotation.is_a?(Hash)
+
+      name = annotation.fetch("name", "Unknown")
+      params = annotation.fetch("params", [])
+      return name if params.empty?
+
+      "#{name}[#{params.map { |param| function_type_display(param) }.join(",")}]"
     end
 
     def semantic_expr(expr)
@@ -1535,7 +1593,7 @@ module IgniterLang
     end
 
     def diagnostic(entry)
-      {
+      normalized = {
         "rule" => entry.fetch("rule"),
         "severity" => "error",
         "message" => entry.fetch("message"),
@@ -1543,6 +1601,11 @@ module IgniterLang
         "path" => nil,
         "line" => entry.fetch("line")
       }
+      # LANG-APP-LOCAL-DEF-CALL-CANON-ADOPTION-P2 (PROP-051 §4): def-law
+      # diagnostics carry a full source span; pass `col` through so the report
+      # enrichment (Diagnostics.span_for) can preserve it end-to-end.
+      normalized["col"] = entry.fetch("col") if entry.key?("col")
+      normalized
     end
   end
 end

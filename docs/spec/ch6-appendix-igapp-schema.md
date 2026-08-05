@@ -102,6 +102,31 @@ The manifest file defines the entry points, compilation hashes, contract fragmen
         }
       }
     },
+    "functions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind", "name", "params", "return_type", "body"],
+        "properties": {
+          "kind": { "type": "string", "const": "function_ir" },
+          "name": { "type": "string" },
+          "params": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["name", "type"],
+              "properties": {
+                "name": { "type": "string" },
+                "type": { "type": "string" }
+              }
+            }
+          },
+          "return_type": { "type": "string" },
+          "decreases": { "type": "string" },
+          "body": { "type": "object" }
+        }
+      }
+    },
     "compilation_report_ref": {
       "type": "string",
       "pattern": "^compilation_report/[a-f0-9]{16}$"
@@ -207,6 +232,14 @@ The manifest file defines the entry points, compilation hashes, contract fragmen
   }
 }
 ```
+
+`functions` (PROP-051) is an OPTIONAL SIR payload key: the app-local `def`
+registry, emitted only when non-empty. Each entry's `name` is the emitted
+identity `user.<module>.<name>` (display-text types in `params`/`return_type`;
+`decreases` present only when the `def` declares `decreases fuel`; `body` is
+the right-nested `let` lowering with bare statements bound to `__seq__`).
+Resolved `def` call sites in node expressions use
+`{"kind": "call", "fn": "user.<module>.<name>", "args": […]}` — see ch6 §6.2.
 
 ---
 

@@ -183,11 +183,13 @@ end_of(d: Date, grain: Symbol) -> Date
 day_of_week(d: Date) -> Integer
 
 -- now() is OOF (ambient clock, Law 6):
-now() -> DateTime    -- OOF-L6: use TemporalCtx.as_of instead
+now() -> DateTime    -- OOF-L2: use explicit as_of binding or tick.time
 ```
 
-`OOF-L6` is the current source-level wording anchor for ambient-clock refusal.
-This cross-reference does not mint a new OOF registry code. In managed
+The ambient-clock refusal law id is `OOF-L2` (PROP-051; byte-locked message:
+`now() is forbidden in function '<f>' — use explicit as_of binding or
+tick.time`). `OOF-L6` — the former source-level wording anchor — is
+retired-historical: never emitted, never reused. In managed
 loop/service-loop design text, event time must enter through an explicit
 TemporalCtx-style input or a materialized event binding such as `tick.time`, not
 through `now()`.

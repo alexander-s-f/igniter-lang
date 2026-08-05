@@ -2711,6 +2711,9 @@ module IgniterLang
     # ---- Function declarations ---------------------------------------------
 
     def parse_function_decl
+      # LANG-APP-LOCAL-DEF-CALL-CANON-ADOPTION-P2 (PROP-051 §4): `def` declarations
+      # carry a source span so def-law diagnostics (OOF-F2/F3/L4/L2/TY0) can cite it.
+      name_tok = peek
       name = name_token!(%i[ident])
       params = parse_params
       expect_type!(:arrow)
@@ -2723,7 +2726,8 @@ module IgniterLang
       end
       body = parse_block_body
       result = { "kind" => "function", "name" => name, "params" => params,
-                 "return_type" => return_type, "body" => body }
+                 "return_type" => return_type, "body" => body,
+                 "line" => name_tok.line, "col" => name_tok.col }
       result["decreases"] = decreases if decreases
       result
     end

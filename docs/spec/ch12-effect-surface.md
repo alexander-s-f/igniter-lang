@@ -289,7 +289,9 @@ in a profile that only permits `compensatable` is a compile-time error (OOF-M2).
 > transitive summary over the program's `def` call graph (Tarjan SCC; cyclic
 > helper groups terminate and share one summary value) — the SAME summary machinery
 > that `OOF-M1` uses to catch a `pure` contract laundering I/O through a helper (one
-> analyzer, two consumers; seeded by the shared host-IO census incl.
+> analyzer, two consumers — dual-true after PROP-051: Ruby gains the `OOF-M1`
+> transitive-laundering consumer over the same one-graph summary, so both
+> toolchains now run both consumers; seeded by the shared host-IO census incl.
 > `stdlib.net.request`). The helper diagnostic is one root `OOF-EC6` at the helper
 > call site, naming the helper, the iteration locus, the transitively-reached host
 > IO, and the same rewrite. Ownership is preserved: `OOF-M1` keeps the pure-laundering
@@ -298,10 +300,17 @@ in a profile that only permits `compensatable` is a compile-time error (OOF-M2).
 > and the VM backstop, which builds the static helper summary from `functions[]` and
 > refuses one-hop / two-hop / cyclic helper indirection before any bytecode). Scope
 > stays statically-known app-local `def` indirection — **no** dynamic helper target,
-> **no** cross-package effect inference, **no** effect annotations. In the Ruby
-> canon a helper called in a *HOF-lambda* position that is NOT IO-reaching still
-> carries its pre-existing "Unknown function" diagnostic (app-local `def`s are not
-> resolved inside lambdas there); the placement law owns only the IO-reaching case.
+> **no** cross-package effect inference, **no** effect annotations.
+> **Module-scoped resolution (PROP-051).** App-local `def` resolution is
+> module-scoped and position-independent: a helper visible in the caller's
+> module resolves everywhere, including HOF-lambda position, in both
+> toolchains. A name NOT visible in the caller's module refuses
+> `OOF-TY0` (`Unknown function: <name>`) — out-of-module `def`s do not
+> resolve; cross-module calls stay closed. The earlier Ruby-canon behavior
+> (app-local `def`s not resolved inside lambdas, leaving a pre-existing
+> "Unknown function" diagnostic on non-IO-reaching helpers) is superseded.
+> `OOF-EC6` remains a NON-pure-contract fence only (Ruby's gate aligned to
+> `modifier != "pure"`); pure-contract laundering stays owned by `OOF-M1`.
 
 > The target-prose row "OOF-M2 — missing required Effect Surface fields (error)"
 > is **RETIRED**: implemented `OOF-M2` is PROP-035's structural

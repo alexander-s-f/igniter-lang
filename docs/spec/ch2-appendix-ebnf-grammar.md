@@ -129,6 +129,18 @@ SigBinding        ::= Name (":" TypeRef)? "=" Expr
                       -- shorthand stay closed. LANG-PURE-CONTRACT-EXPRESSION-BODY-P1
 ```
 
+### 3.5 App-local Functions
+```ebnf
+FunctionDecl      ::= "def" Name "(" Params? ")" "->" TypeRef ("decreases" "fuel")? "{" FnBody "}"
+FnBody            ::= Stmt* Expr
+```
+
+`decreases fuel` is the optional compile-time recursion-law token (PROP-051):
+required on every member of a nontrivial call-graph SCC (`OOF-L4`), with no
+independent runtime fuel. `Params`, `Param`, and `Stmt` are defined in §6
+(Expressions). See ch2 §2.4 for the semantic rules (identity, collision,
+visibility, purity, and SIR registry emission).
+
 ---
 
 ## 4. Contract Body Declarations

@@ -403,7 +403,16 @@ module IgniterLang
         },
         "types" => units.flat_map { |unit| unit.fetch("parsed").fetch("types", []) },
         "variants" => units.flat_map { |unit| unit.fetch("parsed").fetch("variants", []) },
-        "functions" => units.flat_map { |unit| unit.fetch("parsed").fetch("functions", []) },
+        # LANG-APP-LOCAL-DEF-CALL-CANON-ADOPTION-P2: function identity is
+        # `(module, name)` (PROP-051 §1.2). The merge collapses modules into the
+        # synthetic universe, so each def carries its ORIGIN module (the same
+        # mechanism contracts use above) for the TypeChecker's module-scoped
+        # function registry, duplicate law (OOF-F3) and `user.<module>.<name>`
+        # emission. Function imports remain refused (no export-set change).
+        "functions" => units.flat_map { |unit|
+          origin = unit.fetch("parsed").fetch("module", nil)
+          unit.fetch("parsed").fetch("functions", []).map { |f| f.merge("origin_module" => origin) }
+        },
         "consts" => units.flat_map { |unit| unit.fetch("parsed").fetch("consts", []) },
         "pipelines" => units.flat_map { |unit| unit.fetch("parsed").fetch("pipelines", []) },
         "olap_points" => units.flat_map { |unit| unit.fetch("parsed").fetch("olap_points", []) },

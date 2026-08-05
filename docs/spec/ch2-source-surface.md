@@ -76,7 +76,7 @@ ConstArray    := "[" (ConstExpr ("," ConstExpr)*)? "]"
 ConstRecord   := "{" (Name ":" ConstExpr ("," Name ":" ConstExpr)*)? "}"
 ScalarLiteral:= IntLit | FloatLit | StrLiteral | BoolLit
 
-FunctionDecl  := "def" Name "(" Params? ")" "->" TypeRef "{" Body "}"
+FunctionDecl  := "def" Name "(" Params? ")" "->" TypeRef ["decreases" "fuel"] "{" Body "}"
 Params        := Param ("," Param)*
 Param         := Name ":" TypeRef
 Body          := Stmt* Expr
@@ -597,11 +597,47 @@ def clamp(value: Float, lo: Float, hi: Float) -> Float {
 }
 ```
 
-**Semantic rules**:
-- Non-recursive (self-reference is OOF-F1)
-- Pure: no reads, no effects, no ambient state
-- Inlined at the call site in SemanticIR (no lambda node in emitted IR)
-- Scope: module-level or contract-local
+**Semantic rules** (as amended by PROP-051; the four original PROP-015 §Part 1
+rules below each record their supersession):
+- **Recursion — permitted under the recursion law.** Every member of a
+  nontrivial call-graph SCC must carry the literal `decreases fuel`
+  (`OOF-L4`, byte-locked message:
+  `Recursive function '<f>' must specify 'decreases fuel'`).
+  `decreases fuel` is a compile-time recursion-law token with NO independent
+  runtime fuel; the shared runtime call-depth bound (`MAX_CALL_DEPTH = 64`)
+  is the executable backstop. The original rule "non-recursive
+  (self-reference is OOF-F1)" is retired-historical: `OOF-F1` was spec'd
+  but never implemented, and is superseded by `OOF-L4` (recorded, never
+  reused).
+- **Purity — transitive laws.** The `OOF-M1` pure-contract purity family
+  covers escape-capability declarations AND transitive ambient-IO
+  laundering through helper `def`s — including through lambda bodies —
+  over the one module-local call graph, in both toolchains. Temporal
+  access is likewise transitive: `now()` is forbidden in `def` bodies
+  (`OOF-L2`, byte-locked message:
+  `now() is forbidden in function '<f>' — use explicit as_of binding or tick.time`).
+- **SemanticIR — registry emission, NOT inlining.** `def`s are emitted
+  into the top-level `functions[]` registry of the SIR envelope with the
+  emitted identity `user.<module>.<name>`, and resolved call sites lower
+  to `{kind: "call", fn: "user.<module>.<name>", args: […]}`. This
+  supersedes the original "inlined at the call site" sentence (PROP-015
+  §Part 1) per PROP-051 — the `user.<module>.<name>` identity survives,
+  the inlining claim does not.
+- **Scope — module-level only.** The original "contract-local" claim was
+  never implemented and is explicitly reserved-unimplemented (a later
+  PROP may open it).
+- **Identity, collision, and visibility (PROP-051).** Function identity is
+  `(module, name)`; the emitted identity is `user.<module>.<name>`. An
+  unqualified call resolves ONLY an app-local `def` declared in the
+  caller's module. Equal names in different modules are legal and
+  permanently distinct. Cross-module function calls and function imports
+  are CLOSED (they refuse; a later PROP may open a qualified-call
+  surface). A same-module `def` whose name collides with a visible stdlib
+  callable (bare/ad-hoc or imported) or with a derived or sealed
+  constructor REFUSES with `OOF-F2` (pinned:
+  `function '<name>' collides with <stdlib function|constructor> '<surface>' — rename the def; shadowing is refused`).
+  A duplicate `(module, name)` declaration REFUSES with `OOF-F3` (pinned:
+  `function '<name>' is declared more than once in module '<module>'`).
 
 ---
 
@@ -655,9 +691,11 @@ import Lang.Stdlib.{ fold, map, filter }
 OOF-G1  Unrecognized keyword at top level
 OOF-G2  Missing type annotation on input/output
 OOF-G3  Malformed lifecycle class (not in LifecycleClass set)
-OOF-F1  Recursive def (self-reference)
-OOF-M1  Circular import
-OOF-M2  Unknown import path
+OOF-F1  retired-historical (never implemented; superseded by OOF-L4
+        "recursive def without literal 'decreases fuel'", PROP-051 —
+        recorded, never reused)
+OOF-IMP1  Circular import
+OOF-IMP2  Unknown import path
 OOF-CONST-CYCLE    Direct or indirect const-reference cycle
 OOF-CONST-UNKNOWN  Const RHS references an unknown const
 OOF-CONST-LITERAL  Const RHS leaves the literal-only subgrammar

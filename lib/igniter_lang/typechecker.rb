@@ -358,6 +358,29 @@ module IgniterLang
     # Source aliases admitted as sealed constructors (function-form only, P3 v0).
     SEALED_CONSTRUCTORS = %w[some none ok err].freeze
 
+    # ── LANG-APP-LOCAL-DEF-CALL-CANON-ADOPTION-P2 (PROP-051 §1.3, OOF-F2) ─────
+    # Every DOT-FREE callable name `infer_call` itself resolves — the bare/ad-hoc
+    # when-arm spellings plus the bare keys of the stdlib tables. A same-module
+    # `def` with one of these names REFUSES (OOF-F2): shadowing is never silently
+    # resolved in either direction. Qualified (`stdlib.*`) identities cannot
+    # collide (def names are single idents) and are omitted. MUST stay in sync
+    # with the infer_call dispatch: any new bare arm is a new census member.
+    # Sealed constructors (SEALED_CONSTRUCTORS) collide as the CONSTRUCTOR
+    # family, not this stdlib-function census.
+    STDLIB_BARE_CALLABLES = (
+      %w[
+        history_at bihistory_at olap_rollup recur concat zip filter_map map
+        flat_map and_then at set_at sort_by sort_by_desc take sum fold append
+        is_empty non_empty char_at substring range decimal or_else secret_ref
+        unwrap_or call_contract text_to_bytes bytes_to_text
+      ] +
+      TEXT_STDLIB_FNS.keys + MATH_STDLIB_FNS.keys +
+      NUMERIC_STDLIB_ALIASES.keys.reject { |name| name.include?(".") } +
+      MAP_STDLIB_FNS.keys + OUTCOME_STDLIB_FNS.keys +
+      OPTION_PREDICATE_FNS.keys + OPTION_HOF_FNS.keys +
+      COLLECTION_HOF_FNS.keys + COLLECTION_FIRST_LAST_FNS.keys
+    ).to_set.freeze
+
     # PROP-042 T3: Matches "fn_name(arg_name)" — the T3 function-call decreases form.
     # Produced by parser.rb parse_decreases_decl when lparen follows the first identifier.
     T3_CALL_FORM_RE = /\A(\w+)\((\w+)\)\z/
@@ -427,11 +450,34 @@ module IgniterLang
       @cross_module_registry = cross_module_registry
       @per_module_imports = per_module_imports
       @per_contract_module = per_contract_module
+      # LANG-APP-LOCAL-DEF-CALL-CANON-ADOPTION-P2 (PROP-051 §1.1): the ONE
+      # module-scoped function registry `(module, name) → decl` — single source
+      # for call resolution, signature/body typing, recursion + IO/time
+      # analysis, and SIR emission. Multifile attribution comes from the
+      # resolver's per-decl origin_module tag; single-file defs belong to the
+      # program's module.
+      collision_errors = build_function_registry(classified_program)
+      # PROP-051 §1.3: the collision (OOF-F2) and duplicate (OOF-F3) laws refuse
+      # BEFORE typing — a program whose def surface is unlawful is never typed.
+      return function_law_refusal(classified_program, collision_errors) unless collision_errors.empty?
       # LANG-EFFECT-ITERATION-HELPER-WRAP-FAIL-CLOSED-P3: the deterministic transitive
       # app-local `def` host-IO summary (Ruby twin of Rust's compute_ambient_io_summary),
-      # built ONCE over the whole program's function call graph + Tarjan SCC and consulted
-      # by the OOF-EC6 helper-in-iteration fence (compute-lambda and loop-body positions).
-      @io_helper_summary = compute_io_helper_summary(classified_program.fetch("functions", []))
+      # built ONCE per module over the registry's function call graph + Tarjan SCC and
+      # consulted by the OOF-EC6 helper-in-iteration fence (compute-lambda and loop-body
+      # positions, non-pure contracts only) and the OOF-M1 laundering law (pure contracts).
+      @io_helper_summary_by_module = @functions_by_module.transform_values do |by_name|
+        compute_io_helper_summary(by_name.values)
+      end
+      @io_helper_summary = {}
+      # PROP-051 §1.4-§1.6: per-def laws over the registry — OOF-L4 recursion
+      # evidence, OOF-M1 pure-contract laundering, OOF-L2 temporal fence — then
+      # signature/body typing for every def the effect laws do not own.
+      function_errors = []
+      function_warnings = []
+      function_errors.concat(function_recursion_errors)
+      function_errors.concat(function_laundering_errors(classified_program))
+      now_flagged = function_temporal_errors(function_errors)
+      typed_functions = typecheck_functions(function_errors, function_warnings, now_flagged)
       typed_contracts = classified_program.fetch("contracts").map do |contract|
         typecheck_contract(contract)
       end
@@ -456,30 +502,8 @@ module IgniterLang
         end
       end
 
-      # OOF-L4: per-SCC rule — every member of a nontrivial SCC must declare `decreases fuel`.
-      # Replaces the self-only fn_self_recursive? check (LAB-FUNCTION-RECURSION-P3 ACCEPT decision).
-      function_errors = []
-      fns = classified_program.fetch("functions", [])
-      unless fns.empty?
-        fn_names_set = fns.map { |f| f.fetch("name") }.to_set
-        fn_adj = fns.to_h do |f|
-          [f.fetch("name"), fn_extract_all_calls(f.fetch("body", {}), fn_names_set)]
-        end
-        sccs = tarjan_sccs(fns.map { |f| f.fetch("name") }, fn_adj)
-        fn_map = fns.to_h { |f| [f.fetch("name"), f] }
-        sccs.each do |scc|
-          is_nontrivial = scc.length > 1 || (fn_adj[scc.first] || []).include?(scc.first)
-          next unless is_nontrivial
-          scc.sort.each do |fn_name|
-            f = fn_map[fn_name]
-            unless f.fetch("decreases", nil) == "fuel"
-              function_errors << oof("OOF-L4",
-                "Recursive function '#{fn_name}' must specify 'decreases fuel'",
-                fn_name)
-            end
-          end
-        end
-      end
+      # OOF-L4 / OOF-M1 / OOF-L2 and def signature/body typing were computed
+      # over the function registry above (function_errors / typed_functions).
 
       result = {
         "kind" => "typed_program",
@@ -500,10 +524,13 @@ module IgniterLang
         "semantic_ir_ref" => nil
       }
       result["entrypoint"] = resolved_entrypoint if resolved_entrypoint
+      # LANG-APP-LOCAL-DEF-CALL-CANON-ADOPTION-P2 (PROP-051 §1.7): typed def
+      # entries for SIR `functions` emission (`user.<module>.<name>` identity).
+      result["functions"] = typed_functions unless typed_functions.empty?
       result["assumption_registry"] = @assumption_registry unless @assumption_registry.empty?
       result["variant_env"] = @variant_shapes unless @variant_shapes.empty?  # PROP-044 P5
       result["olap_points"] = @olap_env.values.map { |decl| decl.fetch("semantic_node") } unless @olap_env.empty?
-      type_warnings = typed_contracts.flat_map { |contract| contract.fetch("type_warnings", []) } + const_warnings
+      type_warnings = typed_contracts.flat_map { |contract| contract.fetch("type_warnings", []) } + const_warnings + function_warnings
       result["type_warnings"] = type_warnings unless type_warnings.empty?
       # PROP-045: propagate module-level intent_text
       module_intent = classified_program.fetch("intent_text", nil)
@@ -804,13 +831,14 @@ module IgniterLang
       contract_modifier = classified_contract.fetch("modifier", "pure")
       contract_name_str = classified_contract.fetch("name")
       @current_contract_name = contract_name_str  # LAB-RUBY-CALL-CONTRACT-PARITY-P3: self-recursion guard
-      contract_id = classified_contract.fetch("contract_id", contract_name_str)
-      module_suffix = ".#{contract_name_str}"
-      @current_contract_module = if contract_id.end_with?(module_suffix)
-                                   contract_id.delete_suffix(module_suffix)
-                                 else
-                                   @per_contract_module.fetch(contract_name_str, @classified_module)
-                                 end
+      @current_contract_module = contract_module_for(classified_contract)
+      # LANG-APP-LOCAL-DEF-CALL-CANON-ADOPTION-P2: module-scoped view of the
+      # transitive def host-IO summary for THIS contract's module (consumed by
+      # the OOF-EC6 helper hooks below and in check_loop_body).
+      @io_helper_summary = (@io_helper_summary_by_module || {}).fetch(@current_contract_module, {})
+      # PROP-051 §1.5: the OOF-EC6 iteration helper fence applies to NON-pure
+      # contracts only — pure contracts are owned by OOF-M1 / E-IO-AMBIENT-BLOCKED.
+      @current_contract_modifier = contract_modifier
       # LANG-EFFECT-CALL-NATURAL-SUGAR-P1: the caller's declared capability slot names, so
       # OOF-EC7 can print the actual capability when the mapping is unique.
       @current_contract_capabilities = classified_contract.fetch("declarations", [])
@@ -1203,11 +1231,12 @@ module IgniterLang
           # LANG-EFFECT-ITERATION-HELPER-WRAP-FAIL-CLOSED-P3: an app-local helper whose
           # call graph transitively reaches host IO, called inside a HOF lambda, is the
           # same placement violation one indirection out — refuse with one root OOF-EC6.
-          # Detected via the shared summary (which sees the parsed `def`s even though
-          # `infer_expr` does not resolve app-local calls inside lambdas), then the
-          # offending compute is bound Unknown so the single root is not buried under
-          # the pre-existing "Unknown function" / output-type noise.
-          io_helper_fn = find_io_helper_in_lambda(decl.fetch("expr", nil), @io_helper_summary)
+          # Detected via the shared summary, then the offending compute is bound Unknown
+          # so the single root is not buried under derivative output-type noise.
+          # PROP-051 §1.5 re-gate: helper-EC6 fires for NON-pure contracts only — a
+          # pure contract reaching an IO def is owned by OOF-M1 (laundering).
+          io_helper_fn = contract_modifier == "pure" ? nil :
+            find_io_helper_in_lambda(decl.fetch("expr", nil), @io_helper_summary)
           if io_helper_fn
             type_errors << oof_ec6_helper_iteration_io(io_helper_fn, "a lambda body in compute '#{name}'", name)
             symbol_types[name] = type_ir("Unknown")
@@ -2517,9 +2546,62 @@ module IgniterLang
         # LAB-RUBY-CALL-CONTRACT-PARITY-P3: Tier 1 literal same-module + Tier 2 dynamic
         infer_call_contract(expr, symbol_types, type_errors, type_warnings, node_name)
       else
-        type_errors << oof("OOF-TY0", "Unknown function: #{fn}", node_name)
-        typed_expr("call", type_ir("Unknown"), [], "fn" => fn, "args" => [])
+        # LANG-APP-LOCAL-DEF-CALL-CANON-ADOPTION-P2 (PROP-051 §1.2): an
+        # unqualified call resolves ONLY an app-local `def` declared in the
+        # caller's module. Anything else keeps the module-scoped
+        # `Unknown function` law (cross-module calls and function imports stay
+        # CLOSED by PROP-051).
+        decl = fn.include?(".") ? nil : (@function_registry || {})[[@current_contract_module, fn]]
+        if decl
+          infer_user_fn_call(decl, args, symbol_types, type_errors, type_warnings, node_name)
+        else
+          type_errors << oof("OOF-TY0", "Unknown function: #{fn}", node_name)
+          typed_expr("call", type_ir("Unknown"), [], "fn" => fn, "args" => [])
+        end
       end
+    end
+
+    # LANG-APP-LOCAL-DEF-CALL-CANON-ADOPTION-P2 (PROP-051 §1.4): typed call to a
+    # registry-resolved app-local def. Arity and per-parameter types are checked
+    # against the declared signature (Rust twin: check_user_fn_call_signature);
+    # the call always carries the DECLARED return type, and its SIR identity is
+    # the emitted `user.<module>.<name>` (§1.7 — the `user.` prefix is reserved
+    # and never rewritten by any stdlib re-qualification).
+    def infer_user_fn_call(decl, args, symbol_types, type_errors, type_warnings, node_name)
+      fn_name = decl.fetch("name")
+      params = decl.fetch("params", [])
+      typed_args = args.map { |arg| infer_expr(arg, symbol_types, type_errors, type_warnings, node_name) }
+      if args.length != params.length
+        type_errors << oof("OOF-TY0",
+          "Call to '#{fn_name}': expected #{params.length} argument#{params.length == 1 ? "" : "s"}, got #{args.length}",
+          node_name)
+      else
+        params.each_with_index do |param, index|
+          expected = type_ir(param.fetch("type_annotation", "Unknown"))
+          actual = typed_args[index].fetch("resolved_type")
+          # P8 capability side-table: a direct capability ref types as the
+          # `IO.Capability` sentinel (CR-001 carrier); recover the authored
+          # nominal type so an `IO.<Specific>Capability` parameter can be proven.
+          if type_name(actual) == "IO.Capability"
+            arg = args[index]
+            ref_name = arg.is_a?(Hash) && arg["kind"] == "ref" ? arg["name"] : nil
+            nominal = ref_name && (@current_contract_capability_types || {})[ref_name]
+            actual = type_ir(nominal) if nominal
+          end
+          next if unknown_or_unknown_bearing?(expected) || unknown_or_unknown_bearing?(actual)
+          next if structurally_assignable?(actual, expected)
+          type_errors << oof("OOF-TY0",
+            "Call to '#{fn_name}': parameter '#{param.fetch("name")}' expects #{type_display(expected)}, got #{type_display(actual)}",
+            node_name)
+        end
+      end
+      typed_expr(
+        "call",
+        type_ir(decl.fetch("return_type", "Unknown")),
+        typed_args.flat_map { |arg| arg.fetch("deps", []) }.uniq,
+        "fn" => "user.#{function_module_for(decl)}.#{fn_name}",
+        "args" => typed_args
+      )
     end
 
     def infer_history_at(fn, args, symbol_types, type_errors, type_warnings, node_name)
@@ -3466,6 +3548,327 @@ module IgniterLang
       ambient
     end
 
+    # ── LANG-APP-LOCAL-DEF-CALL-CANON-ADOPTION-P2: module-scoped def registry ──
+    #
+    # PROP-051 §1.1: ONE registry `(module, name) → decl`, built once per
+    # typecheck. Attribution: the multifile resolver's per-decl `origin_module`
+    # tag, else the program's module. Returns the OOF-F3 (duplicate) + OOF-F2
+    # (collision) refusals — non-empty means the program is refused before any
+    # typing (§1.3).
+    def build_function_registry(classified_program)
+      @function_registry = {}
+      @functions_by_module = {}
+      @stdlib_imported_names = {}
+      errors = []
+      classified_program.fetch("functions", []).each do |decl|
+        mod = function_module_for(decl)
+        name = decl.fetch("name")
+        if @function_registry.key?([mod, name])
+          errors << function_oof("OOF-F3",
+            "function '#{name}' is declared more than once in module '#{mod}'", decl)
+          next
+        end
+        @function_registry[[mod, name]] = decl
+        (@functions_by_module[mod] ||= {})[name] = decl
+      end
+      errors + function_collision_errors(classified_program)
+    end
+
+    def function_module_for(decl)
+      decl.fetch("origin_module", nil) || @classified_module
+    end
+
+    # PROP-051 §1.3 (OOF-F2): a same-module def may not shadow a visible stdlib
+    # callable (bare/ad-hoc census + the module's stdlib imports) or a derived/
+    # sealed constructor (visible variant arms, some/none/ok/err). One refusal
+    # per def, first matching family.
+    def function_collision_errors(classified_program)
+      errors = []
+      @function_registry.each do |(mod, name), decl|
+        family, surface =
+          if SEALED_CONSTRUCTORS.include?(name)
+            ["constructor", name]
+          elsif variant_arm_visible_from?(name, mod)
+            ["constructor", name]
+          elsif STDLIB_BARE_CALLABLES.include?(name)
+            ["stdlib function", name]
+          elsif stdlib_imported_names(mod, classified_program).include?(name)
+            ["stdlib function", name]
+          end
+        next unless family
+        errors << function_oof("OOF-F2",
+          "function '#{name}' collides with #{family} '#{surface}' — rename the def; shadowing is refused",
+          decl)
+      end
+      errors
+    end
+
+    # Names imported from stdlib.* modules by `mod` (multifile: the resolver's
+    # per-module imports; single-file: the classifier's imports pass-through).
+    def stdlib_imported_names(mod, classified_program)
+      @stdlib_imported_names[mod] ||= begin
+        imports = @per_module_imports.fetch(mod, nil) || classified_program.fetch("imports", [])
+        imports.select { |import| import.fetch("module_path", "").to_s.start_with?("stdlib.") }
+               .flat_map { |import| Array(import.fetch("names", nil)) }
+               .to_set
+      end
+    end
+
+    # Arm visibility from an arbitrary module (the def's), mirroring the
+    # contract-context variant_owner_visible? law: own-module arms plus arms of
+    # variants the module imports.
+    def variant_arm_visible_from?(arm_name, mod)
+      Array(@variant_arm_owners.fetch(arm_name, [])).any? do |owner|
+        owner_module = owner.fetch("module", nil)
+        next true if owner_module == mod
+
+        Array(@per_module_imports.fetch(mod, [])).any? do |import|
+          next false unless import.fetch("module_path", nil) == owner_module
+
+          names = import.fetch("names", nil)
+          names.nil? || names.include?(owner.fetch("variant_name"))
+        end
+      end
+    end
+
+    # PROP-051 §4: def-declaration diagnostics carry the decl's source span.
+    def function_oof(rule, message, decl)
+      oof(rule, message, decl.fetch("name")).merge(
+        "line" => decl.fetch("line", nil), "col" => decl.fetch("col", nil)
+      )
+    end
+
+    # §1.3 refusal envelope: the typed-program shape with ONLY the collision/
+    # duplicate refusals — no contract is typed (fail-closed, no derivative noise).
+    def function_law_refusal(classified_program, errors)
+      {
+        "kind" => "typed_program",
+        "typechecker_version" => @typechecker_version,
+        "program_id" => program_id(classified_program),
+        "classified_program_id" => classified_program.fetch("program_id"),
+        "source_path" => classified_program.fetch("source_path"),
+        "source_hash" => classified_program.fetch("source_hash"),
+        "grammar_version" => classified_program.fetch("grammar_version"),
+        "module" => classified_program.fetch("module"),
+        "type_env" => @type_shapes,
+        "declared_type_env" => @port_type_registry,
+        "contracts" => [],
+        "type_errors" => errors,
+        "semantic_ir_ref" => nil
+      }
+    end
+
+    # OOF-L4 over the registry, per module (equal names in different modules are
+    # distinct identities — §1.2): every member of a nontrivial SCC must carry
+    # the literal `decreases fuel`. Message byte-locked.
+    def function_recursion_errors
+      errors = []
+      @functions_by_module.keys.sort_by(&:to_s).each do |mod|
+        by_name = @functions_by_module.fetch(mod)
+        fn_names_set = by_name.keys.to_set
+        fn_adj = by_name.transform_values { |f| fn_extract_all_calls(f.fetch("body", {}), fn_names_set) }
+        tarjan_sccs(by_name.keys, fn_adj).each do |scc|
+          is_nontrivial = scc.length > 1 || (fn_adj[scc.first] || []).include?(scc.first)
+          next unless is_nontrivial
+          scc.sort.each do |fn_name|
+            f = by_name.fetch(fn_name)
+            next if f.fetch("decreases", nil) == "fuel"
+            errors << function_oof("OOF-L4",
+              "Recursive function '#{fn_name}' must specify 'decreases fuel'", f)
+          end
+        end
+      end
+      errors
+    end
+
+    # PROP-051 §1.5 (OOF-M1 laundering): a pure contract reaching an
+    # IO-summary-true def — directly, transitively, or via lambda position —
+    # refuses with one diagnostic per directly-called leaking def, sorted
+    # (Rust twin: the NW-T2-4 interprocedural effect summary consumer; message
+    # byte-locked to the shipped Rust text).
+    def function_laundering_errors(classified_program)
+      return [] if @io_helper_summary_by_module.values.all? { |summary| summary.none? { |_name, io| io } }
+
+      errors = []
+      classified_program.fetch("contracts").each do |contract|
+        next unless contract.fetch("modifier", "pure") == "pure"
+        summary = @io_helper_summary_by_module.fetch(contract_module_for(contract), {})
+        next if summary.empty?
+        called = collect_called_def_names(contract.fetch("declarations", []), summary.keys.to_set, Set.new)
+        contract_name = contract.fetch("name")
+        called.select { |def_name| summary[def_name] }.sort.each do |def_name|
+          errors << oof("OOF-M1",
+            "pure contract '#{contract_name}' performs ambient I/O transitively through helper def " \
+            "'#{def_name}' (a capability-backed host-IO sink is reachable via the call graph); " \
+            "pure contracts cannot launder effects through a def — use 'observed' for read-only " \
+            "access or move the I/O behind a declared capability",
+            contract_name)
+        end
+      end
+      errors
+    end
+
+    # Every module-local def name called anywhere under `node` (generic descent —
+    # covers call args, if/match branches, blocks, record/array literals AND
+    # lambda bodies; lambda position is a reach per §1.5).
+    def collect_called_def_names(node, fn_names_set, found)
+      if node.is_a?(Array)
+        node.each { |value| collect_called_def_names(value, fn_names_set, found) }
+        return found
+      end
+      return found unless node.is_a?(Hash)
+
+      if node.fetch("kind", nil) == "call"
+        fn = node.fetch("fn", nil)
+        found.add(fn) if fn && fn_names_set.include?(fn)
+      end
+      node.each_value { |value| collect_called_def_names(value, fn_names_set, found) }
+      found
+    end
+
+    # PROP-051 §1.5 (OOF-L2): now() is forbidden in def bodies — one per-def
+    # scan (call `now(...)` or bare ref `now`, Rust twin block_has_now).
+    # Returns the flagged (module, name) set so body typing skips them (the
+    # single root diagnostic must not be buried under derivative noise).
+    def function_temporal_errors(errors)
+      flagged = Set.new
+      @function_registry.each do |(mod, name), decl|
+        next unless expr_tree_has_now?(decl.fetch("body", {}))
+        flagged.add([mod, name])
+        errors << function_oof("OOF-L2",
+          "now() is forbidden in function '#{name}' — use explicit as_of binding or tick.time", decl)
+      end
+      flagged
+    end
+
+    def expr_tree_has_now?(node)
+      return node.any? { |value| expr_tree_has_now?(value) } if node.is_a?(Array)
+      return false unless node.is_a?(Hash)
+
+      kind = node.fetch("kind", nil)
+      return true if kind == "call" && node.fetch("fn", nil) == "now"
+      return true if kind == "ref" && node.fetch("name", nil) == "now"
+      node.each_value.any? { |value| expr_tree_has_now?(value) }
+    end
+
+    # PROP-051 §1.4 + §1.7: per-registry-entry signature/body typing and the
+    # typed carriers for SIR `functions` emission. Defs whose transitive summary
+    # reaches host IO are owned by the effect-law family (OOF-M1 / OOF-EC6 / the
+    # contract capability boundary) — their bodies need a capability context only
+    # a contract boundary can supply, so the pure expression pass does not
+    # re-type them; now()-flagged defs are already refused by OOF-L2.
+    def typecheck_functions(type_errors, type_warnings, now_flagged)
+      @function_registry.map do |(mod, name), decl|
+        entry = {
+          "kind" => "function",
+          "module" => mod,
+          "name" => name,
+          "emitted_name" => "user.#{mod}.#{name}",
+          "params" => decl.fetch("params", []),
+          "return_type" => decl.fetch("return_type", "Unknown")
+        }
+        entry["decreases"] = decl.fetch("decreases") if decl.key?("decreases")
+        io_owned = @io_helper_summary_by_module.fetch(mod, {}).fetch(name, false)
+        entry["body"] =
+          if io_owned || now_flagged.include?([mod, name])
+            qualified_raw_body(decl.fetch("body", {}), mod)
+          else
+            typecheck_function_body(decl, mod, type_errors, type_warnings)
+          end
+        entry
+      end
+    end
+
+    # Body/return typing with the SAME expression machinery contracts use:
+    # params bound into scope, `let` bindings threaded, body type checked
+    # against the declared return type (String/Text canonicalized like every
+    # other assignability check). A statement-only body types as Unit.
+    def typecheck_function_body(decl, mod, type_errors, type_warnings)
+      fn_name = decl.fetch("name")
+      reset_function_typing_context(mod)
+      symbol_types = {}
+      decl.fetch("params", []).each do |param|
+        symbol_types[param.fetch("name")] = type_ir(param.fetch("type_annotation", "Unknown"))
+      end
+      body = decl.fetch("body", {})
+      typed_stmts = body.fetch("stmts", []).map do |stmt|
+        if stmt.fetch("kind", nil) == "let"
+          typed = infer_expr(stmt.fetch("expr"), symbol_types, type_errors, type_warnings, fn_name)
+          symbol_types[stmt.fetch("name")] = typed.fetch("resolved_type")
+          { "kind" => "let", "name" => stmt.fetch("name"), "expr" => typed }
+        else
+          typed = infer_expr(stmt.fetch("expr", stmt), symbol_types, type_errors, type_warnings, fn_name)
+          { "kind" => "expr_stmt", "expr" => typed }
+        end
+      end
+      return_expr = body.fetch("return_expr", nil)
+      typed_return = return_expr &&
+                     infer_expr(return_expr, symbol_types, type_errors, type_warnings, fn_name)
+      declared = type_ir(decl.fetch("return_type", "Unknown"))
+      actual = typed_return ? typed_return.fetch("resolved_type") : type_ir("Unit")
+      unless unknown_or_unknown_bearing?(declared) || unknown_or_unknown_bearing?(actual) ||
+             structurally_assignable?(actual, declared)
+        type_errors << function_oof("OOF-TY0",
+          "function '#{fn_name}': body type #{type_display(actual)} does not match declared return type #{type_display(declared)}",
+          decl)
+      end
+      typed_body = { "stmts" => typed_stmts }
+      typed_body["return_expr"] = typed_return if typed_return
+      typed_body
+    end
+
+    # A def body is typed with the same expression machinery contracts use; give
+    # it a neutral contract context (module-scoped call resolution needs only
+    # the caller module).
+    def reset_function_typing_context(mod)
+      @current_contract_name = nil
+      @current_contract_module = mod
+      @current_contract_modifier = nil
+      @current_contract_capabilities = []
+      @current_contract_capability_types = {}
+      @current_contract_refs = {}
+      @output_type_hints = {}
+      @sealed_output_hints = {}
+      @collection_output_hints = {}
+      @recur_context = nil
+      @recur_nontail_ids = {}
+      @t2_context = nil
+      @t3_context = nil
+    end
+
+    # Copying rewrite for effect-law-owned (untyped) def bodies: module-local
+    # def call sites still lower to the reserved `user.<module>.<name>` identity
+    # so no bare def name can reach the emitter (§1.7).
+    def qualified_raw_body(node, mod)
+      case node
+      when Array
+        node.map { |value| qualified_raw_body(value, mod) }
+      when Hash
+        rewritten = node.to_h { |key, value| [key, qualified_raw_body(value, mod)] }
+        fn = rewritten["fn"]
+        if rewritten["kind"] == "call" && fn.is_a?(String) &&
+           @functions_by_module.fetch(mod, {}).key?(fn)
+          rewritten["fn"] = "user.#{mod}.#{fn}"
+        end
+        rewritten
+      else
+        node
+      end
+    end
+
+    # Contract → module attribution (multifile contract_id / per-contract map /
+    # single-file program module) — the same carrier the contract registries use.
+    def contract_module_for(classified_contract)
+      contract_name_str = classified_contract.fetch("name")
+      contract_id = classified_contract.fetch("contract_id", contract_name_str)
+      module_suffix = ".#{contract_name_str}"
+      if contract_id.end_with?(module_suffix)
+        contract_id.delete_suffix(module_suffix)
+      else
+        @per_contract_module.fetch(contract_name_str, @classified_module)
+      end
+    end
+
     # First app-local helper name found ANYWHERE within `node` whose transitive
     # summary reaches host IO, or nil. Generic descent (mirrors `find_host_io`),
     # used for loop bodies where the whole body is an iteration context.
@@ -4278,7 +4681,9 @@ module IgniterLang
           # helper called in a loop-body compute is the same placement violation one
           # indirection out (loop bodies currently accept helper calls silently) — one
           # root OOF-EC6. Only when there is no direct-IO root already (disjoint families).
-          if !io_fn
+          # PROP-051 §1.5 re-gate: helper-EC6 fires for NON-pure contracts only — a
+          # pure contract reaching an IO def is owned by OOF-M1 (laundering).
+          if !io_fn && @current_contract_modifier != "pure"
             helper_fn = find_io_helper(b.fetch("expr", nil), @io_helper_summary)
             errors << oof_ec6_helper_iteration_io(helper_fn, "loop body '#{loop_name}'", loop_name) if helper_fn
           end

@@ -117,7 +117,11 @@ module IgniterLang
 
       line = entry.fetch("line", nil)
       col = entry.fetch("col", nil) || entry.fetch("column", nil)
-      return nil unless line && col
+      # LANG-APP-LOCAL-DEF-CALL-CANON-ADOPTION-P2: PRESERVE what is provided —
+      # a diagnostic carrying only a line keeps it (col stays nil) instead of
+      # silently dropping the whole span. Diagnostics carrying neither are
+      # unchanged (span stays nil).
+      return nil unless line
 
       { "line" => line, "col" => col }
     end

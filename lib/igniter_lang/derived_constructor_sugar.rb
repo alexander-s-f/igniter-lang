@@ -3,6 +3,7 @@
 require "set"
 
 require_relative "contract_call_sugar"
+require_relative "function_registry"
 
 module IgniterLang
   # LANG-DERIVED-RECORD-CONSTRUCTOR-P2
@@ -41,7 +42,9 @@ module IgniterLang
       variant_arm_names = Array(parsed["variants"]).flat_map do |variant|
         Array(variant["arms"]).filter_map { |arm| arm["name"] if arm.is_a?(Hash) }
       end.to_set
-      function_names = Array(parsed["functions"]).filter_map { |function| function["name"] }.to_set
+      # LANG-APP-LOCAL-DEF-CALL-CANON-ADOPTION-P2: shared pre-classification def-name
+      # view (the module-scoped registry itself is TypeChecker authority).
+      function_names = FunctionRegistry.declared_names(parsed)
 
       constructor_infos = Hash.new { |hash, name| hash[name] = [] }
       parsed["contracts"] = contracts.filter_map do |contract|

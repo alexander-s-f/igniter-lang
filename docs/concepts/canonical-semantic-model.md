@@ -181,7 +181,7 @@ also produce `fragment_class: "oof"` on the containing contract.
 
 | code | triggers when | golden_anchor | PROP | Covenant |
 |------|--------------|---------------|------|----------|
-| OOF-M1 | `pure` contract body declares `escape`-class capability | `contract_modifiers_proof/golden/oof_m1_pure_with_escape.classified.json` | PROP-031 | P4, P7 |
+| OOF-M1 | Pure-contract purity family: `escape`-class capability declaration or transitive ambient-I/O laundering through app-local defs | `contract_modifiers_proof/golden/oof_m1_pure_with_escape.classified.json`; igniter-lab P2 def-call corpus | PROP-031, PROP-051 | P4, P7 |
 | OOF-P1 | Unresolved compute dependency or output source symbol | `classifier_pass_proof/golden/negative_unresolved_symbol.classified.json` | PROP-018, PROP-020 | P2 |
 | OOF-S2 | `stream` declared without a `window` block | `classifier_pass_proof/golden/negative_stream_missing_window.classified.json` | PROP-023 | P14 |
 | OOF-S4 | Stream value used directly (must use `fold_stream`) | `classifier_pass_proof/golden/negative_stream_direct_use.classified.json` | PROP-023 | P14 |
@@ -190,6 +190,11 @@ also produce `fragment_class: "oof"` on the containing contract.
 | OOF-KIND8 | A qualified arm is not a visible declared arm, or a bare user arm has zero or multiple visible owners | `variant_arm_qualified_construct_proof/verify_variant_arm_qualified_construct_p1.rb` | LANG-VARIANT-ARM-QUALIFIED-CONSTRUCT-P1 | P27, P28 |
 | OOF-KIND9 | A qualified match pattern names a variant other than the known subject variant | `variant_arm_qualified_construct_proof/verify_variant_arm_qualified_construct_p1.rb` | LANG-VARIANT-ARM-QUALIFIED-CONSTRUCT-P1 | P27, P28 |
 | OOF-VM-OPTION-CARRIER | Option marker/guard/carrier or typed host envelope is missing, incompatible, malformed, or excessive-depth | `option_runtime_carrier_convergence_p2/verify_option_runtime_carrier_p2.rb` | LANG-OPTION-RUNTIME-CARRIER-CONVERGENCE-P2 | P2, P11, P28 |
+| OOF-L4 | Recursive `def` (member of a nontrivial call-graph SCC) without the literal `decreases fuel` | igniter-lab: `proofs/lang-app-local-def-call-canon-adoption-p2/specimen_corpus.py` | PROP-051 | P14 |
+| OOF-L2 | Temporal access (`now()`) in `def` bodies or contract expressions | igniter-lab: `proofs/lang-app-local-def-call-canon-adoption-p2/specimen_corpus.py` | PROP-051 | P3 |
+| OOF-F2 | Same-module `def` name collides with a visible stdlib callable (bare/ad-hoc or imported) or a derived/sealed constructor | igniter-lab: `proofs/lang-app-local-def-call-canon-adoption-p2/specimen_corpus.py` | PROP-051 | — |
+| OOF-F3 | Duplicate `(module, name)` `def` declaration | igniter-lab: `proofs/lang-app-local-def-call-canon-adoption-p2/specimen_corpus.py` | PROP-051 | — |
+| OOF-TY0 | Typing family (note, not a single rule): unknown function (not visible in the caller's module), call arity/param mismatch, declared-return-vs-body mismatch | igniter-lab: `proofs/lang-app-local-def-call-canon-adoption-p2/specimen_corpus.py` | PROP-051 | — |
 | OOF-I1 | `@bitemporal` invariant on non-bitemporal type (deferred) | — | PROP-025 (deferred) | P14 |
 | OOF-I3 | `~T` invariant shape violation (deferred) | — | PROP-025 (deferred) | P14 |
 | OOF-I5 | (deferred invariant OOF, exact condition TBD) | — | PROP-025 (deferred) | P14 |

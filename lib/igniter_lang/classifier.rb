@@ -55,6 +55,10 @@ module IgniterLang
       # the TypeChecker `implements <Shape>` port conformance check.
       contract_shapes = parsed_program.fetch("contract_shapes", [])
       result["contract_shapes"] = contract_shapes unless contract_shapes.empty?
+      # LANG-APP-LOCAL-DEF-CALL-CANON-ADOPTION-P2: module imports feed the OOF-F2
+      # def-collision law (a def may not shadow an imported stdlib callable).
+      imports = parsed_program.fetch("imports", [])
+      result["imports"] = imports unless imports.empty?
       result
     end
 

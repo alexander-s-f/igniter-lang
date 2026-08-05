@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "function_registry"
+
 module IgniterLang
   # LANG-CONTRACT-CALL-SUGAR-P6 (canon parity with igniter-compiler/src/call_sugar.rs).
   #
@@ -30,7 +32,9 @@ module IgniterLang
       contract_names = Array(parsed["contracts"]).map { |c| c["name"] }.compact.to_set
       return parsed if contract_names.empty?
 
-      def_names = Array(parsed["functions"]).map { |f| f["name"] }.compact.to_set
+      # LANG-APP-LOCAL-DEF-CALL-CANON-ADOPTION-P2: shared pre-classification def-name
+      # view (the module-scoped registry itself is TypeChecker authority).
+      def_names = FunctionRegistry.declared_names(parsed)
       rewrite(parsed, contract_names, def_names)
       parsed
     end

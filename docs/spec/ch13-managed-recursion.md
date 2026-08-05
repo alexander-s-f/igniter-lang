@@ -348,17 +348,21 @@ liveness. `OOF-SL4` is reserved for a future required-checkpoint decision.
 | Code | Condition | Severity | Status |
 |------|-----------|----------|--------|
 | OOF-L1 | `for_loop` source is not `Collection[T]` | error | **experiment-pass** — typechecker.rb; loop_typechecker_proof 49/49 |
-| OOF-L2 | `max_steps` is dynamic where v0 requires static literal | error | candidate |
+| OOF-L2 | Temporal access (`now()`) in `def` bodies and contract expressions | error | **live** — Rust-live, adopted dual by PROP-051 (Ruby per-def scan); byte-locked message; supersedes ch8's retired `OOF-L6` anchor |
 | OOF-L3 | Semantic loop block is unnamed (Postulate 28) | error | candidate |
-| OOF-L4 | `break` in a PROP-039 v0 loop | error | candidate |
+| OOF-L4 | Recursive `def` (member of a nontrivial call-graph SCC) without literal `decreases fuel` | error | **experiment-pass** — both toolchains, byte-identical message (PROP-051) |
 | OOF-L5 | Unsupported loop body form (nested loop at body level, non-literal `lead` initial, `lead` at contract level, undefined compute target) | error | **experiment-pass** — typechecker.rb; loop_body_semantics_proof 100/100 |
 | OOF-L7 | Loop body compute targets loop item variable or outer contract symbol (read-only violation) | error | **experiment-pass** — typechecker.rb; loop_body_semantics_proof 100/100 |
 | OOF-L8 | `lead` binding shadows outer contract symbol or loop item variable | error | **experiment-pass** — typechecker.rb; loop_body_semantics_proof 100/100 |
+| OOF-L9 | `max_steps` is dynamic where v0 requires static literal | error | candidate — re-allocated from `OOF-L2` by PROP-051 |
+| OOF-L10 | `break` in a PROP-039 v0 loop | error | candidate — re-allocated from `OOF-L4` by PROP-051 |
 
-OOF-L6 is Ch8 authority (ambient-clock / `now()` refusal). PROP-039 does not
-own or modify OOF-L6.
+`OOF-L6` is retired-historical (PROP-051): it was ch8's source-level wording
+anchor for ambient-clock / `now()` refusal, was never emitted, and is
+superseded by `OOF-L2` — recorded, never reused. PROP-039 does not own or
+modify the ambient-clock law.
 
-OOF-L2/L3/L4 remain candidates. Source-level `break` is deferred. Future proof
+OOF-L3/L9/L10 remain candidates. Source-level `break` is deferred. Future proof
 fixtures must include unnamed-loop robustness for Postulate 28 (the R246/R247
 `OOF-L3` pressure item), but enforcement is not yet proven.
 
