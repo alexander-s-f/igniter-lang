@@ -8,7 +8,6 @@ canon.
 
 `igniter-gov/agent-protocol/idd-agent-protocol/` — see its `VERSION.md` / `SYNC.md`.
 
-- Current version: **v1.1.0** (2026-06-15)
 - Runtime use: Codex loads from `~/.codex/skills/idd-agent-protocol`; Claude uses
   its own managed plugin lineage (separate — see `claude-lineage-note.md` in source).
 
