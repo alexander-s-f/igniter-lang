@@ -1,5 +1,5 @@
 {
-  "artifact_hash": "sha256:68f0e8145e051faa2672f37d9ca72c908573239ba37c4d5a1b6c0c368e65077d",
+  "artifact_hash": "sha256:46a7727385a6c4ab2cfe7a6d31c2a9a9e198c58694a57157e133817186befae1",
   "capabilities": [],
   "compute_nodes": [
     {
@@ -128,7 +128,7 @@
       "type_tag": "Integer"
     }
   ],
-  "source_contract_ref": "contract/Add/sha256:e0677d9cfcafa1e7f5057123",
+  "source_contract_ref": "contract/Add/sha256:dcb50518abc9e7382c7186aa",
   "type_signature": {
     "inputs": {
       "a": "Integer",

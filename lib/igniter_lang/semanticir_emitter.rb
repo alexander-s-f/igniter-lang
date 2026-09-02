@@ -305,6 +305,25 @@ module IgniterLang
       # fuel loop reads termination.max_steps; its default applies otherwise.
       max_steps = contract.fetch("max_steps", nil)
       (contract_ir["termination"] ||= {})["max_steps"] = max_steps if max_steps
+      # LANG-CAPABILITY-DECLARATION-ARTIFACT-PARITY-IMPLEMENTATION-P3:
+      # per-contract capability/effect declaration rows, inserted UNCONDITIONALLY
+      # for every contract on the typed artifact path (Rust parity; Runtime
+      # per-contract array law). Rows carry the DECLARED interface identity —
+      # name AND ordered type parameters, recursively (`declared_type_ref`
+      # carrier); the CR-001 typed-IR sentinel and effect_surface_v1 are
+      # unchanged. Declaration source order preserved. Placed BEFORE contract_ref
+      # so the rows enter contract identity.
+      typed_decls_for_rows = contract.fetch("declarations", [])
+      contract_ir["capabilities"] = typed_decls_for_rows
+        .select { |d| d.fetch("kind") == "capability" }
+        .map do |d|
+          declared = d["declared_type_ref"] ||
+                     { "name" => d.fetch("type", {}).fetch("name", "IO.Capability"), "params" => [] }
+          { "name" => d.fetch("name"), "type" => declared }
+        end
+      contract_ir["effects"] = typed_decls_for_rows
+        .select { |d| d.fetch("kind") == "effect_binding" }
+        .map { |d| { "name" => d.fetch("name"), "capability_ref" => d.fetch("deps", []).first } }
       contract_ir["contract_ref"] = contract_ref(contract_ir)
       contract_ir
     end

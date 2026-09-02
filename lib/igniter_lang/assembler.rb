@@ -261,6 +261,19 @@ module IgniterLang
       fragment_summary = fragment_summary_for(contracts)
       contract_index = contract_index_for(contracts)
 
+      # LANG-CAPABILITY-DECLARATION-ARTIFACT-PARITY-IMPLEMENTATION-P3:
+      # manifest capability/effect aggregation mirroring the Rust assembler —
+      # flat concat of every contract's rows in SIR contract order. The Runtime
+      # never reads manifest key order; the key position here is stable.
+      all_capabilities = []
+      all_effects = []
+      semantic_ir.fetch("contracts").each do |contract_ir|
+        caps = contract_ir["capabilities"]
+        all_capabilities.concat(caps) if caps.is_a?(Array)
+        effs = contract_ir["effects"]
+        all_effects.concat(effs) if effs.is_a?(Array)
+      end
+
       manifest = {
         "kind" => "igapp_manifest",
         "format_version" => "0.1.0",
@@ -286,6 +299,8 @@ module IgniterLang
         "fragment_class" => fragment_class,
         "fragment_summary" => fragment_summary,
         "contract_index" => contract_index,
+        "capabilities" => all_capabilities,
+        "effects" => all_effects,
         "schema_descriptor" => { "trait_bounds" => [], "migrations" => [] },
         "warnings" => [],
         "diagnostics" => report.fetch("diagnostics")

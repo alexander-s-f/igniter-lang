@@ -1057,6 +1057,13 @@ module IgniterLang
           resolved_type = type_name_str.start_with?("IO.") ? type_ir("IO.Capability") : type_ir(type_name_str)
           symbol_types[decl.fetch("name")] = resolved_type
           cap_typed = typed_decl(decl, resolved_type, nil, [])
+          # LANG-CAPABILITY-DECLARATION-ARTIFACT-PARITY-IMPLEMENTATION-P3:
+          # preserve the DECLARED interface identity — name AND ordered type
+          # parameters, recursively — on the typed capability decl in a narrow
+          # carrier field. The CR-001 sentinel in `type` is unchanged (typed-IR
+          # scope intact); artifact rows carry the declared identity (Rust
+          # parity: emitter capabilities[] {name, type:{name, params}}).
+          cap_typed["declared_type_ref"] = declared_capability_type_ref(raw_type)
           # LANG-NETWORK-CAPABILITY-GRAMMAR-P2: declared network policy metadata
           # passes through verbatim (no typing, no enforcement — the values were
           # validated as literals at parse time, OOF-NET*).
@@ -3079,6 +3086,25 @@ module IgniterLang
       name = annotation.is_a?(Hash) ? annotation.fetch("name", "Unknown") : annotation.to_s
       params = annotation.is_a?(Hash) ? annotation.fetch("params", []).map { |p| type_ir(p) } : []
       { "name" => name, "params" => params }
+    end
+
+    # LANG-CAPABILITY-DECLARATION-ARTIFACT-PARITY-IMPLEMENTATION-P3: map a parsed
+    # capability type annotation to the normative declared-identity shape
+    # {name, params:[recursive]} carried into artifact rows. Total over every
+    # parse_type_ref output: bare String and scalar params (Decimal[N] scale
+    # integers) stringify; a name-less structured node (the OLAPPoint
+    # dims-record param) falls back to "Unknown" — the SAME erasure the Rust
+    # emitter performs, so the row stays dual-parity while such declared
+    # detail does not enter identity (disclosed in ch12).
+    def declared_capability_type_ref(raw)
+      return { "name" => raw.to_s, "params" => [] } unless raw.is_a?(Hash)
+
+      params = raw.fetch("params", raw.fetch("type_args", []))
+      params = [] unless params.is_a?(Array)
+      {
+        "name" => raw.fetch("name", "Unknown").to_s,
+        "params" => params.map { |p| declared_capability_type_ref(p) }
+      }
     end
 
     def dims_record_type(dims)

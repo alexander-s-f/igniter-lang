@@ -453,12 +453,42 @@ in a profile that only permits `compensatable` is a compile-time error (OOF-M2).
 >   `affects_target` (parsed since the `affects` slice P5), `authority_ref`
 >   (parsed since the `authority` slice P10), `idempotency_mode`/
 >   `idempotency_key_expr`, `receipt_type`/`failure_type`, and — since P22 —
->   `compensation_mode`/`compensation_ref`. The Rust flat fields and
->   `capabilities[]`/`effects[]` arrays remain as LEGACY compatibility surfaces
->   (igniter-machine `discover_effect_surface` consumes the arrays; the arrays
->   keep the concrete `IO.*` type name); new consumers read `effect_surface`.
+>   `compensation_mode`/`compensation_ref`. The Rust flat fields remain a
+>   LEGACY compatibility surface; the `capabilities[]`/`effects[]` arrays are
+>   the dual declaration-artifact identity law below (igniter-machine
+>   `discover_effect_surface` consumes the arrays; the arrays keep the
+>   concrete `IO.*` type name); new effect-surface consumers read
+>   `effect_surface`.
 >   Proofs: lab `tests/effect_surface_ir_unification_tests.rs` (5/5) + machine
 >   `capability_io_host_tests` (9/9) + all Ruby effect-surface proofs green.
+> - **Dual typed declaration-artifact identity
+>   (LANG-CAPABILITY-DECLARATION-ARTIFACT-PARITY-IMPLEMENTATION-P3):** both
+>   toolchains emit, for EVERY contract, per-contract `capabilities[]` /
+>   `effects[]` declaration rows (empty arrays when no declaration exists) and
+>   aggregate the same rows into the manifest in SIR contract order. A
+>   capability row is `{name, type: {name, params}}` where `type` is the
+>   DECLARED interface identity — name and ordered type parameters,
+>   recursively (`IO.LedgerCapability[Int]` carries
+>   `params: [{"name":"Int","params":[]}]`); an effect row is
+>   `{name, capability_ref}`. Rows are emitted BEFORE `contract_ref`
+>   computation and therefore enter contract identity. **Disclosed limit:**
+>   a name-less structured parameter (today only the OLAPPoint dims-record
+>   form) is NOT carried — BOTH toolchains erase it to
+>   `{"name":"Unknown","params":[]}`, so declared capability types differing
+>   only in a dims-record alias to one declaration row; parity holds
+>   symmetrically, and structured-parameter carriage is future work under a
+>   separate card, not implied by this clause. **CR-001 is
+>   unchanged:** the typed-IR sentinel and
+>   `effect_surface.capability_bindings[].capability_type` keep the
+>   `"IO.Capability"` normalization; the declaration rows carry the declared
+>   identity — the two carriers answer different questions (typing versus
+>   declared authority identity), and the missing information lives in the
+>   declared artifact identity carrier, never recovered from grants, bindings
+>   or Runtime state. Grammar outcome: capability alias, effect operation and
+>   `using`-operand positions accept contextual `ident|keyword` names
+>   identically in both toolchains (`effect read using cap` is legal dual).
+>   No grant, endpoint, credential, provider id or runtime capability id
+>   enters declaration identity.
 
 ---
 

@@ -2,8 +2,10 @@
   "compilation_report_ref": "compilation_report/fe9a2479eb3f4d5d",
   "contracts": [
     {
+      "capabilities": [],
       "contract_name": "Add",
-      "contract_ref": "contract/Add/sha256:e0677d9cfcafa1e7f5057123",
+      "contract_ref": "contract/Add/sha256:dcb50518abc9e7382c7186aa",
+      "effects": [],
       "escape_boundaries": [],
       "fragment_class": "core",
       "inputs": [

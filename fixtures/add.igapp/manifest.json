@@ -1,22 +1,24 @@
 {
-  "artifact_hash": "sha256:68f0e8145e051faa2672f37d9ca72c908573239ba37c4d5a1b6c0c368e65077d",
+  "artifact_hash": "sha256:46a7727385a6c4ab2cfe7a6d31c2a9a9e198c58694a57157e133817186befae1",
   "assembler": "igapp-assembler-proof-stage1-v0",
+  "capabilities": [],
   "compilation_report_ref": "compilation_report/fe9a2479eb3f4d5d",
   "compiled_at": "2026-05-06T00:00:00Z",
   "contract_index": {
     "Add": {
       "contract_path": "contracts/add.json",
-      "contract_ref": "contract/Add/sha256:e0677d9cfcafa1e7f5057123",
+      "contract_ref": "contract/Add/sha256:dcb50518abc9e7382c7186aa",
       "fragment_class": "core"
     }
   },
   "contract_refs": {
-    "Add": "contract/Add/sha256:e0677d9cfcafa1e7f5057123"
+    "Add": "contract/Add/sha256:dcb50518abc9e7382c7186aa"
   },
   "contracts": [
     "Add"
   ],
   "diagnostics": [],
+  "effects": [],
   "format": "igapp_dir",
   "format_version": "0.1.0",
   "fragment_class": "core",
@@ -43,7 +45,7 @@
     "trait_bounds": []
   },
   "schema_version": "0.1.0",
-  "semantic_hash": "sha256:185ac7a89fcfb1ecaf8866ef5c36f1503006fbd8cbc8a1bae7330e6ac69b7c9c",
+  "semantic_hash": "sha256:9a74b7c56402d0fd9506efcf1cf6011cc11d7193804c2c1a387ca4381396b32a",
   "semantic_hash_law": "igniter.semantic-hash.v2",
   "semantic_ir_ref": "semanticir/fe9a2479eb3f4d5d",
   "source_hash": "sha256:fe9a2479eb3f4d5d5b99e5263f691f0d4d2efb38f69ce0e082be71eca97773e1",

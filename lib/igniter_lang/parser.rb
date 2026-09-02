@@ -2033,7 +2033,10 @@ module IgniterLang
     # parsing it grants no authority, opens no socket, binds no executor
     # (enforcement stays host-side). Every static rule fails closed (OOF-NET*).
     def parse_capability_decl
-      name = name_token!(%i[ident])
+      # LANG-CAPABILITY-DECLARATION-ARTIFACT-PARITY-IMPLEMENTATION-P3:
+      # contextual identifier law — alias position accepts ident|keyword
+      # (Rust parity: parser.rs single permissive name gate; measured in P2).
+      name = name_token!(%i[ident keyword])
       expect_type!(:colon)
       type_ref = parse_type_ref
       decl = { "kind" => "capability", "name" => name, "type_annotation" => type_ref }
@@ -2336,9 +2339,12 @@ module IgniterLang
 
     # PROP-035: effect <name> using <cap_ref>
     def parse_effect_binding_decl
-      name = name_token!(%i[ident])
+      # LANG-CAPABILITY-DECLARATION-ARTIFACT-PARITY-IMPLEMENTATION-P3:
+      # contextual identifier law — operation and using-operand positions accept
+      # ident|keyword (Rust parity, measured in P2; e.g. `effect read using c`).
+      name = name_token!(%i[ident keyword])
       expect_kw!("using")
-      cap_ref = name_token!(%i[ident])
+      cap_ref = name_token!(%i[ident keyword])
       { "kind" => "effect_binding", "name" => name, "capability_ref" => cap_ref }
     end
 
