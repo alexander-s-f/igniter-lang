@@ -1,5 +1,34 @@
 # Igniter-Lang Current Status
 
+## Current Implementation Slice / 2026-09-10
+
+**LANG-CANON-TEXT-CONCAT-TYPED-ARG-REUSE-IMPLEMENTATION-P3: CLOSED /
+CURATOR ACCEPTED IMPLEMENTATION (2026-09-10), committed locally, not released.**
+`[Igniter-Lang Implementation Agent]` (Fable); curator independently verified.
+[Single cross-repo card](../../igniter-lab/.agents/work/cards/lang/LANG-CANON-TEXT-CONCAT-TYPED-ARG-REUSE-IMPLEMENTATION-P3.md).
+Exact H+B landed in `lib/igniter_lang/typechecker.rb`: preimage
+7aa0e75e… (HEAD blob) → 64ee3ee7… (+9/−7 lines; H removes the four guarded
+`DEBUG: unresolved l backtrace` lines in `infer_expr`'s ref case; B passes the
+concat router's already-inferred positional arguments to `infer_text_call`
+via `typed:`); no other lib file changed. Permanent self-contained proof
+`experiments/text_concat_typed_arg_reuse_proof/verify_text_concat_typed_arg_reuse.rb`
+(+ README, 2 fixtures): 20/20 PASS on the live lib (asserted realpath);
+its two sensitivity controls (work-count guard 31/11/4 vs 19112/37/7; DEBUG-free
+strict-JSON `igc check` on unresolved `l`) FAIL on the preimage by design.
+The four proof files are versioned explicitly despite `/experiments/` being
+gitignored. Alex authorized this local commit after curator acceptance. Lab integration:
+the sealed A1 table's BH arm (20 calls, 26
+invocations) replayed twice against live `bin/igc` with RUBYLIB=lib and a
+loaded-source probe; 40/40 rows equal the frozen A1 BH records (47 identities
+total 618, A8 23, B6 31, RenderPulse 41, 14 controls; 9 receipts, 4 artifact
+bundles, 7 typed programs). One independent review CLEAN (3 notes, 0 material).
+Curator: fresh suite20/20,80/80 live-to-frozen comparisons,20/20 live agreement.
+The four igapp_path comparator false mismatches and stale v0-report manifest
+entry remain historical, explicitly qualified; source/evidence are unchanged.
+[Acceptance and qualifications](../../igniter-lab/lab-docs/lang/lang-canon-text-concat-typed-arg-reuse-implementation-p3-curator-harvest.md).
+Resource window returned to curator/unassigned; no further repair cycle.
+Locally committed; no push, grammar/type/hash-law change, release or other lib edit.
+
 Stage 1: **CLOSED** (2026-05-06) — META-EXPERT-007
 Stage 2: **CLOSED** (2026-05-07) — META-EXPERT-009.1
 Stage 3: **OPEN** (2026-05-08) — META-EXPERT-011

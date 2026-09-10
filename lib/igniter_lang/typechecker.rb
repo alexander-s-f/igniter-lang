@@ -2151,10 +2151,6 @@ module IgniterLang
       when "ref"
         name = expr.fetch("name")
         type = symbol_types.fetch(name, @olap_env.fetch(name, {}).fetch("type", type_ir("Unknown")))
-        if name == "l" && type_name(type) == "Unknown"
-          puts "DEBUG: unresolved l backtrace:"
-          puts caller
-        end
         type_errors << oof("OOF-P1", "Unresolved symbol: #{name}", node_name) if type_name(type) == "Unknown" && !rule_present?(type_errors, "OOF-P1")
         typed_expr("ref", type, [name], "name" => name)
       when "field_access"
@@ -4228,7 +4224,11 @@ module IgniterLang
       typed_expr("call", result_type, deps, "fn" => qualified, "args" => typed_args)
     end
 
-    def infer_text_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
+    # LANG-CANON-TEXT-CONCAT-TYPED-ARG-REUSE-READINESS-P2 (private candidate B):
+    # `typed` carries positional arguments the caller has ALREADY inferred into
+    # the real collectors (precedent: infer_collection_hof_call collection_arg:).
+    # Absent positions are inferred here exactly as before.
+    def infer_text_call(fn, args, symbol_types, type_errors, type_warnings, node_name, typed: {})
       spec           = TEXT_STDLIB_FNS.fetch(fn)
       expected_count = spec[:arg_types].length
 
@@ -4245,7 +4245,7 @@ module IgniterLang
 
       # Infer and validate each argument
       typed_args = args.each_with_index.map do |arg, idx|
-        ta       = infer_expr(arg, symbol_types, type_errors, type_warnings, node_name)
+        ta       = typed.fetch(idx) { infer_expr(arg, symbol_types, type_errors, type_warnings, node_name) }
         actual   = type_name(ta.fetch("resolved_type"))
         expected = spec[:arg_types][idx]
         unless actual == "Unknown" || text_arg_compatible?(actual, expected)
@@ -6823,16 +6823,18 @@ module IgniterLang
       # LANG-STRING-TEXT-ALIAS-P2: when both args are String, route to stdlib.string.concat → String.
       # String literals and String-typed refs both have type_name "String".
       unless first_type_name == "Collection" || first_type_name == "Unknown"
+        typed = { 0 => first_arg }
         if first_type_name == "String" && args.length == 2
           second_arg       = infer_expr(args[1], symbol_types, type_errors, type_warnings, node_name)
           second_type_name = type_name(second_arg.fetch("resolved_type"))
+          typed[1] = second_arg
           if second_type_name == "String"
             deps = (first_arg.fetch("deps", []) + second_arg.fetch("deps", [])).uniq
             return typed_expr("call", type_ir("String"), deps,
                               "fn" => "stdlib.string.concat", "args" => [first_arg, second_arg])
           end
         end
-        return infer_text_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
+        return infer_text_call(fn, args, symbol_types, type_errors, type_warnings, node_name, typed: typed)
       end
 
       # ── OOF-COL1: arity (collection path) ────────────────────────────────────
