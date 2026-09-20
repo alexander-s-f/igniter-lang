@@ -1,5 +1,99 @@
 # Igniter-Lang Current Status
 
+## Current Implementation Slice / 2026-09-20
+**LANG-CLASSIFIER-LEXICAL-BLOCK-DEPENDENCY-IMPLEMENTATION-R15 + A1: CLOSED / CURATOR ACCEPTED within scope; Canon committed as da3bb16.**
+Commit checkpoint / 2026-09-20: this includes the composed R13-R15 semantics,
+bounded specs and permanent R12/R14/R15 proofs. Lab counterpart `061caef69`;
+[full batch map](../../igniter-lab/lab-docs/lang/current-waves-index.md#active-planning-portfolio).
+Earlier uncommitted wording is acceptance-time history. No push or post-commit
+fleet publication; e6164332 retains its original pre-batch provenance.
+[Curator harvest](../../igniter-lab/lab-docs/lang/lang-classifier-lexical-block-dependency-implementation-r15-a1-curator-harvest.md):
+fresh62 compilations/18 safe Runtime calls, Canon43/43; retained lexical34/34 and
+effect15/15. Curator97/97 after two disclosed driver-exit expectation corrections;
+original/A1/historical curator evidence preserved. No Canon executable change in A1.
+[Card](../../igniter-lab/.agents/work/cards/lang/LANG-CLASSIFIER-LEXICAL-BLOCK-DEPENDENCY-IMPLEMENTATION-R15.md) ·
+[packet](../../igniter-lab/proofs/lang-classifier-lexical-block-dependency-implementation-r15/README.md).
+`classifier.rb` `expr_refs` is now ONE ordered lexical walk (`expr_refs(expr, scope)` + `block_refs`): a block `let`
+binds for the statements and tail AFTER it, its initializer is read in the scope before it, lambda params and
+match-pattern bindings scope their own body / arm, and EVERY child is visited — the old generic fallthrough walked
+Hash children only, so array items, match arms and a lambda block's `stmts` were skipped (a fresh `let` was `OOF-P1`,
+`[a, k]` had no dependencies, and a direct stream read inside an array literal or a match arm COMPILED: `OOF-S4`
+bypass). A node is identified by its `kind`, never by its keys: record / variant / slice `fields` are user-keyed and
+read by value (independent review F1 — the first candidate shape-sniffed them; repaired before any generation).
+Canon SemanticIR `deps` are typechecker-owned and unchanged (they still list callable-local names): Canon rekeys
+nothing. Permanent proof `experiments/r15_classifier_lexical_block_dependency_proof` 43/0 (gitignored dir:
+`git add -f`); the R14 proof's F1 residual lock evolved deliberately (43/0). Broad proof suite in isolated clones:
+687 PASS / 51 FAIL before, 730 / 51 after, identical failure membership. Spec: ch3 §3.5 classifier-residual bullet
+narrowed; the original Rust effect-walker residual is now repaired by A1 below. Canon parser limits met while building the UI example (no match-arm
+block; a statement block cannot end in a record literal) are reported, not repaired.
+**R15-A1 (same card, curator-accepted; original HOLD preserved as history):**
+No Canon executable change. The Rust effect walkers now visit every expression child, so the
+`pure` host-IO-under-`match` program R15 had newly admitted is refused at compile time by the effect law itself;
+Canon was the comparison and already refused it (`E-IO-AMBIENT-BLOCKED`). ch3 §3.5: the effect-walker residual bullet
+is replaced by the A1 law and its declared scope (invoke arguments / write value / idempotency key are still not fed to
+the Rust capability check; Canon has no effect-mode check). A1-F1 is retained as
+pre-existing pressure, not another R15 repair round. Metadata equality is relative
+to the direct form, not generic artifact admissibility. Selected local generation
+e6164332 was qualified before this commit batch; post-commit publication remains
+pending. Joint R6 finite opt-in
+adoption and GUI R13 finite .ig composition are now accepted; all three grants
+are consumed, resource curator/unassigned. No next card is opened in the
+[live Lab portfolio](../../igniter-lab/lab-docs/lang/current-waves-index.md#active-planning-portfolio).
+[A1 packet](../../igniter-lab/proofs/lang-classifier-lexical-block-dependency-implementation-r15-a1/README.md).
+
+## Previous Implementation Slice / 2026-09-19
+**LANG-ORDINARY-HOF-LEXICAL-BLOCK-LOWERING-IMPLEMENTATION-R14: CLOSED / CURATOR ACCEPTED, LANDED IN THE WORKING TREE (uncommitted).**
+[Curator harvest](../../igniter-lab/lab-docs/lang/lang-ordinary-hof-lexical-block-lowering-implementation-r14-curator-harvest.md):
+143/143, fresh Canon43/43 and final-fleet execution. ch3/ch6 claims narrowed to
+qualified routes; executable owners unchanged by curator. Residuals below remain
+open pressure, not universal block support. Joint R5 has the next direct handoff.
+[Card](../../igniter-lab/.agents/work/cards/lang/LANG-ORDINARY-HOF-LEXICAL-BLOCK-LOWERING-IMPLEMENTATION-R14.md) ·
+[packet](../../igniter-lab/proofs/lang-ordinary-hof-lexical-block-lowering-implementation-r14/README.md).
+Canon typed a block's statements on the ordinary route and then dropped them (`infer_lambda_body` returned the
+final expression alone; `infer_if_expr` typed a branch's final expression in the outer scope). Now a lambda
+block / branch WITH statements is a typed `block` the emitter lowers through the one right-nested `let`
+lowering a def body already uses (`function_body_ir`); branches are block-scoped on every route (the
+`@callable_branch_scope` second selection is removed). The statement lowering's `__seq__` is reserved for EVERY
+source value binder (declarations, lambda/def parameters, lets, match bindings, loop items; `OOF-COL4`): the WHOLE
+declaration is walked (a fold_stream seed, an invoke's arguments, a lead initializer) and EVERY def, ahead of the
+IO-ownership choice (an IO-owned def is never body-typed) — the independent review's blocker class, closed
+position by position twice and then structurally: an input spelled `__seq__` was silently shadowed by the newly carried bare statement
+(3 for 8). rv02g 32.0 -> 6.0, rv12g 2 -> 3; Integer/Float shadows were OOF-TY0 and are admitted;
+`now()` in a branch let was ADMITTED (dropped untyped) and refuses. Permanent proof
+`experiments/r14_ordinary_hof_lexical_block_proof` 43/0 (gitignored dir: `git add -f`). Broad proof suite in
+isolated clones: 644 PASS / 51 FAIL before and after, identical membership. Spec: ch3 §3.5 and ch6 §6.4.1
+bounded clarifications. RESIDUALS (owners outside R14): `classifier.rb` `expr_refs` does not model block
+binders, so a fresh-named `let` is still refused OOF-P1; a statement before a tail `recur()` is admitted here
+and refused by the VM tail backstop (`OOF-R15`).
+
+**LANG-CALLABLE-TYPED-CARRIER-ADOPTION-R13: CLOSED / CURATOR ACCEPTED, LANDED IN THE WORKING TREE (uncommitted).**
+[Curator harvest](../../igniter-lab/lab-docs/lang/lang-callable-typed-carrier-adoption-r13-curator-harvest.md).
+Seven owners matched R12; fresh Canon proof 8/8 and copied GUI View/Reduce passed.
+Curator clarified hint failure versus absent-hint fallback, finite decoder scope
+and Float stream examples in ch3/ch6 without changing executable code. Ordinary
+fold branch/block-let lowering remains a separate reproduced defect, not R13 GO.
+`[Igniter-Lang Implementation Agent]` (Fable), cross-repo card in the Lab:
+[LANG-CALLABLE-TYPED-CARRIER-ADOPTION-R13](../../igniter-lab/.agents/work/cards/lang/LANG-CALLABLE-TYPED-CARRIER-ADOPTION-R13.md).
+The accepted R12 final candidate landed byte-exact: `lib/igniter_lang/typechecker.rb` HEAD blob 64ee3ee7… →
+d37f423b… and `semanticir_emitter.rb` 516aff1f… → 8b2b739a… (the R12 packet's full Canon patch, equal to the
+curator's `PATCH-RECONCILIATION.json.final_candidate_bytes`). Law: fresh `fold_stream` callables are the typed
+`callable_v2` carrier (params + lowered body with the type authority's selected identities, block/branch `let`
+chains, qualified `user.<module>.<name>` def calls, whole-payload `lambda/<16 hex>` address); the typed operator
+trace with no opacity rule; branch statements typed inside callables; `OOF-P1: Unresolved symbol` only for UNBOUND
+names (a bound-but-unknown binder keeps the permissive ordinary typing). Spec recorded in `docs/spec/ch6-semanticir.md`
+§6.4.1 (callable registry, decoder law), `ch6-appendix-igapp-schema.md` (`callables`, `fn_ref` pattern) and
+`ch3-type-system.md` (record-literal order, bound-but-unknown, HOF result evidence). Permanent proof
+`experiments/r12_callable_compatibility_proof/verify_r12_callable_compatibility.rb` (+7 fixtures) 8/8 on the live lib
+(pristine 1/7); `experiments/stream_artifact_executability_proof` evolved its one `callable_v1` pin to v2 (all other
+assertions unchanged). Both live in gitignored `experiments/`: version them explicitly (`git add -f`) at the commit.
+Tracked proof scripts: live 60 scripts 658 PASS / 45 FAIL vs pristine 59 / 647 / 48 (Lab sibling present); one
+live-only FAIL is `unknown_field_assignability_parity_proof` C-03, which compares the working tree against HEAD via
+`git stash` (it now sees R13's bound-but-unknown rule as the "unrelated OOF-P1 quirk" it excluded).
+Its predicted post-commit vacuity has not been measured; that proof mutates the tree while running
+(stash/pop), so do not run it over concurrent live owners. `assumptions_proof` goldens are stale at HEAD
+(pristine `--check-golden` fails identically; not R13). Lab evidence: `igniter-lab/proofs/lang-callable-typed-carrier-adoption-r13/`.
+
+
 ## Current Implementation Slice / 2026-09-10
 
 **LANG-CANON-TEXT-CONCAT-TYPED-ARG-REUSE-IMPLEMENTATION-P3: CLOSED /
