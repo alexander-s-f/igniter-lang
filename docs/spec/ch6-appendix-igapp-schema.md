@@ -456,6 +456,19 @@ Each file inside the `contracts/` directory represents a compiled, monomorphic c
         }
       }
     },
+    "callables": {
+      "description": "LANG-CALLABLE-TYPED-CARRIER-ADOPTION-R13: program-level registry of fold_stream accumulator callables, keyed by content address lambda/<16 hex> = SHA-256(canonical JSON of the payload)[0..16]; fresh compilation emits kind callable_v2 (params + lowered typed body, no annotations); callable_v1 is the historical raw-AST carrier still read by the Machine; other kinds refuse at load",
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["kind", "params", "body"],
+        "properties": {
+          "kind": { "type": "string", "enum": ["callable_v1", "callable_v2"] },
+          "params": { "type": "array", "items": { "type": "string" } },
+          "body": { "type": "object" }
+        }
+      }
+    },
     "stream_nodes": {
       "type": "array",
       "items": {
@@ -473,7 +486,7 @@ Each file inside the `contracts/` directory represents a compiled, monomorphic c
           "bounded": { "type": "boolean" },
           "on_close": { "type": "string" },
           "init": { "type": "object" },
-          "fn_ref": { "type": "string" },
+          "fn_ref": { "type": "string", "pattern": "^lambda/[0-9a-f]{16}$" },
           "bound": { "type": "object" },
           "event_binding": { "type": "object" },
           "obs_kind": { "type": "string" }

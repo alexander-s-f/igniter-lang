@@ -1034,6 +1034,22 @@ module IgniterLang
       }
       @current_contract_refs = {}
 
+      # LANG-ORDINARY-HOF-LEXICAL-BLOCK-LOWERING-IMPLEMENTATION-R14: the ordinary route now carries a block's
+      # statements through the same right-nested `let` lowering as the stream callable and a def body, and
+      # that lowering binds a bare statement to `__seq__`. A source binder with that spelling — an input, a
+      # compute, a parameter, a `let`, a match binding, a loop item — would be shadowed by the lowering and
+      # the program would silently compute a different value (review F1: an INPUT `__seq__` read after a bare
+      # statement gave 3 for 8). The carrier's reservation therefore covers every declaration and binder.
+      classified_contract.fetch("declarations").each do |decl|
+        next unless decl_binds_reserved_seq_name?(decl)
+
+        type_errors << oof(
+          "OOF-COL4",
+          "#{decl.fetch("kind")} '#{decl.fetch("name", "")}': '__seq__' is reserved for statement lowering and cannot be bound",
+          decl.fetch("name", "")
+        )
+      end
+
       classified_contract.fetch("declarations").each do |decl|
         case decl.fetch("kind")
         when "input"
@@ -1206,6 +1222,96 @@ module IgniterLang
           # C law step 2 carrier: the TYPED init reaches the emitter so the init
           # is emitted through the same compute-expr path as ordinary computes.
           typed["init"] = typed_init if typed_init
+          # LANG-TYPED-CALLABLE-REPRESENTATION-AND-ADMISSION-READINESS-R10.
+          #
+          # A: the callable is typed here by the SAME owners that type an ordinary fold
+          # callback. `acc` binds the seed type, `elem` binds the DECLARED stream element
+          # type, and the body goes through infer_lambda_body -> infer_expr -> infer_call,
+          # so unknown callee, argument type and the accumulator-result law all refuse in
+          # stream position exactly as they already do on the ordinary route. The fold's own
+          # name is NOT in the callable's scope (the ordinary route refuses it OOF-P1 too).
+          #
+          # S/K: the carrier body is built by `callable_carrier_body` from the RAW body: authored
+          # def names are qualified to `user.<module>.<name>`; ordering and negation take the
+          # identity that `operator_type` / `infer_unary_op` selected while typing this very body
+          # (recorded in `@callable_operator_trace`, R11: with the full lexical environment and no
+          # opacity rule); everything else keeps its authored spelling.
+          fold_lambda = decl.fetch("expr", {}).fetch("args", [])[2]
+          # R10 (A, effects): the SAME iteration-IO fences the `compute` arm owns, reused
+          # verbatim — the direct host-IO fence, then the transitive app-local helper fence
+          # over the shared `@io_helper_summary`, with the SAME pure/non-pure disposition
+          # (PROP-051 §1.5: in a pure contract an IO def is owned by OOF-M1, so the helper
+          # fence does not fire there). The callable is an iteration context exactly like a
+          # HOF lambda body. The IO refusal is the single root: the callable is not typed
+          # afterwards, so derivative Unknown/type noise cannot bury it. No IO is executed —
+          # both fences are static walks.
+          io_lambda_fn = find_host_io_in_lambda(decl.fetch("expr", nil))
+          io_helper_fn =
+            if io_lambda_fn || contract_modifier == "pure"
+              nil
+            else
+              find_io_helper_in_lambda(decl.fetch("expr", nil), @io_helper_summary)
+            end
+          if io_lambda_fn
+            type_errors << oof_ec6_iteration_io(io_lambda_fn, "a lambda body in fold_stream '#{fold_name}'", fold_name)
+          elsif io_helper_fn
+            type_errors << oof_ec6_helper_iteration_io(
+              io_helper_fn, "a lambda body in fold_stream '#{fold_name}'", fold_name
+            )
+          elsif fold_lambda.is_a?(Hash) && fold_lambda.fetch("kind", nil) == "lambda"
+            lambda_params = fold_lambda.fetch("params", [])
+            if lambda_params.length != 2
+              type_errors << oof(
+                "OOF-COL4",
+                "fold_stream '#{fold_name}': lambda must have exactly 2 parameters (acc, elem), " \
+                "got #{lambda_params.length}",
+                fold_name
+              )
+            else
+              stream_arg = decl.fetch("expr", {}).fetch("args", [])[0]
+              elem_type =
+                if stream_arg.is_a?(Hash) && stream_arg.fetch("kind", nil) == "ref"
+                  symbol_types.fetch(stream_arg.fetch("name", ""), type_ir("Unknown"))
+                else
+                  type_ir("Unknown")
+                end
+              local_symbols = symbol_types.reject { |name, _| name == fold_name }.merge(
+                lambda_params[0] => result_type,
+                lambda_params[1] => elem_type
+              )
+              if callable_binds_reserved_seq_name?(fold_lambda)
+                type_errors << oof(
+                  "OOF-COL4",
+                  "fold_stream '#{fold_name}': '__seq__' is reserved for the callable's statement lowering " \
+                  "and cannot be bound",
+                  fold_name
+                )
+              end
+              @callable_operator_trace = {}.compare_by_identity
+              body_typed =
+                begin
+                  infer_lambda_body(
+                    fold_lambda.fetch("body", nil), local_symbols, type_errors, type_warnings, fold_name
+                  )
+                ensure
+                  operator_trace = @callable_operator_trace
+                  @callable_operator_trace = nil
+                end
+              body_name = type_name(body_typed.fetch("resolved_type"))
+              acc_name  = type_name(result_type)
+              unless accumulator_result_compatible?(body_name, acc_name)
+                type_errors << oof(
+                  "OOF-COL4",
+                  "fold_stream '#{fold_name}': lambda return type #{body_name} does not match " \
+                  "accumulator type #{acc_name}",
+                  fold_name
+                )
+              end
+              typed["callable_body"] = callable_carrier_body(
+                fold_lambda.fetch("body", nil), @current_contract_module, operator_trace
+              )
+            end
+          end
           typed_decls << typed
         when "uses_assumptions"
           type = type_ir("Assumption")
@@ -2150,8 +2256,15 @@ module IgniterLang
         typed_expr("symbol", type_ir("Symbol"), [], "value" => expr.fetch("value"))
       when "ref"
         name = expr.fetch("name")
+        # LANG-CALLABLE-COMPATIBILITY-AND-BINDER-PROOF-REPAIR-R12: OOF-P1 names a MISSING declaration,
+        # not missing evidence. A name that is bound — a lambda parameter over an empty or untyped
+        # carrier, a block let, an input — is never "unresolved" merely because its type is Unknown:
+        # `fold([], 0, (a, v) -> …)` binds `v : Unknown` and keeps the permissive ordinary typing of an
+        # Unknown operand (its body never executes; no numeric type is invented), exactly as the Rust
+        # owner does. An undeclared name still refuses OOF-P1.
+        bound = symbol_types.key?(name) || @olap_env.key?(name)
         type = symbol_types.fetch(name, @olap_env.fetch(name, {}).fetch("type", type_ir("Unknown")))
-        type_errors << oof("OOF-P1", "Unresolved symbol: #{name}", node_name) if type_name(type) == "Unknown" && !rule_present?(type_errors, "OOF-P1")
+        type_errors << oof("OOF-P1", "Unresolved symbol: #{name}", node_name) if !bound && !rule_present?(type_errors, "OOF-P1")
         typed_expr("ref", type, [name], "name" => name)
       when "field_access"
         # PROP-041 T2: suppress OOF-P1 for stdlib-certified and user-registered structural accessors
@@ -2846,9 +2959,16 @@ module IgniterLang
         type_errors << oof("OOF-IF1", "if_expr condition must be Bool, got #{type_name(cond_type)}", node_name)
       end
 
-      # Infer branch final expressions
-      then_typed = infer_expr(then_final, symbol_types, type_errors, type_warnings, node_name)
-      else_typed = infer_expr(else_final, symbol_types, type_errors, type_warnings, node_name)
+      # Infer the branches.
+      # LANG-CALLABLE-LEXICAL-TYPE-EVIDENCE-READINESS-R11 / R14: a branch block's STATEMENTS are typed in
+      # a block scope before its final expression (exactly as `infer_lambda_body` scopes a lambda block),
+      # so a branch-local `let` binds and every operator inside it is typed. R11 did this only while a
+      # fold_stream callable was typed; the ORDINARY route typed the final expression alone in the OUTER
+      # scope and its emitter never carried the statements (rv02g: 32.0 for 6.0). R14 removes that
+      # second selection: one branch typing on every route, and a branch WITH statements is a typed
+      # `block` the emitter lowers like every other block. A statement-less branch is unchanged.
+      then_typed = infer_lambda_body(then_block.merge("kind" => "block"), symbol_types, type_errors, type_warnings, node_name)
+      else_typed = infer_lambda_body(else_block.merge("kind" => "block"), symbol_types, type_errors, type_warnings, node_name)
 
       then_type = then_typed.fetch("resolved_type")
       else_type = else_typed.fetch("resolved_type")
@@ -2882,6 +3002,9 @@ module IgniterLang
         return typed_expr("call", type_ir("Unknown"), [], "fn" => op, "args" => [])
       end
       operator, result_type = operator_type(op, left.fetch("resolved_type"), right.fetch("resolved_type"), type_errors, node_name)
+      # R10: while a fold_stream callable body is typed, record the identity THIS owner selected for
+      # each raw operator node (keyed by object identity), so the callable carrier reuses it verbatim.
+      @callable_operator_trace[expr] = operator if @callable_operator_trace
       typed_expr(
         "call",
         result_type,
@@ -3790,6 +3913,16 @@ module IgniterLang
           "return_type" => decl.fetch("return_type", "Unknown")
         }
         entry["decreases"] = decl.fetch("decreases") if decl.key?("decreases")
+        # R14 (review F1 / re-check N1): a def body lowers through the same statement lowering, so its parameters
+        # and its own binders are under the same `__seq__` reservation as a contract's. Checked for EVERY def,
+        # AHEAD of the ownership choice below: an IO-owned def is never body-typed, yet its statements are
+        # lowered all the same.
+        if callable_binds_reserved_seq_name?(decl.fetch("body", {})) ||
+           decl.fetch("params", []).any? { |param| param.is_a?(Hash) && param.fetch("name", nil) == "__seq__" }
+          type_errors << function_oof(
+            "OOF-COL4", "function '#{name}': '__seq__' is reserved for statement lowering and cannot be bound", decl
+          )
+        end
         io_owned = @io_helper_summary_by_module.fetch(mod, {}).fetch(name, false)
         entry["body"] =
           if io_owned || now_flagged.include?([mod, name])
@@ -3861,6 +3994,88 @@ module IgniterLang
     # Copying rewrite for effect-law-owned (untyped) def bodies: module-local
     # def call sites still lower to the reserved `user.<module>.<name>` identity
     # so no bare def name can reach the emitter (§1.7).
+    # LANG-CALLABLE-LEXICAL-TYPE-EVIDENCE-READINESS-R11 (reconstructed from R10): the shared callable
+    # carrier's identity law, applied to the RAW body (shape normalization stays in the emitter).
+    #   * an authored def call  -> `user.<module>.<name>` (the `qualified_raw_body` rule);
+    #   * `< <= > >=`           -> the identity `operator_type` selected while TYPING this very node,
+    #                              with the full lexical environment (callable parameters from declared
+    #                              context, nested HOF binders from the carrier's resolved type,
+    #                              block-local lets in order, shadowing by binder);
+    #   * unary `-`             -> the identity `infer_unary_op` selected; `!` -> stdlib.primitive.not;
+    #   * everything else keeps its authored spelling.
+    # There is NO opacity rule: R10 B2 made nested binders opaque to align carrier bytes and thereby
+    # threw away evidence the authority had (the curator's nested-Float counterexample). Only a node the
+    # authority never typed falls back to the ordinary permissive integer-named identity.
+    CALLABLE_INTEGER_ORDERING = {
+      "<" => "stdlib.integer.lt", "<=" => "stdlib.integer.lte",
+      ">" => "stdlib.integer.gt", ">=" => "stdlib.integer.gte"
+    }.freeze
+
+    def callable_carrier_body(node, mod, trace)
+      case node
+      when Array
+        node.map { |value| callable_carrier_body(value, mod, trace) }
+      when Hash
+        kind = node.fetch("kind", nil)
+        if kind == "binary_op" && CALLABLE_INTEGER_ORDERING.key?(node.fetch("op", nil))
+          fn = trace.fetch(node, CALLABLE_INTEGER_ORDERING.fetch(node.fetch("op")))
+          return { "kind" => "call", "fn" => fn,
+                   "args" => [callable_carrier_body(node.fetch("left", nil), mod, trace),
+                              callable_carrier_body(node.fetch("right", nil), mod, trace)] }
+        end
+        if kind == "unary_op" && %w[- !].include?(node.fetch("op", nil))
+          fn = node.fetch("op") == "!" ? "stdlib.primitive.not" : trace.fetch(node, "stdlib.integer.neg")
+          return { "kind" => "call", "fn" => fn,
+                   "args" => [callable_carrier_body(node.fetch("operand", nil), mod, trace)] }
+        end
+        rewritten = node.to_h { |key, value| [key, callable_carrier_body(value, mod, trace)] }
+        fn = rewritten["fn"]
+        if kind == "call" && fn.is_a?(String) && @functions_by_module.fetch(mod, {}).key?(fn)
+          rewritten["fn"] = "user.#{mod}.#{fn}"
+        end
+        rewritten
+      else
+        node
+      end
+    end
+
+    # True when the callable binds `__seq__` anywhere: a parameter or a `let`, at any depth.
+    def callable_binds_reserved_seq_name?(node)
+      case node
+      when Array then node.any? { |value| callable_binds_reserved_seq_name?(value) }
+      when Hash
+        # R14 (review F1): every VALUE binder — a lambda param (a name) or a def param ({name, …}), a `let`,
+        # a match-pattern binding, a loop item.
+        spells = lambda do |key|
+          node[key].is_a?(Array) &&
+            node[key].any? { |p| p == "__seq__" || (p.is_a?(Hash) && p.fetch("name", nil) == "__seq__") }
+        end
+        # `params` are BINDERS only on a lambda or a def. A type reference also has `params` — its type ARGUMENTS —
+        # and a type named `__seq__` binds no value (re-check N4: `Collection[__seq__]` was refused as a binder).
+        owns_binders = %w[lambda fn function].include?(node.fetch("kind", nil))
+        (owns_binders && spells.call("params")) || spells.call("bindings") ||
+          (node.fetch("name", nil) == "__seq__" && node.key?("expr")) ||
+          node.fetch("item", nil) == "__seq__" ||
+          node.each_value.any? { |value| callable_binds_reserved_seq_name?(value) }
+      else false
+      end
+    end
+
+    # R14 (review F1 / N3): a contract declaration (or, for a loop, any declaration of its body) SPELLED `__seq__`,
+    # binding it as its loop item, or binding that spelling ANYWHERE inside it. The WHOLE declaration is walked,
+    # not a chosen field: every expression position the statement lowering can reach is covered by construction
+    # — a compute, a fold_stream SEED as well as its callable (re-check N3: the seed was skipped and gave 36 for
+    # 33), a lead initializer, a snapshot. (A fold_stream callable also keeps its own R10 diagnostic.)
+    def decl_binds_reserved_seq_name?(decl)
+      return false unless decl.is_a?(Hash)
+
+      decl.fetch("name", nil) == "__seq__" || decl.fetch("item", nil) == "__seq__" ||
+        callable_binds_reserved_seq_name?(decl) ||
+        (decl.fetch("body_nodes", nil) || decl.fetch("body", nil) || []).then do |body|
+          body.is_a?(Array) && body.any? { |inner| decl_binds_reserved_seq_name?(inner) }
+        end
+    end
+
     def qualified_raw_body(node, mod)
       case node
       when Array
@@ -4122,6 +4337,19 @@ module IgniterLang
       return nil unless expr&.fetch("kind", nil) == "call"
 
       expr.fetch("args", [])[1]
+    end
+
+    # The accumulator join law, owned in ONE place so the ordinary fold and the fold_stream
+    # callable can never apply different standards. A String seed with a Text-returning lambda
+    # (concat / int_to_text / ...) is the same runtime text value, so the two text names join;
+    # every non-text type keeps the exact-match rule; Unknown on either side stays permissive.
+    # LANG-TYPED-CALLABLE-REPRESENTATION-AND-ADMISSION-READINESS-R10: extracted from
+    # infer_fold_call, which previously held it inline — the R10 stream check restated it and
+    # dropped the text join, refusing a String/Text accumulator the ordinary route admits.
+    def accumulator_result_compatible?(body_name, acc_name)
+      text_names = %w[Text String].freeze
+      text_compatible = text_names.include?(body_name) && text_names.include?(acc_name)
+      body_name == acc_name || text_compatible || body_name == "Unknown" || acc_name == "Unknown"
     end
 
     def dedupe_errors(errors)
@@ -6466,22 +6694,41 @@ module IgniterLang
 
     # Infer the return type of a lambda body.
     # Handles both single-expression bodies and block-form bodies.
+    #
+    # LANG-ORDINARY-HOF-LEXICAL-BLOCK-LOWERING-IMPLEMENTATION-R14: a block WITH statements is returned
+    # as a typed `block` that KEEPS them ({stmts, return_expr} — the shape a def body already has), so
+    # the emitter lowers it through the one right-nested `let` lowering (`function_body_ir`). It used
+    # to return the typed final expression alone: every statement was typed and then dropped, and the
+    # ordinary route silently read the OUTER binding (rv12g: 2 for 3). A statement-less block is its
+    # final expression, byte-identical to before. `deps` are the block's FREE names: a name read after
+    # its own `let` is the local, not a dependency of the node.
     def infer_lambda_body(body, local_symbols, type_errors, type_warnings, node_name)
       if body.is_a?(Hash) && body.fetch("kind", nil) == "block"
         stmts       = body.fetch("stmts", [])
         return_expr = body.fetch("return_expr", nil)
         block_syms  = local_symbols.dup
-        stmts.each do |stmt|
+        bound       = []
+        deps        = []
+        typed_stmts = stmts.filter_map do |stmt|
           case stmt.fetch("kind", nil)
           when "let"
             val_typed = infer_expr(stmt.fetch("expr"), block_syms, type_errors, type_warnings, node_name)
+            deps |= (val_typed.fetch("deps", []) - bound)
             block_syms[stmt.fetch("name")] = val_typed.fetch("resolved_type")
+            bound << stmt.fetch("name")
+            { "kind" => "let", "name" => stmt.fetch("name"), "expr" => val_typed }
           when "expr_stmt"
-            infer_expr(stmt.fetch("expr"), block_syms, type_errors, type_warnings, node_name)
+            val_typed = infer_expr(stmt.fetch("expr"), block_syms, type_errors, type_warnings, node_name)
+            deps |= (val_typed.fetch("deps", []) - bound)
+            { "kind" => "expr_stmt", "expr" => val_typed }
           end
         end
-        return_expr ? infer_expr(return_expr, block_syms, type_errors, type_warnings, node_name)
-                    : typed_expr("literal", type_ir("Unknown"), [], "value" => nil, "literal_type" => "nil")
+        final = return_expr ? infer_expr(return_expr, block_syms, type_errors, type_warnings, node_name)
+                            : typed_expr("literal", type_ir("Unknown"), [], "value" => nil, "literal_type" => "nil")
+        return final if typed_stmts.empty?
+
+        deps |= (final.fetch("deps", []) - bound)
+        typed_expr("block", final.fetch("resolved_type"), deps, "stmts" => typed_stmts, "return_expr" => final)
       else
         infer_expr(body, local_symbols, type_errors, type_warnings, node_name)
       end
@@ -6551,9 +6798,7 @@ module IgniterLang
       # accumulator join — a String seed ("" literal) with a Text-returning lambda
       # (concat/int_to_text/...) is the same runtime text value; Rust is already
       # permissive here. Non-text types keep the exact-match rule.
-      text_names = %w[Text String].freeze
-      text_compatible = text_names.include?(body_name) && text_names.include?(acc_name)
-      unless body_name == acc_name || text_compatible || body_name == "Unknown" || acc_name == "Unknown"
+      unless accumulator_result_compatible?(body_name, acc_name)
         type_errors << oof("OOF-COL4",
           "#{qualified}: lambda return type #{body_name} does not match accumulator type #{acc_name}",
           node_name)
@@ -7616,40 +7861,44 @@ module IgniterLang
       operand = infer_expr(expr.fetch("operand"), symbol_types, type_errors, type_warnings, node_name)
       op_type = type_name(operand.fetch("resolved_type"))
 
-      case op
-      when "!"
-        unless op_type == "Unknown" || op_type == "Bool"
-          type_errors << oof("OOF-TY0",
-            "stdlib.primitive.not: expected Bool operand, got #{op_type}", node_name)
-        end
-        typed_expr("call", type_ir("Bool"), operand.fetch("deps"),
-                   "fn" => "stdlib.primitive.not", "args" => [operand])
-      when "-"
-        # LANG-FLOAT-OPERATOR-FAMILY-P2: unary negation is admitted for the whole homogeneous
-        # numeric family, with a monomorphic identity per operand type. The result type is the
-        # OPERAND's own resolved type, which is what preserves `Decimal[2]`'s scale — a
-        # re-derived bare `type_ir("Decimal")` would drop it.
-        case op_type
-        when "Float"
-          typed_expr("call", operand.fetch("resolved_type"), operand.fetch("deps"),
-                     "fn" => "stdlib.float.neg", "args" => [operand])
-        when "Decimal"
-          typed_expr("call", operand.fetch("resolved_type"), operand.fetch("deps"),
-                     "fn" => "stdlib.decimal.neg", "args" => [operand])
-        when "Integer", "Unknown"
-          typed_expr("call", type_ir("Integer"), operand.fetch("deps"),
-                     "fn" => "stdlib.integer.neg", "args" => [operand])
+      typed =
+        case op
+        when "!"
+          unless op_type == "Unknown" || op_type == "Bool"
+            type_errors << oof("OOF-TY0",
+              "stdlib.primitive.not: expected Bool operand, got #{op_type}", node_name)
+          end
+          typed_expr("call", type_ir("Bool"), operand.fetch("deps"),
+                     "fn" => "stdlib.primitive.not", "args" => [operand])
+        when "-"
+          # LANG-FLOAT-OPERATOR-FAMILY-P2: unary negation is admitted for the whole homogeneous
+          # numeric family, with a monomorphic identity per operand type. The result type is the
+          # OPERAND's own resolved type, which is what preserves `Decimal[2]`'s scale — a
+          # re-derived bare `type_ir("Decimal")` would drop it.
+          case op_type
+          when "Float"
+            typed_expr("call", operand.fetch("resolved_type"), operand.fetch("deps"),
+                       "fn" => "stdlib.float.neg", "args" => [operand])
+          when "Decimal"
+            typed_expr("call", operand.fetch("resolved_type"), operand.fetch("deps"),
+                       "fn" => "stdlib.decimal.neg", "args" => [operand])
+          when "Integer", "Unknown"
+            typed_expr("call", type_ir("Integer"), operand.fetch("deps"),
+                       "fn" => "stdlib.integer.neg", "args" => [operand])
+          else
+            type_errors << oof("OOF-TY0",
+              "stdlib.integer.neg: expected Integer operand, got #{op_type}", node_name)
+            typed_expr("call", type_ir("Integer"), operand.fetch("deps"),
+                       "fn" => "stdlib.integer.neg", "args" => [operand])
+          end
         else
-          type_errors << oof("OOF-TY0",
-            "stdlib.integer.neg: expected Integer operand, got #{op_type}", node_name)
-          typed_expr("call", type_ir("Integer"), operand.fetch("deps"),
-                     "fn" => "stdlib.integer.neg", "args" => [operand])
+          type_errors << oof("OOF-TY0", "Unsupported unary operator: #{op}", node_name)
+          typed_expr("call", type_ir("Unknown"), operand.fetch("deps"),
+                     "fn" => "stdlib.unsupported.#{op}", "args" => [operand])
         end
-      else
-        type_errors << oof("OOF-TY0", "Unsupported unary operator: #{op}", node_name)
-        typed_expr("call", type_ir("Unknown"), operand.fetch("deps"),
-                   "fn" => "stdlib.unsupported.#{op}", "args" => [operand])
-      end
+      # R10: same identity trace as `infer_binary` (see there).
+      @callable_operator_trace[expr] = typed.fetch("fn") if @callable_operator_trace
+      typed
     end
 
     def unify_match_arm_types(arm_types, subject_type, node_name, type_errors)

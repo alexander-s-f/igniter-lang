@@ -270,7 +270,7 @@ window without hidden defaults.
 {
   "kind": "stream_input_node",
   "name": "readings",
-  "type": "Integer",
+  "type": "Float",
   "window_ref": "integer/{device_id}",
   "escape_capability": "stream_input",
   "fragment": "escape"
@@ -302,18 +302,18 @@ window without hidden defaults.
   "name": "total",
   "stream_ref": "readings",
   "init": {
-    "kind": "integer_literal",
+    "kind": "literal",
+    "type_tag": "Integer",
     "value": 0
   },
-  "fn_ref": "integer_sum_lambda",
+  "fn_ref": "lambda/4d12056babe282ab",
   "bound": {
     "kind": "window_bounded",
     "window_ref": "integer/{device_id}"
   },
   "event_binding": {
     "event_ref": "event",
-    "value_ref": "reading",
-    "value_path": ["value"]
+    "value_ref": "reading"
   },
   "result_type": {
     "name": "Integer",
@@ -324,9 +324,122 @@ window without hidden defaults.
 }
 ```
 
-`init`, `fn_ref`, `bound.window_ref`, and `event_binding.value_path` are
-required metadata. Missing replay metadata is a compiler/assembler proof gap,
-not a runtime default.
+`init`, `fn_ref`, `bound.window_ref`, and `event_binding` (`event_ref` and
+`value_ref`, the authored binders; the earlier `value_path` spelling is not
+emitted) are required metadata. Missing replay metadata is a compiler/assembler proof gap,
+not a runtime default. `fn_ref` is a content address into the program's
+callable registry (§6.4.1); a magic name such as `integer_sum_lambda` is not a
+resolvable reference.
+
+### 6.4.1 Callable registry and the typed carrier (`callable_v2`)
+
+The SemanticIR program carries a top-level `callables` registry: a map from a
+content address to the lowered body of every `fold_stream` accumulator lambda.
+Fresh compilation emits the accepted typed carrier
+(LANG-CALLABLE-TYPED-CARRIER-ADOPTION-R13, from R10–R12):
+
+This example counts Float readings above 10.5 into an Integer accumulator.
+It supplies `lambda/4d12056babe282ab` in the examples above and in §6.6;
+the window key is an authored identifier, not an element-type declaration.
+
+```json
+{
+  "kind": "callable_v2",
+  "params": ["acc", "r"],
+  "body": {
+    "kind": "binary_op",
+    "op": "+",
+    "left": { "kind": "ref", "name": "acc" },
+    "right": {
+      "kind": "call",
+      "fn": "fold",
+      "args": [
+        { "kind": "array_literal", "items": [ { "kind": "ref", "name": "r" } ] },
+        { "kind": "literal", "type_tag": "Integer", "value": 0 },
+        {
+          "kind": "lambda",
+          "params": ["a", "v"],
+          "body": {
+            "kind": "if_expr",
+            "condition": {
+              "kind": "call",
+              "fn": "stdlib.float.gt",
+              "args": [ { "kind": "ref", "name": "v" }, { "kind": "literal", "type_tag": "Float", "value": 10.5 } ]
+            },
+            "then_branch": { "kind": "binary_op", "op": "+", "left": { "kind": "ref", "name": "a" }, "right": { "kind": "literal", "type_tag": "Integer", "value": 1 } },
+            "else_branch": { "kind": "ref", "name": "a" }
+          }
+        }
+      ]
+    }
+  }
+}
+```
+
+Carrier law:
+
+- `params` are the two authored binders `(acc, elem)`; `body` is the lowered
+  authored body. A block body lowers to a right-nested `let` chain
+  (`{"kind": "let", "name", "expr", "body"}`; a bare statement binds the
+  reserved `__seq__`, which a source binder may not spell); an `if` lowers to
+  `if_expr` with `condition` / `then_branch` / `else_branch`, and a branch
+  block with statements is itself a `let` chain (branch-local lets are a
+  scope). Nested lambdas keep their own `params`.
+- The SAME lowering is reused by the ORDINARY routes qualified in R14:
+  an admitted HOF lambda block body, an aggregate stage body (`fold` / `filter` /
+  `map` stages of `map_reduce_aggregate`) and an `if` branch with statements —
+  inside a lambda or at contract level — are that right-nested `let` chain,
+  with every statement in authored order. These bodies contain neither an
+  unlowered `block` nor a kind-less `{stmts, return_expr}`; their statements
+  are not replaced by the final expression alone. Standalone compute blocks,
+  classifier fresh-name gaps and tail-`recur` admission remain implementation
+  residuals (ch3 §3.5), not evidence of universal lowering. A `let` with a
+  `body` binds its `name` for that body ONLY: an
+  executor must not let the binding outlive the body (the other branch, a
+  later arm and a later node read the outer binder of that spelling). Each
+  statement nests one level: a block of N statements consumes N levels of
+  the executor's expression-depth budget (the desktop VM's `eval_ast` budget
+  is 32), exactly as a def body and the stream carrier already did.
+- Type-dependent identities are SELECTED by the frontend's single type
+  authority where the binder is typed and RECORDED in the carrier; nothing
+  else is annotated (no `resolved_type`). Ordering `< <= > >=` over two operands of one known numeric family, and
+  unary `-` over one operand of a known family, become
+  `stdlib.{integer,float,decimal}.{lt,lte,gt,gte,neg}`; `!` becomes
+  `stdlib.primitive.not`; a call to a user def becomes its qualified identity
+  `user.<module>.<name>`. A genuinely unknown operand keeps the ordinary
+  permissive integer-named identity and is never invented as another family.
+  Callable parameters bind from declared context (seed type, stream element
+  type); nested HOF lambda parameters bind by the HOF signature from the
+  carrier's resolved type or an inline literal's first element (a record
+  literal element is typed by the authority, not guessed); block-local lets
+  bind their own expression's type in order; equal spelling is not the same
+  binder (shadowing binds the innermost declaration).
+- The address is `"lambda/" + SHA-256(canonical JSON of the whole payload)[0..16]`
+  (the whole-payload digest convention; no salt, no separate law).
+- Admission uses the ordinary fold owner: the body is typed with `acc` bound
+  from the seed's static type and `elem` from the declared stream symbol; the
+  arity is exactly 2; the result must be assignable to the accumulator; effect
+  fences (no external IO, including transitively effectful helpers), unknown callees and
+  argument types refuse at admission with the ordinary rules. An empty
+  carrier admits a bound-but-unknown element (OOF-P1 names a MISSING
+  declaration, not missing evidence); its unexecuted body still passes the
+  effect, arity, name and result-family checks.
+- Meaning of a `user.*` identity requires the program's own verified def
+  custody at load; identical names across programs are not identical meaning.
+
+Decoder law (Machine `stream_plan` admission): a registry entry whose `kind`
+is `callable_v1` (the historical raw-AST carrier emitted before R13) keeps its
+existing reader and meaning. The same finite envelope predicate admits `callable_v2`:
+the contract registry has exactly one referenced entry, its value equals the SIR
+registry value, `params` is an array, and `body` is present. A missing/unknown
+kind, a non-array/missing `params`, or a missing `body` refuses at this boundary.
+This predicate does not independently prove the frontend typing rules above,
+enforce exactly three keys, or establish a well-typed body. Artifact integrity,
+program custody and execution checks remain separate existing owners.
+There is no migration or compatibility service: recompilation of a
+source produces a v2 artifact whose `fn_ref`, contract references, program
+identity, window identities and receipts are new identities, never relabelled
+from a v1 artifact's evidence.
 
 ---
 
@@ -527,7 +640,7 @@ STREAM contract artifacts analogously preserve replay metadata in
     {
       "kind": "stream_input_node",
       "name": "readings",
-      "type_tag": "Integer",
+      "type_tag": "Float",
       "window_ref": "integer/{device_id}",
       "obs_kind": "stream_replay_metadata"
     },
@@ -545,15 +658,15 @@ STREAM contract artifacts analogously preserve replay metadata in
       "kind": "fold_stream_node",
       "name": "total",
       "stream_ref": "readings",
-      "init": { "kind": "integer_literal", "value": 0 },
-      "fn_ref": "integer_sum_lambda",
+      "init": { "kind": "literal", "type_tag": "Integer", "value": 0 },
+      "fn_ref": "lambda/4d12056babe282ab",
       "bound": {
         "kind": "window_bounded",
         "window_ref": "integer/{device_id}"
       },
       "event_binding": {
         "event_ref": "event",
-        "value_path": ["value"]
+        "value_ref": "reading"
       },
       "result_type_tag": "Integer",
       "obs_kind": "stream_replay_metadata"

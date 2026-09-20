@@ -547,6 +547,11 @@ module IgniterLang
       when Hash
         if expr.fetch("kind", nil) == "if_expr"
           semantic_if_expr(expr)
+        # LANG-ORDINARY-HOF-LEXICAL-BLOCK-LOWERING-IMPLEMENTATION-R14: a typed `block` (a lambda or
+        # branch body WITH statements — `infer_lambda_body`) lowers through the ONE right-nested `let`
+        # lowering a def body already uses; no second block carrier and no new node kind reaches SIR.
+        elsif expr.fetch("kind", nil) == "block"
+          function_body_ir(expr)
         # PROP-044 P6: variant_construct → typed variant_construct node
         elsif expr.fetch("kind", nil) == "variant_construct"
           semantic_variant_construct(expr)
@@ -1135,7 +1140,9 @@ module IgniterLang
         # as ordinary compute nodes (the typed init when the TypeChecker
         # supplied one). No literal-only lowering, no silent defaults.
         "init" => semantic_expr(decl.fetch("init", args[1])),
-        "fn_ref" => decl.fetch("fn_ref") { lambda_ref(args[2]) },
+        # R10 (S2): the typechecker-qualified body reaches the payload; the raw AST stays
+        # the fallback for any decl the typechecker did not carry one for.
+        "fn_ref" => decl.fetch("fn_ref") { lambda_ref(args[2], decl.fetch("callable_body", nil)) },
         "bound" => fold_stream_bound(decl, declarations),
         "event_binding" => stream_event_binding(args[2]),
         "result_type" => decl.fetch("type"),
@@ -1202,17 +1209,76 @@ module IgniterLang
     #   fn_ref = "lambda/" + hex(SHA256(canonical_json(callable_value)))[0,16]
     # with callable_value = {"kind"=>"callable_v1","params"=>…,"body"=>…}.
     # No captures field — closure conversion stays a VM concern.
-    def lambda_ref(expr)
+    # LANG-TYPED-CALLABLE-REPRESENTATION-AND-ADMISSION-READINESS-R10 (K).
+    #
+    # `callable_v2`: same address law, same registry, same canonical_json. `callable_v1` is
+    # never rewritten and stays readable, because nothing in Canon keys off the callable
+    # `kind` — the assembler copies each entry verbatim (assembler.rb:359).
+    #
+    # `body` is the carrier body the typechecker built (`callable_carrier_body`: def names
+    # qualified, ordering/negation identities selected by the typechecker's own owners, all other
+    # constructs authored), normalized here into the SHAPE the consumer executes: a block becomes
+    # the right-nested `let` chain `eval_ast` consumes and a branch becomes
+    # condition/then_branch/else_branch. No type annotation is carried; static types are
+    # admission obligations.
+    def lambda_ref(expr, qualified_body = nil)
       return nil unless expr.is_a?(Hash) && expr.fetch("kind", nil) == "lambda"
 
       callable = {
-        "kind" => "callable_v1",
+        "kind" => "callable_v2",
         "params" => expr.fetch("params", []),
-        "body" => expr.fetch("body", nil)
+        "body" => callable_body_ir(qualified_body || expr.fetch("body", nil))
       }
       fn_ref = "lambda/#{Digest::SHA256.hexdigest(canonical_json(callable))[0, 16]}"
       (@callables ||= {})[fn_ref] = callable
       fn_ref
+    end
+
+    # R10: SHAPE normalization only — no typing, no identity selection, no field added.
+    # A block keeps its authored statement order as a `let` chain; a branch takes the executable
+    # key spelling; `deps` (a typechecker bookkeeping key) is dropped; everything else recurses
+    # unchanged, so literals keep `type_tag` and non-identity operators keep their authored `op`.
+    def callable_body_ir(node)
+      case node
+      when Array
+        node.map { |value| callable_body_ir(value) }
+      when Hash
+        kind = node.fetch("kind", nil)
+        if kind == "block" || (kind.nil? && node.key?("stmts"))
+          acc = node.fetch("return_expr", nil)
+          acc = acc ? callable_body_ir(acc) : nil
+          node.fetch("stmts", []).reverse_each do |stmt|
+            acc = {
+              "kind" => "let",
+              "name" => stmt.fetch("name", "__seq__"),
+              "expr" => callable_body_ir(stmt.fetch("expr", nil)),
+              "body" => acc
+            }
+          end
+          acc
+        elsif kind == "if_expr"
+          {
+            "kind" => "if_expr",
+            "condition" => callable_body_ir(node.fetch("cond", nil)),
+            "then_branch" => callable_body_ir(branch_expr(node.fetch("then", nil))),
+            "else_branch" => callable_body_ir(branch_expr(node.fetch("else", nil)))
+          }
+        else
+          node.reject { |key, _| key == "deps" }
+              .to_h { |key, value| [key, callable_body_ir(value)] }
+        end
+      else
+        node
+      end
+    end
+
+    # A raw branch is either a bare expression or a `{stmts, return_expr}` block.
+    def branch_expr(branch)
+      return branch unless branch.is_a?(Hash)
+      return branch unless branch.key?("stmts") || branch.key?("return_expr") || branch.key?("expr")
+      return branch.fetch("expr") if branch.key?("expr") && !branch.key?("stmts")
+
+      branch
     end
 
     def atom_value(value)

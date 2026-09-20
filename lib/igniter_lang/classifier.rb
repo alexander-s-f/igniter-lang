@@ -1073,39 +1073,74 @@ module IgniterLang
       { "nodes" => declaration_ids, "edges" => edges }
     end
 
-    def expr_refs(expr)
-      return [] unless expr.is_a?(Hash)
-      unless expr.key?("kind")
-        return expr.values.flat_map do |value|
-          case value
-          when Hash then expr_refs(value)
-          when Array then value.flat_map { |item| expr_refs(item) }
-          else []
-          end
-        end.uniq
+    # LANG-CLASSIFIER-LEXICAL-BLOCK-DEPENDENCY-IMPLEMENTATION-R15: the FREE names of `expr` — one
+    # ORDERED lexical walk. `scope` holds the binders in force here: lambda params for the lambda
+    # body, a block `let` for the statements and tail AFTER it, match-pattern bindings for their own
+    # arm. A `ref` is a dependency exactly when no binder in force spells it, so a same-spelled outer
+    # name read before / beside / after a local binder stays a dependency, a local never leaks to a
+    # sibling or outward, and a name read before its own `let` is reported like any other unknown.
+    # Every Hash AND Array child is visited (array items, match arms and block statements used to be
+    # skipped); nothing is subtracted from a whole subtree.
+    #
+    # A node's identity is its `kind`, NEVER the keys it happens to carry: a record / variant / slice
+    # `fields` map is keyed by USER field names (a field may be spelled `stmts`, `return_expr`, `kind`
+    # or `type_annotation`), so those maps are read by value only and no kind-less Hash is ever
+    # shape-sniffed. The two kind-less blocks of the surface are an `if`'s branches, reached here only
+    # through the `if_expr` case.
+    def expr_refs(expr, scope = [])
+      case expr
+      when Array then return expr.flat_map { |item| expr_refs(item, scope) }.uniq
+      when Hash then nil
+      else return []
       end
+      return expr.values.flat_map { |value| expr_refs(value, scope) }.uniq unless expr.key?("kind")
 
       case expr.fetch("kind")
       when "ref"
-        [expr.fetch("name")]
+        scope.include?(expr.fetch("name")) ? [] : [expr.fetch("name")]
       when "field_access"
-        expr_refs(expr.fetch("object"))
+        expr_refs(expr.fetch("object"), scope)
       when "binary_op"
-        expr_refs(expr.fetch("left")) + expr_refs(expr.fetch("right"))
+        expr_refs(expr.fetch("left"), scope) + expr_refs(expr.fetch("right"), scope)
       when "call"
-        expr.fetch("args", []).flat_map { |arg| expr_refs(arg) }
+        expr_refs(expr.fetch("args", []), scope)
       when "form_invocation"
-        expr.fetch("attrs", []).flat_map { |attr| expr_refs(attr.fetch("value")) } +
-          expr.fetch("children", []).flat_map { |child| expr_refs(child) }
+        expr.fetch("attrs", []).flat_map { |attr| expr_refs(attr.fetch("value"), scope) } +
+          expr_refs(expr.fetch("children", []), scope)
+      when "record_literal", "variant_construct", "slice_record"
+        fields = expr.fetch("fields", {})
+        (fields.is_a?(Hash) ? fields.values : Array(fields)).flat_map { |value| expr_refs(value, scope) }
+      when "if_expr"
+        expr_refs(expr.fetch("cond"), scope) + block_refs(expr.fetch("then"), scope) +
+          (expr.fetch("else", nil) ? block_refs(expr.fetch("else"), scope) : [])
       when "lambda"
-        params = expr.fetch("params", [])
-        body_refs = expr_refs(expr.fetch("body"))
-        body_refs - params
-      when "literal", "symbol"
+        expr_refs(expr.fetch("body"), scope + expr.fetch("params", []))
+      when "block"
+        block_refs(expr, scope)
+      when "match_expr"
+        expr_refs(expr.fetch("subject"), scope) +
+          expr.fetch("arms", []).flat_map do |arm|
+            expr_refs(arm.fetch("body"), scope + arm.fetch("pattern", {}).fetch("bindings", []))
+          end
+      when "literal", "symbol", "type_ref"
         []
       else
-        expr.values.flat_map { |value| value.is_a?(Hash) ? expr_refs(value) : [] }
+        expr.values.flat_map { |value| expr_refs(value, scope) }
       end.uniq
+    end
+
+    # A block body in authored order: a `let` initializer is read in the scope BEFORE its own name is
+    # bound; the name is in force for the following statements and the tail only, and leaves with the
+    # block (each `if` branch and each lambda block is its own block). Called ONLY with a node the
+    # caller knows to be a block (`kind: block`, or an `if` branch), never with a sniffed Hash.
+    def block_refs(block, scope)
+      inner = scope.dup
+      refs = block.fetch("stmts", []).flat_map do |stmt|
+        found = expr_refs(stmt.fetch("expr", nil), inner)
+        inner += [stmt.fetch("name")] if stmt.fetch("kind", nil) == "let"
+        found
+      end
+      (refs + expr_refs(block.fetch("return_expr", nil), inner)).uniq
     end
 
     def confidence_as_bool_oof(output_node, expr)

@@ -1,0 +1,2 @@
+# Accepted R12 fixture bytes are evidence; preserve the original final blank line.
+experiments/r12_callable_compatibility_proof/fixtures/e1_empty_carrier_f.ig -text whitespace=-blank-at-eof

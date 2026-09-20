@@ -126,7 +126,8 @@ end
 check("A: fn_ref recomputes from the callable value (lambda/ + SHA256[0,16])", checks) do
   fn_ref = main_fold.fetch("fn_ref")
   entry = main_sir.fetch("callables").fetch(fn_ref)
-  entry.fetch("kind") == "callable_v1" &&
+  # LANG-CALLABLE-TYPED-CARRIER-ADOPTION-R13: fresh compilation emits the accepted typed carrier (callable_v2).
+  entry.fetch("kind") == "callable_v2" &&
     entry.fetch("params") == %w[acc r] &&
     fn_ref == "lambda/#{Digest::SHA256.hexdigest(canonical_json(entry))[0, 16]}"
 end

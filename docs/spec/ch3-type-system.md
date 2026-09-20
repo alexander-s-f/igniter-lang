@@ -237,6 +237,80 @@ its own, separate builtin-scalar-only law (`OOF-M10`); this section governs `inp
 only. This section documents the resolution law only — it introduces no arm-refined types, no
 external/opaque type syntax, and no package-resolver change.
 
+### Record literals, bound-but-unknown binders and HOF result evidence (LANG-CALLABLE-TYPED-CARRIER-ADOPTION-R13)
+
+An available declared named-record hint (for example an annotated output or compute, PROP-043)
+is validated against the literal. A failed hint is not permission to retry another named shape:
+the hinted path retains its existing diagnostics/`Unknown` result. Only when no hint is available
+does structural matching select a declared shape: exactly one shape with the same field-name set
+whose field types admit the typed field values (Unknown values permissive) names the type;
+otherwise the inferred type stays `Unknown`. Several matching shapes are ambiguous: canon
+reports `OOF-TY0: Ambiguous record literal type …`; Rust retains `Unknown`, and the demonstrated
+field-access control refuses with `OOF-P1: Unresolved field`. This is not a claim that Rust rejects
+every bare ambiguous literal. R13 converges the exercised nested record literals (fold seeds,
+branch results and literal carrier elements); hint availability remains context-dependent.
+
+`OOF-P1: Unresolved symbol` names a MISSING declaration. A name that is bound — a lambda parameter over
+an empty or untyped carrier, a block `let`, an input — is never unresolved merely because its type is
+`Unknown`; it keeps the permissive ordinary typing of an `Unknown` operand (its ordering identity is the
+integer-named one), and the effect, arity, callee and result-family checks still apply to a body that
+never executes.
+
+A selecting or reordering HOF (`filter`, `sort_by`, `sort_by_desc`) carries its carrier's element evidence
+through its RESULT: over an inline literal carrier the result is `Collection[T]` with `T` the literal's
+first element type (a record-literal element by the same order above), so a fold over `filter([r, 1.0], …)`
+binds its element `Float`. `map` / `filter_map` / `flat_map` results are typed from their lambda; `find`
+is `Option[T]`.
+
+The lexical law applies to block and branch statements in value expressions. R14 implements this law for
+the admitted HOF lambda bodies, aggregate stages and `if` branches it qualifies, alongside the accepted
+stream carrier; it is not a claim that every block form already compiles and executes. These statements are
+typed in a block scope, in authored order: a `let`'s own expression is typed in the scope BEFORE its binding,
+the name then binds that type for the rest of the block only, and it shadows any outer binder of the same
+spelling. Where ordering-identity selection is implemented, an Integer/Float shadow selects the inner
+binder's identity; the other branch reads the outer binder. On the qualified routes both frontends carry
+statements through the existing right-nested `let` lowering (ch6 §6.4.1). Dropping a statement is an
+implementation defect, never an alternative semantics (R13 review: `32.0` for `6.0`, `2` for `3`; both repaired
+by R14). That lowering binds a bare statement to the reserved name `__seq__`, so NO source value binder — an
+input, a compute, a lambda or def parameter, a `let`, a match-pattern binding, a loop item — may spell `__seq__`
+on any route (`OOF-COL4`); a record FIELD or TYPE of that spelling is not a value binder.
+
+Implementation residuals and limits, not alternative language semantics:
+
+- The classifier's free-name pass is one ORDERED lexical walk (R15), in both frontends: a block `let` —
+  fresh-named or shadowing — in a lambda block, an `if` branch or a match-arm block binds for the statements and
+  tail AFTER it; its initializer is read in the scope BEFORE it (`let k = k + 1` depends on the outer `k`; a
+  fresh `let d = d + 1`, and a name read before its own `let`, are `OOF-P1`); lambda parameters and
+  match-pattern bindings scope their own body / arm; a local reaches no sibling branch or arm, no enclosing block
+  and no later declaration. Every expression child is visited (array items, record and variant fields, match
+  subjects and arms), so a declaration's classifier dependency set is its FREE names, and a law decided from
+  that set — `OOF-S4` direct stream use, Rust `OOF-P4` compute cycles — applies in every child position. This
+  is the classifier's name resolution, not universal block admission: the other typing, lowering and execution
+  limits below still apply. Surface limits outside the classifier remain: the Canon parser has no match-arm
+  block and cannot END a statement block in a record literal (bind it with a `let` or end in a constructor
+  call), and in both parsers a block tail that starts with `[` after a `let` is an index access on the
+  initializer. Canon SemanticIR `deps` are typechecker-owned and still list callable-local names.
+- The Rust classifier's EFFECT checks (ambient-IO / capability / effect-mode / observed-write) visit every
+  expression child too (R15-A1): inside a `compute`, `snapshot`, `fold_stream`, loop collection or loop inner
+  compute, a host-IO or write call under a `match` (subject or arm), in a block, in a variant field or under `?`
+  is decided exactly like the same call in a directly visited position — refused with the same rules
+  (`E-IO-AMBIENT-BLOCKED` and, in a `pure` contract, `OOF-M1`; `E-IO-CAP-*`), or admitted with the same
+  `escape` fragment and effect metadata. Before A1 those positions were skipped, and once fresh locals were
+  admitted a `pure` contract with host IO under `match` compiled as `core`. Still outside this law: the
+  expressions of `invoke` arguments, a `write` value and an `idempotency key` are not fed to the capability /
+  effect-mode check (unchanged since before R15). Canon has no effect-mode check in either position.
+- A statement before a tail `recur()` (`if n > 0 { let acc = acc + n   recur(n - 1, acc) } else { acc }`) is
+  tail-positioned for both typecheckers, but the VM compiler's tail backstop does not see through a `let` body
+  and refuses it (`OOF-R15`).
+- In a DEF body the Rust frontend does not run the ordering-identity selection at all (R11 `d1`, inherited): an
+  ordering over Floats there keeps the integer-named identity and refuses at activation, with or without a
+  shadowing `let`. Canon selects the inner binder's identity in def bodies too.
+- A standalone compute-level block can still reach the VM as `kind: block` and be refused. It is not among
+  R14's qualified HOF/branch routes.
+- The current temporal-read executor resolves `as_of` BY NAME from contract inputs rather than the lexical
+  environment. The R14 review identified this structurally, not through fresh temporal execution. Temporal
+  shadowing remains unqualified; this is not a new exception to the lexical law and R14 does not repair it.
+
 ---
 
 ## 3.6 Type-Level OOF Rules (PROP-021 §Part 6)
