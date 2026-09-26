@@ -406,17 +406,21 @@ Carrier law:
   unary `-` over one operand of a known family, become
   `stdlib.{integer,float,decimal}.{lt,lte,gt,gte,neg}`; `!` becomes
   `stdlib.primitive.not`; a call to a user def becomes its qualified identity
-  `user.<module>.<name>`. A genuinely unknown operand keeps the ordinary
-  permissive integer-named identity and is never invented as another family.
+  `user.<module>.<name>`. A genuinely unknown operand (a hole or declared
+  openness, ch3 §3.3b) keeps the ordinary permissive integer-named identity and
+  is never invented as another family.
   Callable parameters bind from declared context (seed type, stream element
   type); nested HOF lambda parameters bind by the HOF signature from the
-  carrier's resolved type or an inline literal's first element (a record
-  literal element is typed by the authority, not guessed); block-local lets
+  carrier's resolved type, an inline literal's carrier being the join of all
+  its members (ch3 §3.3b, normative since R21 and not yet implemented: both
+  frontends still bind from the first member, as R13 recorded; a record
+  literal member is named by the authority first, not guessed); block-local lets
   bind their own expression's type in order; equal spelling is not the same
   binder (shadowing binds the innermost declaration).
 - The address is `"lambda/" + SHA-256(canonical JSON of the whole payload)[0..16]`
   (the whole-payload digest convention; no salt, no separate law).
-- Admission uses the ordinary fold owner: the body is typed with `acc` bound
+- Admission keeps its pre-R21 fold rule, which is not the ch3 §3.3b `fold`
+  rule (aligning `fold_stream` is open): the body is typed with `acc` bound
   from the seed's static type and `elem` from the declared stream symbol; the
   arity is exactly 2; the result must be assignable to the accumulator; effect
   fences (no external IO, including transitively effectful helpers), unknown callees and
@@ -902,8 +906,9 @@ SemanticIR shape conventions:
 - No `deps` key on the lowered `if_expr` node. Dependency union is a TypeChecker
   evidence policy recorded at the TypeChecker stage; it is not a SemanticIR
   node field in v0.
-- `resolved_type` carries the matched branch type (same type for both branches;
-  see Ch3 Rule IF-v0).
+- `resolved_type` carries the IF-v0 type T, the join of the branch types (Ch3
+  Rule IF-v0, §3.3b); a hole or declared-open position lowers with the `Unknown`
+  spelling.
 
 Recursive lowering consistency:
 

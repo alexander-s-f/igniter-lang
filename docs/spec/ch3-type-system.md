@@ -55,6 +55,8 @@ ContractRef contravariant on inputs, covariant on outputs
 Ref invariant:            Ref[T] <: Ref[U]  only if T = U
 ```
 
+Record width and depth subtyping are not used by the join or the boundary fit of §3.3b.
+
 ### 3.2a Nominal `Option[T]` law
 
 `Option[T]` has exactly two semantic arms:
@@ -92,10 +94,14 @@ Rule 2 Variable:       Γ(x) = T  ⊢  x : T
 Rule 3 Field access:   e : { f: T, ... }  ⊢  e.f : T
 Rule 4 Built-in call:  fn : (T₁..Tₙ → U)  e₁:T₁..eₙ:Tₙ  ⊢  fn(e₁..eₙ) : U
 Rule 5 Case:           e : Variant { case₁:T₁ | ... }
-                       ⊢  case e of case₁(x) -> e₁ : U   if each branch : U
+                       ⊢  case e of case₁(x) -> e₁ | ... : U
+                       where U = J(branch types) (§3.3b); no join: OOF-KIND5
 Rule 6 Temporal:       e : Store[T]  Tt : TemporalCtx
                        ⊢  e.at(Tt) : T
 ```
+
+Rule 3 applies to declared record types. A field read of an unnamed record family (§3.3b) stays
+`OOF-P1: Unresolved field`; R21 does not open it (an open point of the R20 A1 law).
 
 ### 3.3a Variant-arm identity and visible-owner resolution
 
@@ -153,19 +159,155 @@ LANG-VARIANT-ARM-QUALIFIED-CONSTRUCT-P1 (2026-07-20).
 ```
 Rule IF-v0:
   Γ ⊢ cond : Bool
-  Γ ⊢ then_expr : T
-  Γ ⊢ else_expr : T
+  Γ ⊢ then_expr : T₁
+  Γ ⊢ else_expr : T₂
+  T = J(T₁, T₂)            (§3.3b; no join: OOF-IF3)
   --------------------------------------------------
   Γ ⊢ if cond { then_expr } else { else_expr } : T
 ```
 
 The TypeChecker owns this rule. `cond` must resolve to canonical Bool
-`{"name":"Bool","params":[]}`. Both branches must resolve to the same type T.
+`{"name":"Bool","params":[]}`. The branches must have a join T (§3.3b): a hole takes the other branch's
+family, a declared-open position stays open, and branch order never changes T. Under an annotated compute, output
+or argument, each branch (and each `match` arm, Rule 5) is instead fit to the declared type and the expression has
+that type.
 Dependencies are the union of condition, then-branch, and else-branch deps.
 Nested `if_expr` is governed by the same rule at every nesting level.
 
 This rule is internal compiler support only. Runtime/lazy branch execution
 is not claimed. See §3.6 for rejection diagnostics.
+
+### 3.3b Collection and alternative join law (LANG-COLLECTION-EVIDENCE-JOIN-LAW-CANON-ADOPTION-R21)
+
+Normative since R21 (2026-09-26). This section is the law; its accepted evidence is the curator-accepted R20 A1
+packet (Lab `proofs/lang-collection-evidence-and-join-law-convergence-r20-a1/`). Neither compiler implements it yet:
+where the Canon Ruby or Lab Rust typechecker differs from this section, that is an implementation gap measured
+against it, not an alternative semantics (see "Implementation status" at the end of this section).
+
+**Four carriers.** Every inferred position carries exactly one of:
+
+- **a known family**;
+- **declared openness** — `Unknown` written by the author or a declared signature (nested in a port, field,
+  parameter, annotation or declared output, e.g. `Map[String, Unknown]`, `Collection[Unknown]`) and values read
+  from such a slot. It is the author's permission, checked at run time. Inference never produces it;
+- **a hole** — a type parameter no argument or context determines: the element of `[]`, the payload of `none()`,
+  the value of `map_empty()`, the missing side of `ok(x)` / `err(e)`. Its value never exists. It is solved by
+  context and joins and never licenses a family; as an operand it is permissive in every position, each result
+  typed from the other operands;
+- **an error** — the value of an expression whose diagnostic reaches the verdict. Every judgment that receives an
+  error at any depth in any operand, including an expected type, yields the error and reports nothing further; an
+  error never satisfies a boundary and never becomes openness. A probe or provisional pass that discards its
+  diagnostics yields no type; the owning pass re-derives it.
+
+A site that can justify none of the four is a diagnostic.
+
+**Record literals are named first.** This amends the R13 naming rule (§3.5a keeps the R13 observations as
+history). Before any join, every record literal is named, innermost first:
+
+- a hint names it: its own expected named record type (annotation, declared field, parameter or element), which
+  also reaches a literal written in a field of that shape. A failing hint is refused, never retried (an annotation
+  hint: `OOF-TY0`);
+- otherwise the one declared shape with exactly its field names whose fields each FIT its values (the boundary rule
+  below: holes and declared openness are permissive at any depth) names it. Optional-field construction (the gated
+  LANG-OPTIONAL-FIELD-PARTIAL-RECORD-P3 behavior for `f : T?`) is not changed by this section and applies inside
+  this fit. Several such shapes are ambiguous
+  (`OOF-TY0`); with none the literal keeps its own record family. An unnamed inner literal is judged by that record
+  family, never as open;
+- a `Map[K, V]` or declared-open expected type suppresses structural naming; the literal meets it by fit.
+
+A named literal IS that record, and an open value flows into its field as at any boundary. Naming belongs to the
+literal expression and happens once, before the literal is joined: the join never names a literal, and a type
+produced by a join is never re-named. A declaration can therefore change a verdict: adding a shape that fits one
+member of a literal can leave that member named and the others unnamed, with no join.
+
+**Join.** The join `J` of a set of normalized types (branches of an `if` / `match`, members of a collection
+literal, a `fold` seed and its body, an `unwrap_or` payload and fallback) is defined on the whole set:
+
+1. an error at any depth makes the result an error (no further diagnostic);
+2. with declared-open positions and holes contributing nothing, the remaining known families must have one least
+   upper bound: equal families; `String` and `Text` as one scalar; one constructor (`Collection`, `Option`,
+   `Result`, `Map`, keys and values) position-wise; unnamed record families with the same field names,
+   field-wise; named records and variants only by name. Otherwise there is no join. A declared-open member never
+   hides a conflict between known members;
+3. every position some member declares open is open in the result.
+
+Joining never produces openness or an error that no member had. A `let` / compute alias binds the joined TYPE.
+Record width/depth subtyping (§3.2) is not used by the join or by boundary fit; two declared records with
+identical fields are different names and have no join.
+
+**Order and grouping.** For one literal, `if` or `match` the join is commutative and independent of member,
+branch and arm order. Associativity is not universal. Grouping is free for members without declared openness;
+binding or grouping part of a set through a declared-open value keeps only openness (its known families are not
+remembered), so a grouped form can be admitted where the flat set has no join. With `open : Collection[Unknown]`
+declared, `[[1], open, ["a"]]` has no join (`OOF-COL13`), while `a = if c { [1] } else { open }` followed by
+`[a, ["a"]]` is `Collection[Collection[Unknown]]`. This loss of evidence across bindings and groupings is part of
+the law, and it happens only through author-declared openness.
+
+**Operators.** An operator that requires its operands to share a family (equality, ordering, same-family
+arithmetic; ch2 §2.2, unchanged) decides that agreement by the join: a hole or declared-open operand is permissive,
+also nested in a structured operand the operator admits (`++`). No join is `OOF-TY0` (`OOF-COL7` for `++`). This
+admits no operand family an operator does not already accept (for example `==` over collections or records stays
+refused) and changes no other operator rule: the §3.6 Decimal rules keep their results and owner
+(`Decimal[A] * Decimal[B]` is `Decimal[A+B]`; `+` over different scales is `OOF-TC5`), and equality and ordering
+over the `Decimal` family are unchanged.
+
+**Collections are homogeneous or explicitly opaque.**
+
+- `[] : Collection[_]`; `[e₁, …, eₙ] : Collection[J(e₁, …, eₙ)]`. Members with no join are refused `OOF-COL13`
+  unless the literal's own expected element type is declared open (`Collection[Unknown]` at the annotated compute,
+  port, field or parameter it is written in), which types it `Collection[Unknown]`. That context reaches the
+  annotated expression (its branches and literal members), not an earlier binding, and a slot open only as a whole
+  (e.g. a `Map[String, Unknown]` value) does not make a literal opaque. A named variant is the explicit
+  heterogeneous carrier; there is no inferred union type.
+- A HOF callback parameter is the carrier's ONE element type, and a selecting or reordering HOF returns the carrier
+  type. When all members have one family that family is the element type; a heterogeneous literal has no
+  carrier unless its element is declared open (bullet 1).
+- `concat` / `++` require a join of both element types, `append` / `set_at` a join of the element type and the
+  item (`OOF-COL7` / `OOF-COL6` otherwise); the result element is that join.
+- `fold(xs, seed, (acc, v) -> body)`: the accumulator is ONE value typed `J(seed, body)` at its least fixed point.
+  The first refinement `J(seed, body(seed))` is free. After it, a pass may fill a hole only with a hole-free type
+  (or make a position open) and never adds a hole, so refinement terminates: each changing step lowers (holes,
+  known positions) lexicographically. Provisional passes report nothing; the verdict and the lowering come from the
+  pass with the settled accumulator. No join, or a later pass that would fill a hole with a type that still has a
+  hole, is `OOF-COL4`; such a fold is refused even when a further pass would settle. The accumulator is never
+  typed from one carrier item. This rule governs `fold`. `fold_stream` is outside the A1 evidence and keeps its
+  ch6 §6.4.1 admission rule until a later card aligns it.
+- `unwrap_or` / `or_else`: `J(payload, fallback)`; no join is `OOF-TY0`.
+- Maps: `map_get` / `map_put` need a join of the key with the map's key family (a `map_put` result has that joined
+  key family, so a declared-open key keeps only openness), and join values. A record literal used as a map has key
+  family `String` (also with no fields) and value family the join of its fields. A record literal meets a map only
+  at a boundary, never in a join; `map_empty()` is the Map seed. A stdlib map call's argument is not a Map expected
+  type for naming: once a declared shape fits a record literal, the literal is that record and not a map (a
+  `Map[String, V]`-annotated binding keeps it a map). A written map key type is `String` or declared open
+  (`OOF-MAP1`, unchanged).
+
+**Boundaries (family before deferral).** An annotated compute, port, argument, record or variant field, element or
+return accepts an actual when: the slot is declared open; the actual is declared open (checked at run time); the
+actual is a hole there; or the families agree position-wise. Expected types come from written or declared slots
+and contain no holes; an unsolved expectation constrains nothing. A record literal fits a named shape with exactly
+its fields (optional-field construction as in naming, unchanged), and a `Map[K, V]` slot when `String` fits `K` and every field
+fits `V`. An unsolved or erroneous inner
+position never defers the known outer family. A `match` subject must be known to be a variant (Rule 5); declared
+openness is not a variant (a hole subject never exists).
+
+**Diagnostics.** No join is `OOF-IF3` (`if`), `OOF-KIND5` (`match`), `OOF-COL13` (collection literal),
+`OOF-COL7` (`concat` / `++`), `OOF-COL6` (`append` / `set_at`), `OOF-COL4` (fold) and `OOF-TY0` (same-family
+operators other than the §3.6 Decimal `OOF-TC5`, `unwrap_or` / `or_else`, record naming). A boundary that does not
+fit is refused by that boundary's existing owner (for example §3.5 `OOF-TC1`); every other diagnostic keeps its
+owner.
+
+**SemanticIR** is unchanged: a hole and declared openness both lower with today's `Unknown` spelling, and an error
+never reaches SemanticIR (a refused program emits none).
+
+**Implementation status (observation, not law).** R21 adopts text only; no compiler changed. Read at Canon
+`aa0e67e` and Lab `5f587b3f3`, both typecheckers still carry holes, declared openness and errors as one `Unknown`
+sentinel. They join `if` branches by an order-sensitive (then-arm) rule and `match` arms by a
+top-level-`Unknown`-skipping join that degrades a parameter conflict to the bare family name; type inline literal
+carriers without a whole-set join or `OOF-COL13` and bind HOF parameters from the first member; leave `map_get`
+keys unchecked and check a `map_put` key only by its top-level name, which refuses keys the join admits (an
+`Integer` key into a declared `Map[Unknown, V]`); do not implement the fold refinement rule; and can report a
+derivative `OOF-TY0` after a refused expression. Record naming differs as recorded in §3.5a. The owner
+checklist for a later implementation card is in Lab `lab-docs/lang/lang-collection-evidence-join-law-canon-adoption-r21.md`.
 
 ---
 
@@ -189,7 +331,7 @@ Reproducible iff `horizon` contains no `:latest` references.
 ## 3.5 Annotation-Driven Type Resolution (PROP-021 §Part 3)
 
 The TypeChecker v0 is **annotation-driven**: declared `type_annotation` is ground truth.
-Inferred type must match; mismatch → `OOF-TC1`.
+The inferred type must fit it (§3.3b boundaries); a misfit → `OOF-TC1`.
 
 ```
 parse_type_annotation("Integer")     → TypeRef::Base(:integer)
@@ -223,10 +365,11 @@ An undeclared nominal name — including a dotted spelling that resembles a pack
 `Foo.Bar`) or a variant arm (e.g. `Evidence.Observed`, which does not become a standalone type) —
 fails closed with `OOF-TY0: Unresolved type reference '<name>' in <input|output> '<port>' of
 contract '<contract>'`, once per `(contract, port, type_ref)`, before emit/assemble; the refused
-source produces no artifact. The bare inference sentinel `Unknown` is refused as a port's own
+source produces no artifact. A bare `Unknown` is refused as a port's own
 direct annotation, but stays admissible where it already appears nested inside a resolved
 parametric param or declared field (the pre-existing "untyped JSON value" idiom, e.g.
-`Map[String, Unknown]`) — nested `Unknown` is not itself an unresolved *reference*.
+`Map[String, Unknown]`) — nested `Unknown` is not itself an unresolved *reference*. Written
+`Unknown` is declared openness (§3.3b); inference never produces it.
 Malformed builtin constructor arity also fails with `OOF-TY0` at the owning port.
 The existing bare `History` read envelope and typed `History[T]` form are both admitted.
 
@@ -239,28 +382,33 @@ external/opaque type syntax, and no package-resolver change.
 
 ### Record literals, bound-but-unknown binders and HOF result evidence (LANG-CALLABLE-TYPED-CARRIER-ADOPTION-R13)
 
-An available declared named-record hint (for example an annotated output or compute, PROP-043)
-is validated against the literal. A failed hint is not permission to retry another named shape:
-the hinted path retains its existing diagnostics/`Unknown` result. Only when no hint is available
-does structural matching select a declared shape: exactly one shape with the same field-name set
-whose field types admit the typed field values (Unknown values permissive) names the type;
-otherwise the inferred type stays `Unknown`. Several matching shapes are ambiguous: canon
-reports `OOF-TY0: Ambiguous record literal type …`; Rust retains `Unknown`, and the demonstrated
-field-access control refuses with `OOF-P1: Unresolved field`. This is not a claim that Rust rejects
-every bare ambiguous literal. R13 converges the exercised nested record literals (fold seeds,
-branch results and literal carrier elements); hint availability remains context-dependent.
+The record-literal naming law is §3.3b (R13 as amended by R21). **History (R13 implementation
+observations, not the current law):** at R13 an available declared named-record hint (for example an
+annotated output or compute, PROP-043) was validated against the literal, and a failed hint was not retried
+with another named shape. Without a hint, exactly one shape with the same field-name set whose field types
+admitted the typed field values (Unknown values permissive) named the type; otherwise the inferred type
+stayed `Unknown`. Several matching shapes were ambiguous: canon reported `OOF-TY0: Ambiguous record literal
+type …`; Rust retained `Unknown`, and the demonstrated field-access control refused with `OOF-P1: Unresolved
+field`. R13 converged the exercised nested record literals (fold seeds, branch results and literal carrier
+elements). A1 reading of Canon `aa0e67e`: canon treats only a top-level `Unknown` value (or an all-`Unknown`
+empty collection) as permissive and refuses a nested `Unknown`, and it passes a hint into nested literals.
+These observations are what the §3.3b amendment changes (fit at any depth, an unnamed inner literal judged by
+its record family, no match keeps the record family, ambiguity refused in both). Both implementations still
+behave as observed here (§3.3b "Implementation status"); R21 changed neither.
 
 `OOF-P1: Unresolved symbol` names a MISSING declaration. A name that is bound — a lambda parameter over
-an empty or untyped carrier, a block `let`, an input — is never unresolved merely because its type is
-`Unknown`; it keeps the permissive ordinary typing of an `Unknown` operand (its ordering identity is the
-integer-named one), and the effect, arity, callee and result-family checks still apply to a body that
+an empty or untyped carrier, a block `let`, an input — is never unresolved merely because it carries no known
+family (a hole or declared openness, §3.3b); it keeps the permissive typing of such an operand (its ordering
+identity is the integer-named one), and the effect, arity, callee and result-family checks still apply to a body that
 never executes.
 
 A selecting or reordering HOF (`filter`, `sort_by`, `sort_by_desc`) carries its carrier's element evidence
-through its RESULT: over an inline literal carrier the result is `Collection[T]` with `T` the literal's
-first element type (a record-literal element by the same order above), so a fold over `filter([r, 1.0], …)`
-binds its element `Float`. `map` / `filter_map` / `flat_map` results are typed from their lambda; `find`
-is `Option[T]`.
+through its RESULT: over an inline literal carrier the result is `Collection[T]` with `T` the join of all the
+literal's members (§3.3b; a record-literal member is named first), so a fold over `filter([r, 1.0], …)` with
+`r : Float` binds its element `Float`. `map` / `filter_map` / `flat_map` results are typed from their lambda;
+`find` is `Option[T]`. (R13 recorded the first element's type here, and both frontends still use it; §3.3b
+retires that rule: a heterogeneous literal has no carrier and is `OOF-COL13` unless its element is declared
+open.)
 
 The lexical law applies to block and branch statements in value expressions. R14 implements this law for
 the admitted HOF lambda bodies, aggregate stages and `if` branches it qualifies, alongside the accepted
@@ -316,10 +464,13 @@ Implementation residuals and limits, not alternative language semantics:
 ## 3.6 Type-Level OOF Rules (PROP-021 §Part 6)
 
 ```
-OOF-TC1  Declared type_annotation does not match inferred type
+OOF-TC1  Inferred type does not fit the declared type_annotation (§3.3b boundaries)
 OOF-TC2  Field access on non-record type
 OOF-TC3  Call arity mismatch
-OOF-TC4  Collection[T] where element type is unknown
+OOF-TC4  retired by §3.3b (formerly: Collection[T] where element type is unknown); an unsolved
+         element is a lawful hole; any other element without a known family is declared open or an
+         error
+OOF-COL13 collection literal members have no join and no declared-open element is expected (§3.3b)
 OOF-TC5  Decimal scale mismatch in add (must be equal)
 OOF-CE4  ConfidenceLabel used as Bool (enforced with full inferred types)
 OOF-DM2  Decimal division by statically-known zero
@@ -331,7 +482,7 @@ OOF-DM2  Decimal division by statically-known zero
 | --- | --- | --- |
 | `OOF-IF1` | TypeChecker | condition does not resolve to canonical Bool `{"name":"Bool","params":[]}` |
 | `OOF-IF2` | TypeChecker | expression-level `if_expr` has no `else` branch (missing else is not accepted v0 semantics) |
-| `OOF-IF3` | TypeChecker | then/else branch result types do not exact-match |
+| `OOF-IF3` | TypeChecker | then/else branch result types have no join (§3.3b) |
 | `OOF-IF4` | TypeChecker | branch has no value-producing final expression (empty block body) |
 
 `OOF-IF5` is unowned and outside v0.
@@ -340,12 +491,12 @@ OOF-DM2  Decimal division by statically-known zero
 specific `OOF-IF*` diagnostic for any supported or diagnosed `if_expr` path.
 Other unsupported expression kinds remain owned by `OOF-TY0`.
 
-Derivative `OOF-TY0` type-mismatch diagnostics after rejected `if_expr` remain
-accepted secondary diagnostics for now. These arise because a rejected `if_expr`
-produces an `Unknown` resolved type, which downstream type-mismatch checks
-(`OOF-TY0 Type mismatch: expected ..., got Unknown`) then flag as a secondary
-consequence of the rejected branch. They are not unsupported-expression
-diagnostics and do not indicate an `if_expr` regression.
+A rejected `if_expr`, like every refused expression, yields an error (§3.3b): no
+derivative diagnostic is reported against it, and it never satisfies a boundary.
+History: before R21 this section accepted derivative `OOF-TY0 Type mismatch:
+expected ..., got Unknown` diagnostics after a rejected `if_expr` as secondary
+"for now", because the rejected expression resolved to `Unknown`. That allowance
+is retired; an implementation that still reports them has an open gap.
 
 **Decimal rules**:
 - `Decimal[A] + Decimal[B]`: requires `A == B` → result `Decimal[A]`; else `OOF-TC5`

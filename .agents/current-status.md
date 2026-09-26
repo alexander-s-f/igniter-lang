@@ -1,5 +1,24 @@
 # Igniter-Lang Current Status
 
+## Current Normative Decision / 2026-09-26
+**LANG-COLLECTION-EVIDENCE-JOIN-LAW-CANON-ADOPTION-R21: COLLECTION LAW ADOPTED AS NORMATIVE TEXT (curator accepted) / IMPLEMENTATION PENDING.**
+ch3 §3.3b is now the collection and alternative join law: four carriers (known family, declared openness, hole,
+error), record literals named before one set-based join (R13 amended), homogeneous-or-explicitly-opaque
+collections (`OOF-COL13`), the fill-only `fold` termination rule, key-checked maps and family-before-deferral
+boundaries. It is order-free for one set; grouping through declared openness may discard known evidence. Aligned
+with it: ch3 §3.2, Rule 3/5, IF-v0, §3.5, §3.5a, §3.6; ch2 §2.2 operators, §2.2.3, §2.2.5, §2.5; ch6 §6.4.1,
+§6.10. R13
+observations and the old secondary-diagnostic allowance are kept as marked history. Accepted costs: R19 CF1 is
+retired; heterogeneous literals need a variant or a declared `Collection[Unknown]`; conflicting unnamed and
+ambiguous records refuse; record/Map joins refuse (`map_empty()` seeds maps); some settling late-hole folds refuse;
+once implemented, an application stand may need migration or a rebuild, and the A1 census's zero hits are not
+fleet compatibility. Docs only: no compiler, SemanticIR, VM or app change; both typecheckers still differ (§3.3b
+"Implementation status"). Open: `fold_stream` alignment, unnamed-record field reads. Out-of-scope spec lag: ch5
+IF-v0 "exact-match", ch8 §8.16.2 `set_at`, stdlib-inventory `map_empty` "Unknown".
+For these three stale passages, ch3 §3.3b takes precedence. This is not a whole-spec consistency claim.
+[Card](../../igniter-lab/.agents/work/cards/lang/LANG-COLLECTION-EVIDENCE-JOIN-LAW-CANON-ADOPTION-R21.md) ·
+[report](../../igniter-lab/lab-docs/lang/lang-collection-evidence-join-law-canon-adoption-r21.md).
+
 ## Current Implementation Slice / 2026-09-20
 **LANG-CLASSIFIER-LEXICAL-BLOCK-DEPENDENCY-IMPLEMENTATION-R15 + A1: CLOSED / CURATOR ACCEPTED within scope; Canon committed as da3bb16.**
 Commit checkpoint / 2026-09-20: this includes the composed R13-R15 semantics,

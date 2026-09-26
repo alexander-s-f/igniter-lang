@@ -172,11 +172,11 @@ operand-compatibility law and both return `Bool`; `!=` is strict inequality,
 implemented by negating the same strict equality relation used by `==`. The
 accepted equality families are the existing homogeneous exact scalar families
 (`Integer`, `Bool`, `Float`, `Decimal`), `String`/`Text` compatible pairs, and
-`Unknown`-deferred operands. Known incompatible types fail closed with
+a hole or declared-open operand (ch3 §3.3b). Known incompatible types fail closed with
 `OOF-TY0`; records, collections and other structured values are not granted
 structural equality by these operators, and `SecretRef` remains unobservable.
 
-`&&` and `||` require `Bool` operands (or existing `Unknown`-deferred values),
+`&&` and `||` require `Bool` operands (or a hole or declared-open operand, ch3 §3.3b),
 return `Bool`, and have precedence `&&` above `||`. They do not introduce
 truthiness or short-circuit-effect semantics. The word forms `and` and `or` are
 not expression aliases; diagnostics direct authors to `&&` and `||` instead.
@@ -249,8 +249,8 @@ V0 accepted semantics:
   and produces `OOF-IF2` (not a parse error — the parser emits `else: null`
   to allow TypeChecker rejection).
 - Condition must resolve to canonical Bool `{"name":"Bool","params":[]}`.
-- Then/else branch `return_expr` must both exist (non-null) and resolve to
-  the same type; see Ch3 §3.6.
+- Then/else branch `return_expr` must both exist (non-null) and have a join
+  (Ch3 Rule IF-v0, §3.3b); see Ch3 §3.6.
 - Nested `if_expr` follows the same rules at every nesting level.
 
 ### 2.2.3.1 else if chaining (source-surface sugar)
@@ -282,7 +282,7 @@ expression is the trailing `if_expr`. Consequences, all inherited (no new rule):
   (`if c1 { a } else if c2 { b }`) desugars to an inner `if` with no `else`, so
   `OOF-IF2` fires on that inner node exactly as the nested form does.
 - **Diagnostics unchanged.** `OOF-IF1` (non-Bool condition), `OOF-IF3` (branch
-  type mismatch), and `OOF-IF4` (empty branch) apply per link at its source span.
+  types have no join), and `OOF-IF4` (empty branch) apply per link at its source span.
 - **Unambiguous parse.** After `else`, one-token lookahead disambiguates: the
   `if` keyword starts a chain link; `{` starts a block. Each branch body is
   brace-delimited, so a trailing `else` binds to the nearest `if`.
@@ -393,7 +393,7 @@ N { fn: en, f1, ..., f2: e2 }
 ⇒ call_contract("N", f1, e2, ..., en)
 ```
 
-This exact-field gate is stricter than ordinary structural width assignability:
+This exact-field gate is exact-field like the record fit of ch3 §3.3b (no width subtyping):
 construction cannot silently omit or add a field. `N(args...)` is refused for
 constructor-declared contracts because the derived positional order is an
 implementation detail. A literally authored `call_contract("N", ...)` remains
@@ -654,7 +654,11 @@ type ProductRef {
 ```
 
 **Semantic rules**:
-- Structural (not nominal): two types with identical fields are compatible
+- Structural naming, nominal identity (ch3 §3.3b): a record literal is named by its hint or by the one
+  declared shape whose fields it fits, before any join; a declared record type is then compared by name, so two
+  declarations with identical fields are different types in a join and at a boundary (with `type A { x: Integer }`,
+  `type B { x: Integer }`, `a : A` and `b : B`, `if c { a } else { b }` has no join: `OOF-IF3`). Record
+  width/depth subtyping is not used there
 - Optional fields (`?`) map to `Option[T]` in TypeEnv
 - TypeDecl produces a named entry in the program's TypeEnv
 - `const` is a compile-time name for a scalar, record, or collection literal.
