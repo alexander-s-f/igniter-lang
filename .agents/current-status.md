@@ -1,16 +1,22 @@
 # Igniter-Lang Current Status
 
 ## Current Implementation Slice / 2026-09-29
-**LANG-COLLECTION-EVIDENCE-JOIN-MAIN-ADOPTION-R23: R22 A2 PAIR LANDED IN BOTH FRONTENDS (executor) / CURATOR ACCEPTANCE PENDING.**
+**LANG-COLLECTION-EVIDENCE-JOIN-MAIN-ADOPTION-R23: CLOSED / CURATOR ACCEPTED, exact adoption and bounded publication.**
+Adoption commits: Canon `27c0a9b4b`, Lab `821f7cbd9`; debug `4ffc3cb8`, release `bfab7216`.
+Fresh curator24/24 and executor reader38/38 twice. Debug artifact qualification is direct-member, not a public
+debug-artifact route; release public source/artifact smoke is accepted. Producer hashing omits three compiled Lab
+path packages; current clean bytes are verified, future drift coverage remains open. R19 retirement is recoverable.
+[Curator harvest](../../igniter-lab/lab-docs/lang/lang-collection-evidence-join-main-adoption-r23-curator-harvest.md).
 The curator-accepted R22 A2 pair is now the maintained source: Canon `lib/igniter_lang/typechecker.rb`, the permanent
 proof `experiments/r22_collection_join_law_proof/` (473 checks, 296-row witness table shared byte for byte with the
 Lab Rust fixture; gitignored dir: `git add -f`) and four re-pointed proofs (`fold_struct_accumulator` P2,
 `record_literal_inference` P4, `sort_by_desc` P2, `text_concat_typed_arg_reuse` with its two accepted `[D]` pins).
 Every landed byte equals the A2 pin (303 Canon / 311 Lab files; full patches `e2f5b0035bd8…` on `66e24d5` and
 `95b5aae3d271…` on Lab `273104a11`). No new semantic edit, grammar, emitter, hash-law, VM or Machine change. Normative
-ch3 §3.3b is unchanged; only its observational "Implementation status" records the adoption and its limits, and the
+ch3 §3.3b law is unchanged; its observational "Implementation status" records the adoption and its limits, and the
 R21 pre-implementation observation is kept there as history. The R21 entry below stays as written; its
-"IMPLEMENTATION PENDING" is superseded by this entry as an observation.
+"IMPLEMENTATION PENDING" is superseded by this entry as an observation. At harvest the obsolete implementation
+sentence at the section head was editorially corrected; the dated R21 paragraph remains unchanged.
 Limits: `fold_stream`, cross-scale `Decimal` joins, field reads on open / hole / unnamed receivers, ungated stdlib
 owners and the disclosed frontend differences stay outside the claim (arity refusals, parse forms, the Rust-only
 `invoke` argument owner, and one spelling: an annotated collection literal with a `Text` member is

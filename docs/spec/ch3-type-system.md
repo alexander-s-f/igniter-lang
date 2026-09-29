@@ -180,9 +180,10 @@ is not claimed. See §3.6 for rejection diagnostics.
 ### 3.3b Collection and alternative join law (LANG-COLLECTION-EVIDENCE-JOIN-LAW-CANON-ADOPTION-R21)
 
 Normative since R21 (2026-09-26). This section is the law; its accepted evidence is the curator-accepted R20 A1
-packet (Lab `proofs/lang-collection-evidence-and-join-law-convergence-r20-a1/`). Neither compiler implements it yet:
-where the Canon Ruby or Lab Rust typechecker differs from this section, that is an implementation gap measured
-against it, not an alternative semantics (see "Implementation status" at the end of this section).
+packet (Lab `proofs/lang-collection-evidence-and-join-law-convergence-r20-a1/`). The maintained frontends adopted
+the accepted R22 A2 slice in R23 (2026-09-29); current coverage and remaining limits are recorded under
+"Implementation status" below. Where the Canon Ruby or Lab Rust typechecker differs from this section, that is
+an implementation gap measured against it, not an alternative semantics.
 
 **Four carriers.** Every inferred position carries exactly one of:
 
@@ -304,9 +305,9 @@ never reaches SemanticIR (a refused program emits none).
 pair, landed byte for byte from its full patches (Canon `e2f5b0035bd8…` on `66e24d5`, Lab Rust `95b5aae3d271…` on
 `273104a11`; Lab packet `proofs/lang-collection-evidence-join-implementation-r22-a2/`): Canon
 `lib/igniter_lang/typechecker.rb` and the Lab Rust typechecker (`typechecker.rs`, `typechecker/stdlib_calls.rs`,
-`typechecker/type_ir.rs`). This supersedes, as an observation, the "Neither compiler implements it yet" sentence at
-the head of this section and the R21 paragraph kept below. Implemented in the ratified slice: the four carriers are
-kept apart during inference and the carrier marking is erased at emission, where a known family keeps its spelling,
+`typechecker/type_ir.rs`). This supersedes, as an observation, the former "Neither compiler implements it yet"
+claim (editorially corrected at curator harvest) and the R21 paragraph kept below. Implemented in the ratified
+slice: the four carriers are kept apart during inference and the carrier marking is erased at emission, where a known family keeps its spelling,
 a hole, declared openness and an unnamed record family are spelled `Unknown`, and an error is never emitted
 (SemanticIR schema and hash law unchanged); record literals are named before one set-based join; `if` / `match` /
 collection literals / `concat` / `append` / `set_at` / `fold` / `unwrap_or` / `or_else` / maps and same-family
