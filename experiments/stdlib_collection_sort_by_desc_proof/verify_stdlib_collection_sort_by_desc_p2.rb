@@ -377,8 +377,10 @@ check("4.3 non-Collection first arg -> OOF-COL2 in the sort_by_desc spelling") d
 end
 
 float_res = ruby_compile_source(FLOAT_KEY)
+# LANG-COLLECTION-EVIDENCE-JOIN-IMPLEMENTATION-R22 [D]: OOF-COL13 is now the ratified heterogeneous-literal owner
+# (ch3 §3.3b), so its text lawfully exists in the typechecker; the pin is that THIS refusal mints no new code.
 check("4.4 Float key -> reused OOF-COL11 (no new code minted)") do
-  float_res[:codes].include?("OOF-COL11") && !TC_SRC.include?("OOF-COL13")
+  float_res[:codes].include?("OOF-COL11") && (float_res[:codes] - ["OOF-COL11"]).empty?
 end
 check("4.5 OOF-COL11 message uses the sort_by_desc spelling and routes to Decimal/Integer") do
   float_res[:messages].any? do |m|

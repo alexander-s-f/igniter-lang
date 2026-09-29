@@ -1,5 +1,30 @@
 # Igniter-Lang Current Status
 
+## Current Implementation Slice / 2026-09-29
+**LANG-COLLECTION-EVIDENCE-JOIN-MAIN-ADOPTION-R23: R22 A2 PAIR LANDED IN BOTH FRONTENDS (executor) / CURATOR ACCEPTANCE PENDING.**
+The curator-accepted R22 A2 pair is now the maintained source: Canon `lib/igniter_lang/typechecker.rb`, the permanent
+proof `experiments/r22_collection_join_law_proof/` (473 checks, 296-row witness table shared byte for byte with the
+Lab Rust fixture; gitignored dir: `git add -f`) and four re-pointed proofs (`fold_struct_accumulator` P2,
+`record_literal_inference` P4, `sort_by_desc` P2, `text_concat_typed_arg_reuse` with its two accepted `[D]` pins).
+Every landed byte equals the A2 pin (303 Canon / 311 Lab files; full patches `e2f5b0035bd8…` on `66e24d5` and
+`95b5aae3d271…` on Lab `273104a11`). No new semantic edit, grammar, emitter, hash-law, VM or Machine change. Normative
+ch3 §3.3b is unchanged; only its observational "Implementation status" records the adoption and its limits, and the
+R21 pre-implementation observation is kept there as history. The R21 entry below stays as written; its
+"IMPLEMENTATION PENDING" is superseded by this entry as an observation.
+Limits: `fold_stream`, cross-scale `Decimal` joins, field reads on open / hole / unnamed receivers, ungated stdlib
+owners and the disclosed frontend differences stay outside the claim (arity refusals, parse forms, the Rust-only
+`invoke` argument owner, and one spelling: an annotated collection literal with a `Text` member is
+`Collection[String]` in Rust and `Collection[Text]` in Canon, with equal values); the three spec-lag passages named
+in the R21 entry are untouched. No whole-language conformance, no frontend parity claim, no application migration.
+A rebuilt artifact can change its semantic hash where an inferred type spelling changed (observed: the Lab
+workbench Joint copy, three `Collection[String]` nodes now `Collection[Text]`, identical View / Reduce values);
+Inspector and Kuramoto rebuild byte for byte. The lawful refusals accepted with R22
+are real on the landed frontends and open as migration items: Lab `apps/igniter-apps/spreadsheet` (Rust; Canon
+already refused it) and two view-engine recursion fixtures (both frontends).
+[Card](../../igniter-lab/.agents/work/cards/lang/LANG-COLLECTION-EVIDENCE-JOIN-MAIN-ADOPTION-R23.md) ·
+[report](../../igniter-lab/lab-docs/lang/lang-collection-evidence-join-main-adoption-r23.md) ·
+[packet](../../igniter-lab/proofs/lang-collection-evidence-join-main-adoption-r23/README.md).
+
 ## Current Normative Decision / 2026-09-26
 **LANG-COLLECTION-EVIDENCE-JOIN-LAW-CANON-ADOPTION-R21: COLLECTION LAW ADOPTED AS NORMATIVE TEXT (curator accepted) / IMPLEMENTATION PENDING.**
 ch3 §3.3b is now the collection and alternative join law: four carriers (known family, declared openness, hole,

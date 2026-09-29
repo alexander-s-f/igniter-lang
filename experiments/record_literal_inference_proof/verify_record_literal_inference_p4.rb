@@ -84,8 +84,11 @@ puts "── A: Source guards ────────────────�
 check("A-01 source: empty_collection_assignable? method defined",
       tc_src.include?("def empty_collection_assignable?"))
 
-check("A-02 source: empty_collection_assignable? called in infer_record_literal",
-      tc_src.include?("empty_collection_assignable?(act_type, exp_type)"))
+# LANG-COLLECTION-EVIDENCE-JOIN-IMPLEMENTATION-R22 [D]: structural naming now measures each field by the ONE
+# §3.3b fit, in which an empty literal is a hole that fits any collection position; the P4 helper call is gone
+# (the behavior is still pinned by sections B-D below).
+check("A-02 source: structural naming measures fields by the §3.3b fit (an empty collection is a fitting hole)",
+      tc_src.include?("shape_fields.all? { |fname, exp_type| fit(field_types.fetch(fname), exp_type) == :yes }"))
 
 check("A-03 source: P3 structural path preserved (candidates = @type_shapes.select)",
       tc_src.include?("candidates = @type_shapes.select"))
@@ -93,10 +96,13 @@ check("A-03 source: P3 structural path preserved (candidates = @type_shapes.sele
 # A-04: output boundary must use structurally_assignable? only — not the new helper
 # The output boundary line contains 'structurally_assignable?' but not 'empty_collection_assignable?'
 # immediately adjacent to the unless/blocking_rule_present? pair.
-output_boundary_region = tc_src[/unless structurally_assignable.*?blocking_rule_present.*?\n/m] || ""
+# LANG-COLLECTION-EVIDENCE-JOIN-IMPLEMENTATION-R22 [D]: the output boundary is now the `when "output"` arm's
+# fit/legacy decision; the region must be found (a missing region is a vacuous pass, not a PASS).
+output_boundary_region = tc_src[/when "output"\n.*?typed_decls << typed_decl_output/m] || ""
 check("A-04 scope: output boundary does not call empty_collection_assignable?",
-      !output_boundary_region.include?("empty_collection_assignable?"),
-      "output boundary region: #{output_boundary_region.strip.inspect[0..80]}")
+      output_boundary_region.include?("structurally_assignable?(actual, expected)") &&
+        !output_boundary_region.include?("empty_collection_assignable?"),
+      "output boundary region found: #{!output_boundary_region.empty?}")
 
 check("A-05 source: no new OOF rule codes added",
       !tc_src.include?("OOF-TY-P4") && !tc_src.include?("OOF-COLL"))
@@ -443,8 +449,10 @@ end
 check("F-04 scope: structurally_assignable? body unchanged (no new branch added)",
       tc_src.include?("return false if type_name(actual)   == \"Unknown\""))
 
-check("F-05 scope: P2 paths preserved (temp_hint_installed present)",
-      tc_src.include?("temp_hint_installed"))
+# LANG-COLLECTION-EVIDENCE-JOIN-IMPLEMENTATION-R22 [D]: the P2 annotated-compute hint path is now the compute's
+# position-scoped written context (the node-keyed temp hint is gone: it also reached nested literals, ch3 §3.3b).
+check("F-05 scope: P2 paths preserved (the annotated compute is its expression's written context)",
+      tc_src.include?("install_compute_expected_context(decl, all_decls)"))
 
 puts
 

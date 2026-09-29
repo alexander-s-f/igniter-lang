@@ -196,11 +196,15 @@ end
 check("B-02: Ruby — record Acc is NOT semantically rejected (P1 finding confirmed)") do
   ruby_clean?(R_RUBY_OK)
 end
-check("B-03: Ruby — bad record field in lambda return is CAUGHT (OOF-TY0)") do
-  has_oof?(R_RUBY_BAD, "OOF-TY0")
+# LANG-COLLECTION-EVIDENCE-JOIN-IMPLEMENTATION-R22 [D]: the lambda-return literal has no written context (ch3 §3.3b
+# naming: the node-keyed output hint that named it Stats is gone), so it keeps its record family, which does not join
+# the Stats accumulator: the fold owner OOF-COL4 refuses it — the owner Rust already used. The record family displays
+# as Unknown (legacy display), so the message names the accumulator, not the field.
+check("B-03: Ruby — bad record field in lambda return is CAUGHT (OOF-COL4, the fold join owner)") do
+  has_oof?(R_RUBY_BAD, "OOF-COL4")
 end
-check("B-04: Ruby — bad-field error names the offending field type mismatch") do
-  msg?(R_RUBY_BAD, "count") && msg?(R_RUBY_BAD, "String")
+check("B-04: Ruby — the refusal names the accumulator type it does not join") do
+  msg?(R_RUBY_BAD, "accumulator type Stats")
 end
 check("B-05: Ruby — scalar fold compiles CLEAN (regression baseline)") do
   ruby_clean?(R_RUBY_SCAL)

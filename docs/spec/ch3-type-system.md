@@ -299,7 +299,38 @@ owner.
 **SemanticIR** is unchanged: a hole and declared openness both lower with today's `Unknown` spelling, and an error
 never reaches SemanticIR (a refused program emits none).
 
-**Implementation status (observation, not law).** R21 adopts text only; no compiler changed. Read at Canon
+**Implementation status (observation, not law).** *Adoption, 2026-09-29
+(LANG-COLLECTION-EVIDENCE-JOIN-MAIN-ADOPTION-R23).* Both maintained frontends now carry the curator-accepted R22 A2
+pair, landed byte for byte from its full patches (Canon `e2f5b0035bd8…` on `66e24d5`, Lab Rust `95b5aae3d271…` on
+`273104a11`; Lab packet `proofs/lang-collection-evidence-join-implementation-r22-a2/`): Canon
+`lib/igniter_lang/typechecker.rb` and the Lab Rust typechecker (`typechecker.rs`, `typechecker/stdlib_calls.rs`,
+`typechecker/type_ir.rs`). This supersedes, as an observation, the "Neither compiler implements it yet" sentence at
+the head of this section and the R21 paragraph kept below. Implemented in the ratified slice: the four carriers are
+kept apart during inference and the carrier marking is erased at emission, where a known family keeps its spelling,
+a hole, declared openness and an unnamed record family are spelled `Unknown`, and an error is never emitted
+(SemanticIR schema and hash law unchanged); record literals are named before one set-based join; `if` / `match` /
+collection literals / `concat` / `append` / `set_at` / `fold` / `unwrap_or` / `or_else` / maps and same-family
+operators decide by that join with the diagnostics listed above; boundaries judge the family before deferral;
+`unwrap_or` / `or_else` judge the receiver family before the payload join; a `match` subject that is not known to be
+a variant is refused (`OOF-KIND4`), and a `call_contract` whose callee is dynamic or declares no single output is
+refused at the call (`OOF-TY0`); an expression that reports yields the error and nothing further is reported for it,
+while diagnostics of nested bodies and statements keep their own verdicts. Permanent evidence in this repository:
+`experiments/r22_collection_join_law_proof/` (473 checks; its 296-row witness table is byte-identical with the Lab
+Rust fixture `igniter-compiler/tests/fixtures/r22_review/EXPECT.json`). Limits, still measured against this section
+and not claimed as conforming: `fold_stream` keeps ch6 §6.4.1; a cross-scale `Decimal` join keeps the first member's
+scale; a field read on an open, hole or unnamed-record receiver stays `OOF-P1`; stdlib owners that gate no argument
+family (`first`, `last`, `map_from_pairs`, `range`, and the Option / Text owners other than `unwrap_or` / `or_else`
+/ `concat` / `join`) are unchanged; the frontends still differ in arity refusals (a one-argument `unwrap_or` or
+`or_else` is refused in Canon and admitted in Rust, where its value stays untyped), parse forms, the Rust-only
+`invoke` argument owner and the spelling of one joined scalar (an annotated collection literal with a `Text` member
+is `Collection[String]` in Rust and `Collection[Text]` in Canon, with equal values). Inferred types recorded in
+SemanticIR can differ from the pre-adoption compilers for the same admitted source, for example a settled hole, a
+position that a member declares open and that is now recorded open (Canon), or a joined `String` / `Text` set
+spelled `Text` where a `Text` member takes part (`concat` and `if` in both frontends, the collection literal in
+Canon), so a rebuilt artifact can change its semantic hash without changing its values. This is adoption of the
+ratified slice, not whole-language conformance or frontend parity; an application stand is migrated by its own card.
+*History (R21 pre-implementation observation, kept as written).*
+R21 adopts text only; no compiler changed. Read at Canon
 `aa0e67e` and Lab `5f587b3f3`, both typecheckers still carry holes, declared openness and errors as one `Unknown`
 sentinel. They join `if` branches by an order-sensitive (then-arm) rule and `match` arms by a
 top-level-`Unknown`-skipping join that degrades a parameter conflict to the bare family name; type inline literal

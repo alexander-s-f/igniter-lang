@@ -1,0 +1,2319 @@
+{
+ "_doc": "LANG-COLLECTION-EVIDENCE-JOIN-IMPLEMENTATION-R22 independent review witnesses (REVIEW-1 F1-F12 REVIEW-1-VERIFY V1-V5 and REVIEW-1-RECHECK2 R1-R4, REVIEW-1-RECHECK3 T1): the exact rule set each compiler must give (empty = admitted, SIR carrier-free). compilers = both | rust (Canon lacks the owner or cannot parse the form: a recorded pre-existing divergence). R22 A1 (F1-F4 repair) rows A1-F1..A1-F4 and the curator probes A1-C are added; the fifth `untyped` carrier is retired, so every former untyped row is now its originating-site diagnostic (OOF-TY0 at the call_contract), a non-variant match subject is OOF-KIND4 in both compilers, and a record family at a Collection gate is OOF-COL2. Rows A1-F2-cascade: after the originating-site refusal every collection / option / operator / boundary owner that receives the erroneous carrier is silent (the origin diagnostic exactly once). Rows A1-R1..A1-R7 (the A1 review, REVIEW-1): R1 every owner (text, numeric, option, map, sealed) that receives the erroneous carrier yields the error, origin once; R2 the value of a refused unknown-function call is the error carrier; R3 an unresolved symbol is the error carrier in both compilers (the T7 interpolation shape reports OOF-P1 only); R4 a match over an erroneous subject binds its patterns to the error (no manufactured OOF-P1) while an arm's own diagnostic survives; R5 join and the concat text route judge a record family as the known family Record; R6 and_then does too (both compilers); R7 openness / holes / text stay admitted at those owners and a callback body over the erroneous carrier keeps its own diagnostic. Rows A2-C (the A1 curator harvest witnesses, LANG-COLLECTION-EVIDENCE-JOIN-IMPLEMENTATION-R22 A2), A2-C1 (receiver family before the payload join: a known unnamed Record, a named record, a scalar, Text, Collection, Map or variant receiver of unwrap_or / or_else is refused at the owner with its existing text and no SIR, also unused / annotated / aliased / joined; lawful Option / Result / hole / declared-open receivers and payload joins stay admitted; the refused value is the error carrier downstream) and A2-C2 (a call whose own typing reported yields the error carrier, never its intended result family: no derivative OOF-COL13 / payload conflict / boundary line after the origin, in both compilers; a real known Text/Integer conflict, an independent callback diagnostic and a lawful expression after an unrelated error keep their own verdicts).",
+ "rows": [
+  {
+   "finding": "F1",
+   "fixture": "p09_invoke_match_arm_hole_transport.ig",
+   "rules": [],
+   "compilers": "both"
+  },
+  {
+   "finding": "F2",
+   "fixture": "p07_call_contract_nested_literal.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "F2",
+   "fixture": "p07c_compute_nested_literal.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "F2",
+   "fixture": "p07d_variant_field_nested_literal.ig",
+   "rules": [
+    "OOF-KIND2"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "F2",
+   "fixture": "p07e_port_nested_literal.ig",
+   "rules": [
+    "OOF-TY1"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "F2",
+   "fixture": "p07f_compute_nested_literal_option.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "F3",
+   "fixture": "p05c_untyped_concat.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both",
+   "a1": "R22 A1: rules changed by the F1-F4 repair (see the A1 report)"
+  },
+  {
+   "finding": "F3",
+   "fixture": "p06_untyped_hof_element_open.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both",
+   "a1": "R22 A1: rules changed by the F1-F4 repair (see the A1 report)"
+  },
+  {
+   "finding": "F3",
+   "fixture": "p06b_untyped_concat_only.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both",
+   "a1": "R22 A1: rules changed by the F1-F4 repair (see the A1 report)"
+  },
+  {
+   "finding": "F3",
+   "fixture": "p14_hole_map_value_becomes_open.ig",
+   "rules": [
+    "OOF-COL7"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "F3",
+   "fixture": "p13_record_family_as_collection.ig",
+   "rules": [
+    "OOF-COL2"
+   ],
+   "compilers": "both",
+   "a1": "R22 A1: rules changed by the F1-F4 repair (see the A1 report)"
+  },
+  {
+   "finding": "F3",
+   "fixture": "p06c_declared_open_control.ig",
+   "rules": [],
+   "compilers": "both"
+  },
+  {
+   "finding": "F4",
+   "fixture": "p01_legacy_node_hint_opens_inner_literal.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "F4",
+   "fixture": "p01c_legacy_hint_hides_col13.ig",
+   "rules": [
+    "OOF-COL13"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "F5",
+   "fixture": "p02_hole_param_becomes_open.ig",
+   "rules": [
+    "OOF-COL7"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "F6",
+   "fixture": "p04_record_vs_opaque_builtin.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "F6",
+   "fixture": "p04b_record_vs_undeclared.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "F7",
+   "fixture": "p05_untyped_map_put.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both",
+   "a1": "R22 A1: rules changed by the F1-F4 repair (see the A1 report)"
+  },
+  {
+   "finding": "F7",
+   "fixture": "p05b_untyped_map_get.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both",
+   "a1": "R22 A1: rules changed by the F1-F4 repair (see the A1 report)"
+  },
+  {
+   "finding": "F8",
+   "fixture": "p12_match_open_subject.ig",
+   "rules": [
+    "OOF-KIND4"
+   ],
+   "compilers": "both",
+   "a1": "R22 A1: rules changed by the F1-F4 repair (see the A1 report)"
+  },
+  {
+   "finding": "F8",
+   "fixture": "p13b_match_record_family_subject.ig",
+   "rules": [
+    "OOF-KIND4"
+   ],
+   "compilers": "both",
+   "a1": "R22 A1: rules changed by the F1-F4 repair (see the A1 report)"
+  },
+  {
+   "finding": "F9",
+   "fixture": "p08a_invoke_empty_literal_into_integer.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "rust"
+  },
+  {
+   "finding": "F9",
+   "fixture": "p08b_invoke_record_into_integer.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "rust"
+  },
+  {
+   "finding": "F9",
+   "fixture": "p08d_invoke_hole_map_into_integer.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "rust"
+  },
+  {
+   "finding": "F10",
+   "fixture": "p03_block_value_context.ig",
+   "rules": [],
+   "compilers": "rust"
+  },
+  {
+   "finding": "F12",
+   "fixture": "q09d_fold_body_conflict_plus_unused_bad.ig",
+   "rules": [
+    "OOF-COL7",
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "V1",
+   "fixture": "w01_append_hole_carrier.ig",
+   "rules": [
+    "OOF-COL7"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "V1",
+   "fixture": "w02_append_record_family.ig",
+   "rules": [
+    "OOF-COL2"
+   ],
+   "compilers": "both",
+   "a1": "R22 A1 (F4): the record family is the COLLECTION argument of append - a known non-collection, refused by the existing OOF-COL2 gate (was the element join OOF-COL6)"
+  },
+  {
+   "finding": "V1",
+   "fixture": "w03_set_at_untyped.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both",
+   "a1": "R22 A1: rules changed by the F1-F4 repair (see the A1 report)"
+  },
+  {
+   "finding": "V1",
+   "fixture": "w06_plusplus_untyped.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both",
+   "a1": "R22 A1: rules changed by the F1-F4 repair (see the A1 report)"
+  },
+  {
+   "finding": "V1",
+   "fixture": "w08_fold_untyped_seed.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both",
+   "a1": "R22 A1: rules changed by the F1-F4 repair (see the A1 report)"
+  },
+  {
+   "finding": "V1",
+   "fixture": "w11_plusplus_hole_carrier.ig",
+   "rules": [
+    "OOF-COL7"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "V1",
+   "fixture": "w12_set_at_hole_carrier.ig",
+   "rules": [
+    "OOF-COL7"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "V1",
+   "fixture": "w14_plusplus_record_family.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "V1",
+   "fixture": "w15_fold_hole_acc_append.ig",
+   "rules": [
+    "OOF-COL7"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "V1",
+   "fixture": "v08d_untyped_element_join_known.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both",
+   "a1": "R22 A1: rules changed by the F1-F4 repair (see the A1 report)"
+  },
+  {
+   "finding": "V1",
+   "fixture": "w01b_append_hole_control.ig",
+   "rules": [
+    "OOF-COL7"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "V2",
+   "fixture": "w16_record_family_arith.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "V2",
+   "fixture": "w17_record_family_equality.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "V2",
+   "fixture": "w18_record_family_if_cond.ig",
+   "rules": [
+    "OOF-IF1"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "V3",
+   "fixture": "v02_legacy_hint_suppresses_ambiguity.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "V3",
+   "fixture": "v10b_fold_seed_ambiguous_legacy.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "V4",
+   "fixture": "v07_fold_value_error_no_cascade.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "V4",
+   "fixture": "v06c_error_subject.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "V5",
+   "fixture": "v08c_untyped_map_put_chain.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both",
+   "a1": "R22 A1: rules changed by the F1-F4 repair (see the A1 report)"
+  },
+  {
+   "finding": "V3",
+   "fixture": "v11_output_hint_does_not_reach_nested_fold_seed.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "R1",
+   "fixture": "z15_hole_plusplus_integer_openness.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "R1",
+   "fixture": "z16_untyped_plusplus_integer.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both",
+   "a1": "R22 A1: rules changed by the F1-F4 repair (see the A1 report)"
+  },
+  {
+   "finding": "R1",
+   "fixture": "z17_hole_plusplus_text.ig",
+   "rules": [
+    "OOF-COL7"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "R1",
+   "fixture": "z19_hole_plusplus_hole_then_conflict.ig",
+   "rules": [
+    "OOF-COL7"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "R1",
+   "fixture": "z11_hole_plusplus_integer.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "R2",
+   "fixture": "z18_string_plusplus_text.ig",
+   "rules": [],
+   "compilers": "both"
+  },
+  {
+   "finding": "R3",
+   "fixture": "z01_collection_eq_open.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "R3",
+   "fixture": "y20_record_eq_open.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "R4",
+   "fixture": "z10_unary_neg_hole.ig",
+   "rules": [],
+   "compilers": "both"
+  },
+  {
+   "finding": "T1",
+   "fixture": "s07_text_into_variant_field.ig",
+   "rules": [],
+   "compilers": "both"
+  },
+  {
+   "finding": "T1",
+   "fixture": "s13_text_input_into_variant_string_field.ig",
+   "rules": [],
+   "compilers": "both"
+  },
+  {
+   "finding": "T1",
+   "fixture": "s14_text_concat_call_into_variant_string_field.ig",
+   "rules": [],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F1",
+   "fixture": "a1_f1_error_subject_control.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F1",
+   "fixture": "a1_f1_hole_subject_in_lambda.ig",
+   "rules": [
+    "OOF-KIND4"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F1",
+   "fixture": "a1_f1_known_variant_control.ig",
+   "rules": [],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F1",
+   "fixture": "a1_f1_open_input_subject.ig",
+   "rules": [
+    "OOF-KIND4",
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F1",
+   "fixture": "a1_f1_open_match.ig",
+   "rules": [
+    "OOF-KIND4"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F1",
+   "fixture": "a1_f1_open_match_annotated.ig",
+   "rules": [
+    "OOF-KIND4"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F1",
+   "fixture": "a1_f1_open_match_arms_conflict.ig",
+   "rules": [
+    "OOF-KIND4"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F1",
+   "fixture": "a1_f1_record_subject.ig",
+   "rules": [
+    "OOF-KIND4"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F1",
+   "fixture": "a1_f1_scalar_subject_control.ig",
+   "rules": [
+    "OOF-KIND4"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2",
+   "fixture": "a1_f2_declared_open_control.ig",
+   "rules": [],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2",
+   "fixture": "a1_f2_dynamic_call.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2",
+   "fixture": "a1_f2_dynamic_call_annotated.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2",
+   "fixture": "a1_f2_dynamic_call_into_output.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2",
+   "fixture": "a1_f2_dynamic_call_unused.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2",
+   "fixture": "a1_f2_fold_stream_float_control.ig",
+   "rules": [],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2",
+   "fixture": "a1_f2_fold_stream_hole_seed.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2",
+   "fixture": "a1_f2_fold_stream_hole_seed_aliased.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2",
+   "fixture": "a1_f2_fold_stream_hole_seed_wrong_body.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2",
+   "fixture": "a1_f2_fold_stream_map_empty_seed.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2",
+   "fixture": "a1_f2_lawful_holes_control.ig",
+   "rules": [],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2",
+   "fixture": "a1_f2_literal_call_control.ig",
+   "rules": [],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2",
+   "fixture": "a1_f2_zero_output_call.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F3",
+   "fixture": "a1_f3_bool_or_open_control.ig",
+   "rules": [],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F3",
+   "fixture": "a1_f3_collection_div_open.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F3",
+   "fixture": "a1_f3_hole_concat_integer.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F3",
+   "fixture": "a1_f3_hole_plus_string.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F3",
+   "fixture": "a1_f3_integer_and_open.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F3",
+   "fixture": "a1_f3_integer_concat_open.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F3",
+   "fixture": "a1_f3_integer_plus_open_control.ig",
+   "rules": [],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F3",
+   "fixture": "a1_f3_open_and_bool_control.ig",
+   "rules": [],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F3",
+   "fixture": "a1_f3_open_and_integer.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F3",
+   "fixture": "a1_f3_open_concat_collection_control.ig",
+   "rules": [],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F3",
+   "fixture": "a1_f3_open_concat_integer.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F3",
+   "fixture": "a1_f3_open_concat_string_control.ig",
+   "rules": [],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F3",
+   "fixture": "a1_f3_open_eq_integer_control.ig",
+   "rules": [],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F3",
+   "fixture": "a1_f3_open_gt_bool.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F3",
+   "fixture": "a1_f3_open_lt_integer_control.ig",
+   "rules": [],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F3",
+   "fixture": "a1_f3_open_lt_string.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F3",
+   "fixture": "a1_f3_open_lte_collection.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F3",
+   "fixture": "a1_f3_open_minus_bool.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F3",
+   "fixture": "a1_f3_open_mul_collection.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F3",
+   "fixture": "a1_f3_open_neg_control.ig",
+   "rules": [],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F3",
+   "fixture": "a1_f3_open_or_string.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F3",
+   "fixture": "a1_f3_open_plus_float_control.ig",
+   "rules": [],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F3",
+   "fixture": "a1_f3_open_plus_integer_control.ig",
+   "rules": [],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F3",
+   "fixture": "a1_f3_open_plus_open_control.ig",
+   "rules": [],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F3",
+   "fixture": "a1_f3_open_plus_string.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F3",
+   "fixture": "a1_f3_string_concat_open_control.ig",
+   "rules": [],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F3",
+   "fixture": "a1_f3_string_gte_open.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F3",
+   "fixture": "a1_f3_string_plus_open.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F4",
+   "fixture": "a1_f4_hole_hof_control.ig",
+   "rules": [],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F4",
+   "fixture": "a1_f4_named_record_collection_field_control.ig",
+   "rules": [],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F4",
+   "fixture": "a1_f4_named_record_control.ig",
+   "rules": [
+    "OOF-P1"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F4",
+   "fixture": "a1_f4_open_hof_control.ig",
+   "rules": [],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F4",
+   "fixture": "a1_f4_record_all.ig",
+   "rules": [
+    "OOF-COL2"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F4",
+   "fixture": "a1_f4_record_any.ig",
+   "rules": [
+    "OOF-COL2"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F4",
+   "fixture": "a1_f4_record_append.ig",
+   "rules": [
+    "OOF-COL2"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F4",
+   "fixture": "a1_f4_record_as_map_control.ig",
+   "rules": [],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F4",
+   "fixture": "a1_f4_record_at.ig",
+   "rules": [
+    "OOF-COL2"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F4",
+   "fixture": "a1_f4_record_concat_first.ig",
+   "rules": [
+    "OOF-COL2"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F4",
+   "fixture": "a1_f4_record_concat_second.ig",
+   "rules": [
+    "OOF-COL2"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F4",
+   "fixture": "a1_f4_record_count.ig",
+   "rules": [
+    "OOF-COL2"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F4",
+   "fixture": "a1_f4_record_filter.ig",
+   "rules": [
+    "OOF-COL2"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F4",
+   "fixture": "a1_f4_record_filter_map.ig",
+   "rules": [
+    "OOF-COL2"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F4",
+   "fixture": "a1_f4_record_find.ig",
+   "rules": [
+    "OOF-COL2"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F4",
+   "fixture": "a1_f4_record_flat_map.ig",
+   "rules": [
+    "OOF-COL2"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F4",
+   "fixture": "a1_f4_record_fold.ig",
+   "rules": [
+    "OOF-COL4"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F4",
+   "fixture": "a1_f4_record_is_empty.ig",
+   "rules": [
+    "OOF-COL2"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F4",
+   "fixture": "a1_f4_record_map.ig",
+   "rules": [
+    "OOF-COL2"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F4",
+   "fixture": "a1_f4_record_plusplus.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F4",
+   "fixture": "a1_f4_record_set_at.ig",
+   "rules": [
+    "OOF-COL2"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F4",
+   "fixture": "a1_f4_record_sort_by.ig",
+   "rules": [
+    "OOF-COL2"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F4",
+   "fixture": "a1_f4_record_sum.ig",
+   "rules": [
+    "OOF-COL2"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F4",
+   "fixture": "a1_f4_record_take.ig",
+   "rules": [
+    "OOF-COL2"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F4",
+   "fixture": "a1_f4_record_to_map_boundary_control.ig",
+   "rules": [],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F4",
+   "fixture": "a1_f4_record_zip.ig",
+   "rules": [
+    "OOF-COL2"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F4",
+   "fixture": "a1_f4_record_zip_second.ig",
+   "rules": [
+    "OOF-COL2"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-C",
+   "fixture": "a1_curator_heterogeneous_literal.ig",
+   "rules": [
+    "OOF-COL13"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-C",
+   "fixture": "a1_curator_known_variant_match.ig",
+   "rules": [],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-C",
+   "fixture": "a1_curator_open_and_integer.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-C",
+   "fixture": "a1_curator_open_concat_integer.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-C",
+   "fixture": "a1_curator_open_concat_string.ig",
+   "rules": [],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-C",
+   "fixture": "a1_curator_open_match.ig",
+   "rules": [
+    "OOF-KIND4"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-C",
+   "fixture": "a1_curator_record_as_collection.ig",
+   "rules": [
+    "OOF-COL2"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-C",
+   "fixture": "a1_curator_untyped_result.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2-cascade",
+   "fixture": "a1_c_all.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2-cascade",
+   "fixture": "a1_c_and_then.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2-cascade",
+   "fixture": "a1_c_any.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2-cascade",
+   "fixture": "a1_c_append.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2-cascade",
+   "fixture": "a1_c_append_item.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2-cascade",
+   "fixture": "a1_c_at.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2-cascade",
+   "fixture": "a1_c_call_contract_arg.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2-cascade",
+   "fixture": "a1_c_concat_first.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2-cascade",
+   "fixture": "a1_c_concat_second.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2-cascade",
+   "fixture": "a1_c_count.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2-cascade",
+   "fixture": "a1_c_def_arg.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2-cascade",
+   "fixture": "a1_c_eq.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2-cascade",
+   "fixture": "a1_c_field_read.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2-cascade",
+   "fixture": "a1_c_filter.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2-cascade",
+   "fixture": "a1_c_filter_map.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2-cascade",
+   "fixture": "a1_c_find.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2-cascade",
+   "fixture": "a1_c_first.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2-cascade",
+   "fixture": "a1_c_flat_map.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2-cascade",
+   "fixture": "a1_c_fold.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2-cascade",
+   "fixture": "a1_c_fold_seed.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2-cascade",
+   "fixture": "a1_c_fold_stream_seed.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2-cascade",
+   "fixture": "a1_c_if_branch.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2-cascade",
+   "fixture": "a1_c_if_cond.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2-cascade",
+   "fixture": "a1_c_is_empty.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2-cascade",
+   "fixture": "a1_c_last.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2-cascade",
+   "fixture": "a1_c_literal_member.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2-cascade",
+   "fixture": "a1_c_map.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2-cascade",
+   "fixture": "a1_c_map_get.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2-cascade",
+   "fixture": "a1_c_map_has_key.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2-cascade",
+   "fixture": "a1_c_map_put.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2-cascade",
+   "fixture": "a1_c_map_put_value.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2-cascade",
+   "fixture": "a1_c_match_subject.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2-cascade",
+   "fixture": "a1_c_neg.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2-cascade",
+   "fixture": "a1_c_not.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2-cascade",
+   "fixture": "a1_c_or_else.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2-cascade",
+   "fixture": "a1_c_output_port.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2-cascade",
+   "fixture": "a1_c_plus.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2-cascade",
+   "fixture": "a1_c_plusplus.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2-cascade",
+   "fixture": "a1_c_record_field.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2-cascade",
+   "fixture": "a1_c_set_at.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2-cascade",
+   "fixture": "a1_c_sort_by.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2-cascade",
+   "fixture": "a1_c_sort_by_desc.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2-cascade",
+   "fixture": "a1_c_sum.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2-cascade",
+   "fixture": "a1_c_take.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2-cascade",
+   "fixture": "a1_c_unwrap_or.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2-cascade",
+   "fixture": "a1_c_unwrap_or_fallback.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2-cascade",
+   "fixture": "a1_c_variant_field.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2-cascade",
+   "fixture": "a1_c_zip_first.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2-cascade",
+   "fixture": "a1_c_zip_second.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2-callback",
+   "fixture": "a1_d_callback_bad_body.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2-callback",
+   "fixture": "a1_d_callback_unknown_fn.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-F2-callback",
+   "fixture": "a1_d_interpolation_unresolved_field.ig",
+   "rules": [
+    "OOF-P1"
+   ],
+   "compilers": "both",
+   "a1": "an unresolved field inside a text interpolation: the origin OOF-P1 once; the concat that receives the error yields the error (no OOF-COL2 route cascade, no count cascade)"
+  },
+  {
+   "finding": "A1-F2-callback",
+   "fixture": "a1_d_callback_body_error_keeps_independent_owner_diagnostics.ig",
+   "rules": [
+    "OOF-COL5",
+    "OOF-P1"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-R1",
+   "fixture": "a1_r1_int_to_text_error_operand.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-R1",
+   "fixture": "a1_r1_join_error_operand.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-R1",
+   "fixture": "a1_r1_is_some_error_operand.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-R1",
+   "fixture": "a1_r1_modulo_error_operand.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-R1",
+   "fixture": "a1_r1_split_error_operand.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-R1",
+   "fixture": "a1_r1_decimal_error_operand.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-R1",
+   "fixture": "a1_r1_range_error_operand.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-R1",
+   "fixture": "a1_r1_map_from_pairs_error_operand.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-R1",
+   "fixture": "a1_r1_some_error_operand.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-R1",
+   "fixture": "a1_r1_trim_error_operand.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-R1",
+   "fixture": "a1_r1_contains_error_operand.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-R1",
+   "fixture": "a1_r1_text_owner_operator.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-R2",
+   "fixture": "a1_r2_unknown_function_operands.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-R2",
+   "fixture": "a1_r2_unknown_function_match_subject.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-R2",
+   "fixture": "a1_r2_unknown_function_callback_own_diag.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-R3",
+   "fixture": "a1_r3_unresolved_symbol_operands.ig",
+   "rules": [
+    "OOF-P1"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-R3",
+   "fixture": "a1_r3_t7_interpolation_shape.ig",
+   "rules": [
+    "OOF-P1"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-R3",
+   "fixture": "a1_r3_unresolved_symbol_match_subject.ig",
+   "rules": [
+    "OOF-P1"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-R4",
+   "fixture": "a1_r4_error_subject_pattern_binding.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-R4",
+   "fixture": "a1_r4_error_subject_arm_own_diag_survives.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-R5",
+   "fixture": "a1_r5_join_record.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-R5",
+   "fixture": "a1_r5_join_record_annotated.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-R5",
+   "fixture": "a1_r5_concat_text_route_record.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-R5",
+   "fixture": "a1_r5_concat_text_route_record_alias.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-R6",
+   "fixture": "a1_r6_and_then_record.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-R6",
+   "fixture": "a1_r6_and_then_record_alias.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-R7",
+   "fixture": "a1_r7_open_controls_admitted.ig",
+   "rules": [],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-R7",
+   "fixture": "a1_r7_error_callback_own_diag_survives.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A1-R5",
+   "fixture": "a1_r5_join_reporting_yields_error.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C",
+   "fixture": "a2_curator_unwrap_record.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C",
+   "fixture": "a2_curator_or_else_record.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C",
+   "fixture": "a2_curator_option_scalar_control.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C",
+   "fixture": "a2_curator_option_controls.ig",
+   "rules": [],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C",
+   "fixture": "a2_curator_refused_text_origin.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C",
+   "fixture": "a2_curator_refused_text_collection.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C",
+   "fixture": "a2_curator_refused_text_option_join.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C",
+   "fixture": "a2_curator_lawful_text_conflict.ig",
+   "rules": [
+    "OOF-COL13"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C1",
+   "fixture": "a2_c1_unwrap_or_record_direct.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C1",
+   "fixture": "a2_c1_unwrap_or_record_alias.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C1",
+   "fixture": "a2_c1_unwrap_or_record_alias_unused.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C1",
+   "fixture": "a2_c1_unwrap_or_record_annotated.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C1",
+   "fixture": "a2_c1_unwrap_or_record_output.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C1",
+   "fixture": "a2_c1_unwrap_or_named_record.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C1",
+   "fixture": "a2_c1_unwrap_or_scalar.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C1",
+   "fixture": "a2_c1_unwrap_or_text.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C1",
+   "fixture": "a2_c1_unwrap_or_collection.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C1",
+   "fixture": "a2_c1_unwrap_or_map.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C1",
+   "fixture": "a2_c1_unwrap_or_variant.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C1",
+   "fixture": "a2_c1_unwrap_or_record_if_join.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C1",
+   "fixture": "a2_c1_unwrap_or_record_then_silent.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C1",
+   "fixture": "a2_c1_unwrap_or_controls_admitted.ig",
+   "rules": [],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C1",
+   "fixture": "a2_c1_unwrap_or_payload_conflict_retained.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C1",
+   "fixture": "a2_c1_unwrap_or_open_receiver_open_result.ig",
+   "rules": [],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C1",
+   "fixture": "a2_c1_or_else_record_direct.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C1",
+   "fixture": "a2_c1_or_else_record_alias.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C1",
+   "fixture": "a2_c1_or_else_record_alias_unused.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C1",
+   "fixture": "a2_c1_or_else_record_annotated.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C1",
+   "fixture": "a2_c1_or_else_record_output.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C1",
+   "fixture": "a2_c1_or_else_named_record.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C1",
+   "fixture": "a2_c1_or_else_scalar.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C1",
+   "fixture": "a2_c1_or_else_text.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C1",
+   "fixture": "a2_c1_or_else_collection.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C1",
+   "fixture": "a2_c1_or_else_map.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C1",
+   "fixture": "a2_c1_or_else_variant.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C1",
+   "fixture": "a2_c1_or_else_record_if_join.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C1",
+   "fixture": "a2_c1_or_else_record_then_silent.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C1",
+   "fixture": "a2_c1_or_else_controls_admitted.ig",
+   "rules": [],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C1",
+   "fixture": "a2_c1_or_else_payload_conflict_retained.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C1",
+   "fixture": "a2_c1_or_else_open_receiver_open_result.ig",
+   "rules": [],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C2",
+   "fixture": "a2_c2_curator_origin_only.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C2",
+   "fixture": "a2_c2_reporting_call_into_literal.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C2",
+   "fixture": "a2_c2_reporting_call_into_unwrap_or_payload.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C2",
+   "fixture": "a2_c2_reporting_call_inline_compositions.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C2",
+   "fixture": "a2_c2_sibling_reporting_calls.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C2",
+   "fixture": "a2_c2_arity_reporting_calls.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C2",
+   "fixture": "a2_c2_collection_gate_reporting_calls.ig",
+   "rules": [
+    "OOF-COL2"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C2",
+   "fixture": "a2_c2_hof_callback_error_then_silent.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C2",
+   "fixture": "a2_c2_reporting_call_unused.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C2",
+   "fixture": "a2_c2_reporting_call_nested.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C2",
+   "fixture": "a2_c2_lawful_conflict_retained.ig",
+   "rules": [
+    "OOF-COL13"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C2",
+   "fixture": "a2_c2_lawful_conflict_inline_retained.ig",
+   "rules": [
+    "OOF-COL13"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C2",
+   "fixture": "a2_c2_non_reporting_call_keeps_its_family.ig",
+   "rules": [
+    "OOF-COL13"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C2",
+   "fixture": "a2_c2_lawful_payload_conflict_retained.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C2",
+   "fixture": "a2_c2_prior_error_does_not_poison_a_lawful_expression.ig",
+   "rules": [
+    "OOF-COL13",
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C2",
+   "fixture": "a2_c2_independent_callback_diagnostic_retained.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C2",
+   "fixture": "a2_c2_fold_provisional_passes_do_not_poison.ig",
+   "rules": [],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C2",
+   "fixture": "a2_c2_unused_bad_statement_in_body_keeps_the_carrier.ig",
+   "rules": [
+    "OOF-COL7",
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C2",
+   "fixture": "a2_c2_predicate_diagnostic_keeps_the_carrier.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C2",
+   "fixture": "a2_c2_branch_statement_diagnostic_keeps_the_value.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-C2",
+   "fixture": "a2_c2_reporting_calls_admitted_controls.ig",
+   "rules": [],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-R1",
+   "fixture": "a2_r1_sink_growth_sweep_n04.ig",
+   "rules": [
+    "OOF-COL7",
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-R1",
+   "fixture": "a2_r1_sink_growth_sweep_n08.ig",
+   "rules": [
+    "OOF-COL7",
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-R2",
+   "fixture": "a2_r2_and_then_unused_bad_statement_keeps_value.ig",
+   "rules": [
+    "OOF-COL13",
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-R2",
+   "fixture": "a2_r2_and_then_body_reporting_value_flows.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-R3",
+   "fixture": "a2_r3_variant_constructor_reporting_yields_error.ig",
+   "rules": [
+    "OOF-KIND2"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-R4",
+   "fixture": "a2_r4_flat_map_body_reporting_value_flows.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-R5",
+   "fixture": "a2_r5_filter_map_body_reporting_value_flows.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-R6",
+   "fixture": "a2_r6_refused_binding_is_the_error.ig",
+   "rules": [
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-R7",
+   "fixture": "a2_r7_variant_constructor_nested_diagnostic_keeps_the_family.ig",
+   "rules": [
+    "OOF-COL13",
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  },
+  {
+   "finding": "A2-R8",
+   "fixture": "a2_r8_join_nested_diagnostic_in_argument_keeps_the_family.ig",
+   "rules": [
+    "OOF-COL13",
+    "OOF-TY0"
+   ],
+   "compilers": "both"
+  }
+ ]
+}

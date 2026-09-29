@@ -174,10 +174,14 @@ check("T6 Collection concat: concat(xs, ys) routes to stdlib.collection.concat, 
   c["status"] == "accepted" && e["fn"] == "stdlib.collection.concat" && e["resolved_type"]["name"] == "Collection" && e["deps"] == %w[xs ys]
 end
 
-check("T7 Unknown-first part: \"${nope}b${int_to_text(n)}c\" -> ordered [OOF-P1, OOF-COL2 got String, OOF-COL2 got Text], top fn stdlib.collection.concat") do
+# LANG-COLLECTION-EVIDENCE-JOIN-IMPLEMENTATION-R22 A1 [D]: the unresolved symbol is an error carrier (ch3 §3.3b); the
+# concat that receives it yields the error and reports nothing further — the two derivative OOF-COL2 lines this pin
+# recorded ("got String", "got Text") were cascades of the collection route selected by the error's legacy `Unknown`
+# name. Exactly one public OOF-P1 remains; the top identity is unchanged.
+check("T7 Unknown-first part: \"${nope}b${int_to_text(n)}c\" -> exactly [OOF-P1] (no derivative OOF-COL2 cascade), top fn stdlib.collection.concat") do
   c, e = compute(typecheck("module T7\npure contract R { input n : Integer  compute line : Text = \"${nope}b${int_to_text(n)}c\"  output line : Text }\n"), "R", "line")
   es = errs(c)
-  es.map(&:first) == %w[OOF-P1 OOF-COL2 OOF-COL2] && es[1][1].end_with?("got String") && es[2][1].end_with?("got Text") && e["fn"] == "stdlib.collection.concat"
+  es.map(&:first) == %w[OOF-P1] && e["fn"] == "stdlib.collection.concat"
 end
 
 check("T8 wrong arity: concat(t) refuses OOF-TY0 'expected 2 argument(s), got 1' with empty typed args (early return before any reuse)") do
@@ -185,9 +189,12 @@ check("T8 wrong arity: concat(t) refuses OOF-TY0 'expected 2 argument(s), got 1'
   c["status"] == "blocked" && errs(c) == [["OOF-TY0", "stdlib.text.concat: expected 2 argument(s), got 1"]] && e["args"] == []
 end
 
-check("T9 unknown NON-ref second argument: \"${p.a}${p.zzz}\" -> exactly one public OOF-P1 'Unresolved field: P.zzz'; result Text; deps [p]") do
+# LANG-COLLECTION-EVIDENCE-JOIN-IMPLEMENTATION-R22 A1 [D]: the unresolved field is an error carrier (ch3 §3.3b); a concat
+# that receives it YIELDS the error (erased to the legacy `Unknown` spelling), never a Text typed from an error, and
+# reports nothing further — still exactly one public OOF-P1. Pre-A1 this pin read `Text`.
+check("T9 unknown NON-ref second argument: \"${p.a}${p.zzz}\" -> exactly one public OOF-P1 'Unresolved field: P.zzz'; result the error (erased Unknown); deps [p]") do
   c, e = compute(typecheck("module T9\ntype P { a : String }\npure contract R { input p : P  compute line : Text = \"${p.a}${p.zzz}\"  output line : Text }\n"), "R", "line")
-  c["status"] == "blocked" && errs(c) == [["OOF-P1", "Unresolved field: P.zzz"]] && e["resolved_type"]["name"] == "Text" && e["deps"] == ["p"]
+  c["status"] == "blocked" && errs(c) == [["OOF-P1", "Unresolved field: P.zzz"]] && e["resolved_type"]["name"] == "Unknown" && e["deps"] == ["p"]
 end
 
 check("T10 default typed: {} path: trim(t) accepted, fn stdlib.text.trim, single typed ref arg") do
@@ -206,14 +213,20 @@ check("T12 branch context: chain inside if/else keeps both arms typed once, resu
   c["status"] == "accepted" && e["kind"] == "if_expr" && e["resolved_type"]["name"] == "Text" && e["deps"] == %w[b n m]
 end
 
-check("T13 ordered multiple refusals: \"a${n}b${b}\" -> [OOF-TY0 arg 2 got Integer, OOF-TY0 arg 2 got Bool] in source order") do
+# LANG-COLLECTION-EVIDENCE-JOIN-IMPLEMENTATION-R22 A2 [D] (C2, ch3 §3.3b): a call whose OWN typing reports is the error
+# carrier, never its intended result family. The first refused piece makes the inner `concat` the error; the outer
+# `concat` receives an erroneous operand and reports nothing further (the pre-A2 pin recorded the second, derivative
+# refusal in source order). The origin is reported exactly once.
+check("T13 [D] ordered multiple refusals: \"a${n}b${b}\" -> exactly [OOF-TY0 arg 2 got Integer] (the first misfit; the chain is the error afterwards)") do
   c, _ = compute(typecheck("module T13\npure contract R { input n : Integer  input b : Bool  compute line : Text = \"a${n}b${b}\"  output line : Text }\n"), "R", "line")
-  errs(c) == [["OOF-TY0", "stdlib.text.concat arg 2: expected Text, got Integer"], ["OOF-TY0", "stdlib.text.concat arg 2: expected Text, got Bool"]]
+  errs(c) == [["OOF-TY0", "stdlib.text.concat arg 2: expected Text, got Integer"]]
 end
 
-check("T14 dedupe preserved: \"a${n}b${int_to_text(n)}c\" publishes exactly one OOF-TY0 (arg 2 Integer); result Text") do
+# LANG-COLLECTION-EVIDENCE-JOIN-IMPLEMENTATION-R22 A2 [D] (C2): the reporting chain's value is the error carrier (erased
+# `Unknown` spelling), not `Text` — the pre-A2 pin read a `Text` typed past the refusal.
+check("T14 [D] dedupe preserved: \"a${n}b${int_to_text(n)}c\" publishes exactly one OOF-TY0 (arg 2 Integer); result the error (erased Unknown)") do
   c, e = compute(typecheck("module T14\npure contract R { input n : Integer  compute line : Text = \"a${n}b${int_to_text(n)}c\"  output line : Text }\n"), "R", "line")
-  errs(c) == [["OOF-TY0", "stdlib.text.concat arg 2: expected Text, got Integer"]] && e["resolved_type"]["name"] == "Text"
+  errs(c) == [["OOF-TY0", "stdlib.text.concat arg 2: expected Text, got Integer"]] && e["resolved_type"]["name"] == "Unknown"
 end
 
 check("T15 nonempty OOF-M3: irreversible contract with escape keeps exactly one OOF-M3 warning on the typed program; chain Text") do

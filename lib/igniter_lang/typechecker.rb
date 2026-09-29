@@ -410,6 +410,7 @@ module IgniterLang
 
     def typecheck(classified_program, cross_module_registry: {}, per_module_imports: {}, per_contract_module: {},
                   variant_arm_owners: {})
+      @expected_ctx   = {}.compare_by_identity  # R22: identity-keyed written expected context
       @type_shapes    = type_shapes(classified_program)
       @variant_shapes = variant_shapes(classified_program)  # PROP-044 P5
       # LANG-TYPE-REF-UNRESOLVED-FAIL-CLOSED-P1: a SEPARATE, un-mutated snapshot of the
@@ -535,7 +536,10 @@ module IgniterLang
       # PROP-045: propagate module-level intent_text
       module_intent = classified_program.fetch("intent_text", nil)
       result["intent_text"] = module_intent if module_intent
-      result
+      # R22 (§3.3b SemanticIR): inference-only carriers never leave the typechecker. A hole, an
+      # unnamed record family and declared openness all leave as the legacy Unknown spelling; an
+      # error only exists in a refused program (which emits no SemanticIR).
+      erase_inference_carriers!(result)
     end
 
     private
@@ -912,8 +916,8 @@ module IgniterLang
       end
 
       # PROP-043: @output_type_hints — pre-scan output declarations whose type_annotation
-      # names a known named Record type in @type_shapes. Used by infer_record_literal to
-      # resolve { field: value } literals to a named Record type and validate field shapes.
+      # names a known named Record type in @type_shapes. R22: read only by the transitional
+      # fold_stream seed (its pre-R21 rule); a literal is otherwise named by its written context.
       # Only named Records (user-declared, present in @type_shapes) receive hints.
       # Map/Collection/primitive types are excluded — they are not @type_shapes entries.
       @output_type_hints = {}
@@ -957,14 +961,21 @@ module IgniterLang
       # Runs before declarations.each so errors accumulate early and blocking_rule_present?
       # can suppress spurious downstream type mismatches.
       map_annotation_errors = []
+      # R22 (§3.3b error carrier): an annotation refused here is an ERRONEOUS expected type — every
+      # boundary judged against it is silent (a04: no derivative "Binding type mismatch").
+      @refused_annotation_decls = {}.compare_by_identity
+      @refused_port_decls = {}.compare_by_identity
+      @expected_ctx = {}.compare_by_identity
       all_decls.each do |decl|
         next unless decl.key?("type_annotation")
+        errors_before = map_annotation_errors.length
         check_map_annotation(
           decl.fetch("type_annotation"),
           decl.fetch("name"),
           decl.fetch("kind", ""),
           map_annotation_errors
         )
+        @refused_annotation_decls[decl] = true if map_annotation_errors.length > errors_before
       end
       type_errors.concat(map_annotation_errors)
 
@@ -983,6 +994,7 @@ module IgniterLang
         ann = decl.fetch("type_annotation", nil)
         next unless ann
         port_ir = type_ir(ann)
+        port_errors_before = type_errors.length
         invalid_port_type_arities(port_ir, []).uniq.each do |constructor, expected, actual|
           type_errors << oof(
             "OOF-TY0",
@@ -1001,6 +1013,8 @@ module IgniterLang
             "#{kind}:#{decl.fetch("name")}"
           )
         end
+        # R22: a port type this law refuses is an erroneous annotation; it installs no written context.
+        @refused_port_decls[decl] = true if type_errors.length > port_errors_before
       end
 
       # LANG-STDLIB-BYTES-CANON-ADMISSION-P7 Stage 1 (seal): a contract INPUT or OUTPUT whose
@@ -1192,30 +1206,30 @@ module IgniterLang
           # record/collection init and refused it with a derivative output-port
           # mismatch. An untypeable init refuses NAMING THE INIT, not the port.
           init_expr = fold_stream_init_expr(decl)
-          temp_hint_installed = false
-          if decl["type_annotation"] && init_expr.is_a?(Hash) &&
-             init_expr.fetch("kind", nil) == "record_literal"
-            declared_type = type_ir(decl["type_annotation"])
-            tn = type_name(declared_type)
-            if @type_shapes.key?(tn) && !@output_type_hints.key?(fold_name)
-              @output_type_hints[fold_name] = declared_type
-              temp_hint_installed = true
-            end
+          # Transitional fold_stream (C29, its pre-R21 rule): a record-literal SEED is named by the fold's own
+          # annotation, else by its output port — installed as that seed's position-scoped context (R22).
+          if init_expr.is_a?(Hash) && init_expr.fetch("kind", nil) == "record_literal"
+            seed_hint = decl["type_annotation"] && type_ir(decl["type_annotation"])
+            seed_hint = nil unless seed_hint && @type_shapes.key?(type_name(seed_hint))
+            seed_hint ||= @output_type_hints[fold_name]
+            set_expected_context(init_expr, seed_hint) if seed_hint
           end
           errors_before = type_errors.length
-          typed_init =
-            begin
-              init_expr ? infer_expr(init_expr, symbol_types, type_errors, type_warnings, fold_name) : nil
-            ensure
-              @output_type_hints.delete(fold_name) if temp_hint_installed
-            end
+          typed_init = init_expr ? infer_expr(init_expr, symbol_types, type_errors, type_warnings, fold_name) : nil
           result_type = typed_init ? typed_init.fetch("resolved_type") : type_ir("Unknown")
-          if type_name(result_type) == "Unknown" && type_errors.length == errors_before
+          if error_bearing?(result_type)
+            result_type = error_type
+          elsif (type_name(result_type) == "Unknown" || hole_bearing?(result_type)) && type_errors.length == errors_before
+            # R22 A1 (F2) transitional fold_stream (ch3 §3.3b C29 / ch6 §6.4.1, its pre-R21 rule): the
+            # accumulator is never refined, so a hole the seed carries is never solved by any context or join,
+            # and the value that exists at run time justifies none of the four carriers — the fold_stream's own
+            # existing owner refuses the init here (no fifth carrier, no output-port workaround).
             type_errors << oof(
               "OOF-TY0",
               "fold_stream '#{fold_name}' init is untypeable - the init expression must have a static type",
               fold_name
             )
+            result_type = error_type
           end
           symbol_types[fold_name] = result_type
           typed = typed_decl(decl, result_type, decl.fetch("expr", nil), decl.fetch("deps", []))
@@ -1356,15 +1370,6 @@ module IgniterLang
             typed_decls << typed_decl(decl, type_ir("Unknown"), nil, [])
             next
           end
-          temp_hint_installed = false
-          if decl["type_annotation"] && decl.fetch("expr", {}).fetch("kind", nil) == "record_literal"
-            declared_type = type_ir(decl["type_annotation"])
-            tn = type_name(declared_type)
-            if @type_shapes.key?(tn) && !@output_type_hints.key?(name)
-              @output_type_hints[name] = declared_type
-              temp_hint_installed = true
-            end
-          end
           # LANG-RECUR-NONTAIL-FAIL-CLOSED-P1: precompute the non-tail recur()
           # node-identity set for this compute's expression BEFORE the generic
           # infer_expr walk reaches (and validates arity/type/decrease for) each
@@ -1384,11 +1389,11 @@ module IgniterLang
             else
               {}
             end
-          begin
-            typed_expr = infer_expr(decl.fetch("expr"), symbol_types, type_errors, type_warnings, name)
-          ensure
-            @output_type_hints.delete(name) if temp_hint_installed
-          end
+          # R22 (§3.3b): the annotated compute — or, for an unannotated compute, its same-named
+          # annotated output port — is the written expected context of THIS expression (its
+          # branches and literal members).
+          install_compute_expected_context(decl, all_decls)
+          typed_expr = infer_expr(decl.fetch("expr"), symbol_types, type_errors, type_warnings, name)
           validate_declared_olap_type(decl, typed_expr, type_errors)
 
           # LANG-EMPTY-COLLECTION-TYPE-PARITY-P1: `compute xs : Collection[T] = []` —
@@ -1408,16 +1413,22 @@ module IgniterLang
 
           inferred_type = typed_expr.fetch("resolved_type")
           bind_type = if decl["type_annotation"]
-            expected_type = type_ir(decl["type_annotation"])
-            if unknown_or_unknown_bearing?(inferred_type)
-              expected_type
-            elsif structurally_assignable?(inferred_type, expected_type)
-              inferred_type
+            expected_type = @refused_annotation_decls[decl] ? error_type : type_ir(decl["type_annotation"])
+            # R22 (§3.3b boundaries, family before deferral): a hole/open position fits only at that
+            # position; an error (actual or expected) is silent and the binding stays an error.
+            case fit(inferred_type, expected_type)
+            when :error
+              error_type
+            when :yes
+              carrier_free?(inferred_type) ? inferred_type : expected_type
             else
               type_errors << oof("OOF-TY0",
                 "Binding type mismatch: declared #{type_display(expected_type)}, got #{type_display(inferred_type)}",
                 decl.fetch("name"))
-              expected_type
+              # R22 A2 (REVIEW-1 F6, ch3 §3.3b): the refused binding is the error carrier from here on (Rust already
+              # binds the error) — never the declared family typed past its own refusal (`v : Nope = seed` then
+              # `[v, "s"]` joined a family "Nope").
+              error_type
             end
           else
             inferred_type
@@ -1427,8 +1438,20 @@ module IgniterLang
           typed_decls << typed_decl(decl, bind_type, typed_expr, typed_expr.fetch("deps"))
         when "output"
           expected = type_ir(decl.fetch("type_annotation"))
+          # R22 (§3.3b boundaries): a bound actual is fit family-before-deferral (hole/open
+          # positions permissive, an error or an erroneous annotation silent). An output with no
+          # producing binding keeps the legacy strict check.
+          produced = symbol_types.key?(decl.fetch("name"))
           actual = symbol_types.fetch(decl.fetch("name"), type_ir("Unknown"))
-          unless structurally_assignable?(actual, expected) ||
+          boundary_ok =
+            if !produced
+              # Pre-R22 strict output law for an output with no producing binding (a declaration fact, not a
+              # carrier): its existing owner OOF-TY1.
+              structurally_assignable?(actual, expected)
+            else
+              @refused_annotation_decls[decl] || fit(actual, expected) != :no
+            end
+          unless boundary_ok ||
               blocking_rule_present?(type_errors) ||
               kind8_refused_binding?(type_errors, decl.fetch("name"), actual)
             type_errors << structural_mismatch(expected, actual, decl.fetch("name"))
@@ -1439,11 +1462,11 @@ module IgniterLang
           # PROP-039 gate 4: FiniteLoop — source must be Collection[T]
           source_name = decl.fetch("source")
           source_type = symbol_types.fetch(source_name, type_ir("Unknown"))
-          unless type_name(source_type) == "Collection" || type_name(source_type) == "Unknown"
+          unless collection_gate_name(source_type) == "Collection" || collection_gate_name(source_type) == "Unknown"
             type_errors << oof(
               "OOF-L1",
               "for loop '#{decl.fetch("name")}' source '#{source_name}' must be " \
-              "Collection[T], got #{type_name(source_type)}",
+              "Collection[T], got #{collection_gate_name(source_type)}",
               decl.fetch("name")
             )
           end
@@ -1568,6 +1591,23 @@ module IgniterLang
         result["numeric_measure_evidence"] = @t3_context[:builtin].merge("arg" => @t3_context[:arg_name])
       end
       result
+    end
+
+    # R22 (§3.3b): the written expected context of a compute's own expression — its annotation or, for
+    # an unannotated compute, its same-named annotated output port. The boundary itself (OOF-TY0 /
+    # OOF-TY1) judges the expression's type; an erroneous (refused) annotation installs no context.
+    def install_compute_expected_context(decl, all_decls)
+      name = decl.fetch("name")
+      expr = decl.fetch("expr", nil)
+      if decl["type_annotation"]
+        set_expected_context(expr, type_ir(decl["type_annotation"])) unless @refused_annotation_decls[decl]
+        return
+      end
+      output = all_decls.find { |d| d.fetch("kind", "") == "output" && d.fetch("name", nil) == name }
+      return unless output && output["type_annotation"] && !@refused_annotation_decls[output] &&
+        !@refused_port_decls[output]
+
+      set_expected_context(expr, type_ir(output["type_annotation"]))
     end
 
     def typed_decl(decl, type, expr, deps)
@@ -1696,7 +1736,7 @@ module IgniterLang
         type_errors << oof("OOF-TY0",
           "call_contract requires at least one argument (contract name as String)",
           node_name)
-        return typed_expr("call", type_ir("Unknown"), [], "fn" => fn, "args" => [])
+        return typed_error("call", [], "fn" => fn, "args" => [])
       end
 
       typed_name_arg = infer_expr(args[0], symbol_types, type_errors, type_warnings, node_name)
@@ -1706,7 +1746,7 @@ module IgniterLang
         type_errors << oof("OOF-TY0",
           "call_contract: first argument must be String (contract name), got #{name_arg_type}",
           node_name)
-        return typed_expr("call", type_ir("Unknown"), [], "fn" => fn, "args" => [])
+        return typed_error("call", [], "fn" => fn, "args" => [])
       end
 
       first_raw = args[0]
@@ -1724,7 +1764,7 @@ module IgniterLang
             "short name '#{callee_name}' (#{cands.join(', ')}); use a qualified name, " \
             "e.g. call_contract('#{cands.first}')",
             node_name)
-          return typed_expr("call", type_ir("Unknown"), [], "fn" => fn, "args" => [])
+          return typed_error("call", [], "fn" => fn, "args" => [])
         end
 
         entry = @call_contract_registry.fetch("entries")[callee_name]
@@ -1733,7 +1773,7 @@ module IgniterLang
           type_errors << oof("OOF-TY0",
             "call_contract: unknown callee '#{callee_name}' — not found in this module",
             node_name)
-          return typed_expr("call", type_ir("Unknown"), [], "fn" => fn, "args" => [])
+          return typed_error("call", [], "fn" => fn, "args" => [])
         end
 
         if entry["modifier"] != "pure"
@@ -1745,23 +1785,31 @@ module IgniterLang
           type_errors << oof("OOF-EC7",
             "contract '#{callee_name}' is #{entry["modifier"]} — an effectful contract is called with invoke: invoke #{node_name} = #{callee_name}(...) using #{using_hint}",
             node_name)
-          return typed_expr("call", type_ir("Unknown"), [], "fn" => fn, "args" => [])
+          return typed_error("call", [], "fn" => fn, "args" => [])
         end
 
         if callee_name == @current_contract_name
           type_errors << oof("OOF-TY0",
             "call_contract: self-recursion via '#{callee_name}' is closed in v0; use recur() for recursive contracts",
             node_name)
-          return typed_expr("call", type_ir("Unknown"), [], "fn" => fn, "args" => [])
+          return typed_error("call", [], "fn" => fn, "args" => [])
         end
 
         if positional_count != entry["input_count"]
           type_errors << oof("OOF-TY0",
             "call_contract: callee '#{callee_name}' expects #{entry["input_count"]} input(s), got #{positional_count}",
             node_name)
-          return typed_expr("call", type_ir("Unknown"), [], "fn" => fn, "args" => [])
+          return typed_error("call", [], "fn" => fn, "args" => [])
         end
 
+        # R22 (§3.3b): each declared callee input is the written expected context of its argument.
+        entry.fetch("input_types", []).each_with_index do |expected_raw, idx|
+          arg_expr = args[idx + 1]
+          expected = type_ir(expected_raw)
+          next if arg_expr.nil? || type_name(expected) == "Unknown"
+
+          set_expected_context(arg_expr, expected)
+        end
         typed_positional = args[1..].map { |a| infer_expr(a, symbol_types, type_errors, type_warnings, node_name) }
         # LANG-DERIVED-RECORD-CONSTRUCTOR-P2 closes the canon-side tail of
         # LAB-IGNITER-COMPILER-CALL-CONTRACT-ARG-TYPING-P8: static call_contract
@@ -1780,8 +1828,8 @@ module IgniterLang
           # (it previously slid through the Unknown-bearing skip as Collection[Unknown]).
           contextualize_empty_collection_node!(actual_arg, expected)
           actual = actual_arg.fetch("resolved_type")
-          next if unknown_or_unknown_bearing?(expected) || unknown_or_unknown_bearing?(actual)
-          next if structurally_assignable?(actual, expected)
+          # R22 (§3.3b boundaries): family before deferral; an error argument is silent.
+          next unless fit(actual, expected) == :no
 
           parameter_name = entry.fetch("input_names", [])[idx] || "##{idx + 1}"
           type_errors << oof(
@@ -1795,12 +1843,28 @@ module IgniterLang
         # All checks pass — resolve output type.
         # LANG-OUTPUT-TYPE-ASSIGNABILITY-P3 is implemented; structurally_assignable?
         # covers parametric types at the output boundary so we resolve fully here.
-        out_type = entry["single_output_type"] ? type_ir(entry["single_output_type"]) : type_ir("Unknown")
+        # R22 A1 (F2, ch3 §3.3b carriers): a callee with no single output gives the call no value that any of
+        # the four carriers justifies — a diagnostic at this originating site, never a permissive marker.
+        unless entry["single_output_type"]
+          type_errors << oof("OOF-TY0",
+            "call_contract: callee '#{callee_name}' declares no single output (its result has no static type)",
+            node_name)
+          return typed_error("call", typed_name_arg.fetch("deps", []) + typed_positional.flat_map { |a| a.fetch("deps", []) },
+                             "fn" => fn, "args" => [typed_name_arg] + typed_positional)
+        end
+        out_type = type_ir(entry["single_output_type"])
+        out_type = error_type if typed_positional.any? { |a| error_bearing?(a.fetch("resolved_type")) }
         all_deps = typed_name_arg.fetch("deps", []) + typed_positional.flat_map { |a| a.fetch("deps", []) }
         typed_expr("call", out_type, all_deps, "fn" => fn, "args" => [typed_name_arg] + typed_positional)
       else
-        # Tier 2 — dynamic / variable callee: Unknown, no error.
-        typed_expr("call", type_ir("Unknown"), typed_name_arg.fetch("deps", []), "fn" => fn, "args" => [typed_name_arg])
+        # Tier 2 — dynamic / variable callee. R22 A1 (F2, ch3 §3.3b carriers): the result exists at run time
+        # but justifies none of the four carriers (it is not author-written openness, not a hole, not an
+        # error) — a diagnostic at this originating site; the value is the error carrier. The pre-R22
+        # permissive Unknown and the R22 fifth-carrier residual are gone.
+        type_errors << oof("OOF-TY0",
+          "call_contract: callee must be a String literal (a dynamic callee has no static output type)",
+          node_name)
+        typed_error("call", typed_name_arg.fetch("deps", []), "fn" => fn, "args" => [typed_name_arg])
       end
     end
 
@@ -1838,7 +1902,8 @@ module IgniterLang
       # unresolved ref fails closed with OOF-P1 exactly like a compute expr.
       typed_args = args.map { |a| infer_expr(a, symbol_types, type_errors, type_warnings, binding) }
 
-      out_type     = type_ir("Unknown")
+      # R22 (§3.3b error carrier): every refused-callee branch below reports; its binding is an error.
+      out_type     = error_type
       absorbed     = nil
       effects_flat = []
 
@@ -1975,8 +2040,16 @@ module IgniterLang
             binding)
         end
 
-        # Result binding: callee's single output type (call_contract v0 rule).
-        out_type = entry["single_output_type"] ? type_ir(entry["single_output_type"]) : type_ir("Unknown")
+        # Result binding: callee's single output type (call_contract v0 rule). R22 A1 (F2): a callee with no
+        # single output gives the binding no value any carrier justifies — a diagnostic here, the binding an error.
+        if entry["single_output_type"]
+          out_type = type_ir(entry["single_output_type"])
+        else
+          type_errors << oof("OOF-TY0",
+            "invoke '#{binding}': callee '#{callee_name}' declares no single output (the binding has no static type)",
+            binding)
+          out_type = error_type
+        end
 
         # SIR absorption record (packet §5) — carried on the typed decl for the
         # emitter; absent callee fields stay null.
@@ -2265,6 +2338,8 @@ module IgniterLang
         bound = symbol_types.key?(name) || @olap_env.key?(name)
         type = symbol_types.fetch(name, @olap_env.fetch(name, {}).fetch("type", type_ir("Unknown")))
         type_errors << oof("OOF-P1", "Unresolved symbol: #{name}", node_name) if !bound && !rule_present?(type_errors, "OOF-P1")
+        # R22 (§3.3b): a missing declaration is an error carrier (silent afterwards), never openness.
+        type = error_type unless bound
         typed_expr("ref", type, [name], "name" => name)
       when "field_access"
         # PROP-041 T2: suppress OOF-P1 for stdlib-certified and user-registered structural accessors
@@ -2300,6 +2375,12 @@ module IgniterLang
         end
         object = infer_expr(expr.fetch("object"), symbol_types, type_errors, type_warnings, node_name)
         object_type = type_name(object.fetch("resolved_type"))
+        # R22 (§3.3b error carrier): a read of an erroneous value is the error, silently. Field reads
+        # on declared-open, hole and unnamed-record receivers keep their pre-R22 behavior below
+        # (transitional control; R21 pending decision).
+        if error_bearing?(object.fetch("resolved_type"))
+          return typed_error("field_access", object.fetch("deps"), "object" => object, "field" => expr.fetch("field"))
+        end
         # LANG-STDLIB-COLLECTION-ZIP-RUBY-PARITY-P3: built-in Pair{first, second} — the element
         # type `zip` produces. Fields resolve from the type params ([A, B]); a missing/empty param
         # stays Unknown WITHOUT OOF-P1 (permissive, mirroring the Rust Pair field-access fix from
@@ -2321,6 +2402,7 @@ module IgniterLang
         field_type = @type_shapes.fetch(object_type, {})[expr.fetch("field")] || type_ir("Unknown")
         if type_name(field_type) == "Unknown"
           type_errors << oof("OOF-P1", "Unresolved field: #{object_type}.#{expr.fetch("field")}", node_name)
+          field_type = error_type
         end
         typed_expr(
           "field_access",
@@ -2351,7 +2433,7 @@ module IgniterLang
         infer_unary_op(expr, symbol_types, type_errors, type_warnings, node_name)
       else
         type_errors << oof("OOF-TY0", "Unsupported expression kind: #{expr.fetch("kind")}", node_name)
-        typed_expr("unsupported", type_ir("Unknown"), [], "source_kind" => expr.fetch("kind"))
+        typed_error("unsupported", [], "source_kind" => expr.fetch("kind"))
       end
     end
 
@@ -2457,7 +2539,41 @@ module IgniterLang
       )
     end
 
+    # R22 A1 (ch3 §3.3b error carrier): a collection / option / map owner that receives an erroneous operand YIELDS the
+    # error — its own typing runs as before (a callback body keeps reporting its own diagnostics, e.g. an unknown
+    # function inside `filter(err, c -> F(c))`), but the call's value is the error carrier, so nothing downstream types a
+    # family from it (mirrors the Rust `infer_stdlib_call` wrapper).
+    # A1's first cut listed the collection / option / map owners only; the A1 review (REVIEW-1 F1) showed the text,
+    # numeric, option-predicate and map-construction owners still typing a family out of the error (`int_to_text(err)`
+    # → `Text` → a derivative binding mismatch), so the rule is the dispatcher's, once, for EVERY owner.
     def infer_call(expr, symbol_types, type_errors, type_warnings, node_name)
+      # R22 A2 (C2, ch3 §3.3b): the value of a call whose OWN typing reported a diagnostic (an arity or argument gate,
+      # a callback body, a payload join, a signature check, a sealed constructor) is the error carrier, never its
+      # intended result family — otherwise a later join or boundary reports a derivative (`[int_to_text("s"), seed]` →
+      # OOF-COL13, `unwrap_or(some(int_to_text("s")), seed)` → a payload conflict). Measured on the caller's live sink
+      # across this call only: a provisional pass types into its own scratch sink, and a prior unrelated error lies
+      # before this mark, so neither poisons a lawful call; a call that reports nothing keeps its result
+      # (`[int_to_text(seed), seed]` stays a real conflict).
+      # A lambda body (or an if / match branch block) typed inside this call is NESTED scope: its diagnostics are not
+      # this call's own report — a callback's value flows through the owner (a `map` element, a `fold` accumulator),
+      # while an unused bad statement in a body, or a predicate's own diagnostic, never poisons the carrier the owner
+      # returns (`r22_nested_diags`, per sink).
+      errors_before = type_errors.length
+      nested_before = r22_nested(type_errors)
+      typed = infer_call_dispatch(expr, symbol_types, type_errors, type_warnings, node_name)
+      return typed unless typed.is_a?(Hash)
+      own = (type_errors.length - errors_before) - (r22_nested(type_errors) - nested_before)
+      return typed.merge("resolved_type" => error_type) if own > 0 && !error_bearing?(typed.fetch("resolved_type", nil))
+
+      # operands are VALUES (carriers); a callback is not an operand value — its body's own diagnostics are its own
+      # judgment and never poison the owner's result (the pre-A1 behavior of every HOF; Rust types no lambda as an arg)
+      operands = typed.fetch("args", []).select { |a| a.is_a?(Hash) && a.key?("resolved_type") && a["kind"] != "lambda" }
+      return typed unless operands.any? { |a| error_bearing?(a.fetch("resolved_type")) }
+
+      typed.merge("resolved_type" => error_type)
+    end
+
+    def infer_call_dispatch(expr, symbol_types, type_errors, type_warnings, node_name)
       fn = expr.fetch("fn")
       args = expr.fetch("args")
       case fn
@@ -2494,7 +2610,7 @@ module IgniterLang
         # declare a live `collections.ig` declaration a type error.
         if legacy_minmax_aggregate?(fn, args, symbol_types, type_warnings, node_name)
           type_errors << oof("OOF-TY0", "Unknown function: #{fn}", node_name)
-          typed_expr("call", type_ir("Unknown"), [], "fn" => fn, "args" => [])
+          typed_error("call", [], "fn" => fn, "args" => [])
         else
           infer_math_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
         end
@@ -2510,7 +2626,8 @@ module IgniterLang
         infer_outcome_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
       when "filter_map"
         # LANG-SUMTYPE-COLLECT-P3: filter_map(Collection[T], T -> Option[U]) -> Collection[U]
-        infer_filter_map_call(args, symbol_types, type_errors, type_warnings, node_name)
+        infer_filter_map_call(args, symbol_types, type_errors, type_warnings, node_name,
+                              context: expected_context(expr))
       when *OPTION_PREDICATE_FNS.keys,
            *OPTION_PREDICATE_FNS.values
         infer_option_predicate_call(fn, args, symbol_types, type_errors, type_warnings, node_name)
@@ -2672,7 +2789,10 @@ module IgniterLang
           infer_user_fn_call(decl, args, symbol_types, type_errors, type_warnings, node_name)
         else
           type_errors << oof("OOF-TY0", "Unknown function: #{fn}", node_name)
-          typed_expr("call", type_ir("Unknown"), [], "fn" => fn, "args" => [])
+          # R22 A1 (ch3 §3.3b, REVIEW-1 F2): the value of a refused call is the error carrier (silent afterwards),
+          # never declared openness — otherwise the F1 / F3 owners judge it as open and add derivative refusals
+          # (`nosuch(x) ++ 1`, `match nosuch(x) {…}`).
+          typed_error("call", [], "fn" => fn, "args" => [])
         end
       end
     end
@@ -2686,6 +2806,14 @@ module IgniterLang
     def infer_user_fn_call(decl, args, symbol_types, type_errors, type_warnings, node_name)
       fn_name = decl.fetch("name")
       params = decl.fetch("params", [])
+      # R22 (§3.3b): an annotated def parameter is the written expected context of its argument
+      # (branches/arms fit to it; the parameter boundary below keeps its OOF-TY0 owner and message).
+      if args.length == params.length
+        params.each_with_index do |param, index|
+          expected = type_ir(param.fetch("type_annotation", "Unknown"))
+          set_expected_context(args[index], expected) unless type_name(expected) == "Unknown"
+        end
+      end
       typed_args = args.map { |arg| infer_expr(arg, symbol_types, type_errors, type_warnings, node_name) }
       if args.length != params.length
         type_errors << oof("OOF-TY0",
@@ -2704,16 +2832,18 @@ module IgniterLang
             nominal = ref_name && (@current_contract_capability_types || {})[ref_name]
             actual = type_ir(nominal) if nominal
           end
-          next if unknown_or_unknown_bearing?(expected) || unknown_or_unknown_bearing?(actual)
-          next if structurally_assignable?(actual, expected)
+          # R22 (§3.3b boundaries): family before deferral; an error argument is silent.
+          next unless fit(actual, expected) == :no
+
           type_errors << oof("OOF-TY0",
             "Call to '#{fn_name}': parameter '#{param.fetch("name")}' expects #{type_display(expected)}, got #{type_display(actual)}",
             node_name)
         end
       end
+      error_arg = typed_args.any? { |arg| error_bearing?(arg.fetch("resolved_type")) }
       typed_expr(
         "call",
-        type_ir(decl.fetch("return_type", "Unknown")),
+        error_arg ? error_type : type_ir(decl.fetch("return_type", "Unknown")),
         typed_args.flat_map { |arg| arg.fetch("deps", []) }.uniq,
         "fn" => "user.#{function_module_for(decl)}.#{fn_name}",
         "args" => typed_args
@@ -2935,8 +3065,7 @@ module IgniterLang
       if else_block.nil?
         type_errors << oof("OOF-IF2", "if_expr requires an else branch", node_name)
         cond_typed = infer_expr(cond_raw, symbol_types, type_errors, type_warnings, node_name)
-        return typed_expr("if_expr", type_ir("Unknown"), cond_typed.fetch("deps"),
-                          "cond" => cond_typed)
+        return typed_error("if_expr", cond_typed.fetch("deps"), "cond" => cond_typed)
       end
 
       then_final = then_block.fetch("return_expr", nil)
@@ -2946,8 +3075,7 @@ module IgniterLang
       if then_final.nil? || else_final.nil?
         type_errors << oof("OOF-IF4", "if_expr branches must be value-producing", node_name)
         cond_typed = infer_expr(cond_raw, symbol_types, type_errors, type_warnings, node_name)
-        return typed_expr("if_expr", type_ir("Unknown"), cond_typed.fetch("deps"),
-                          "cond" => cond_typed)
+        return typed_error("if_expr", cond_typed.fetch("deps"), "cond" => cond_typed)
       end
 
       # Infer condition
@@ -2955,8 +3083,19 @@ module IgniterLang
       cond_type  = cond_typed.fetch("resolved_type")
 
       # OOF-IF1: condition must resolve to canonical Bool {"name":"Bool","params":[]}
-      unless type_name(cond_type) == "Bool" || type_name(cond_type) == "Unknown"
-        type_errors << oof("OOF-IF1", "if_expr condition must be Bool, got #{type_name(cond_type)}", node_name)
+      cond_failed = false
+      cond_owner = type_name(owner_operand(cond_type))
+      unless cond_owner == "Bool" || cond_owner == "Unknown" || error_bearing?(cond_type)
+        type_errors << oof("OOF-IF1", "if_expr condition must be Bool, got #{cond_owner}", node_name)
+        cond_failed = true
+      end
+
+      # R22 (§3.3b / Rule IF-v0): the written expected context of this expression reaches both
+      # branch results (never an earlier binding).
+      ctx = expected_context(expr)
+      if ctx
+        set_expected_context(then_final, ctx.type)
+        set_expected_context(else_final, ctx.type)
       end
 
       # Infer the branches.
@@ -2973,7 +3112,13 @@ module IgniterLang
       then_type = then_typed.fetch("resolved_type")
       else_type = else_typed.fetch("resolved_type")
 
-      result_type = merge_if_branch_types(then_type, else_type, node_name, type_errors)
+      result_type =
+        if cond_failed || error_bearing?(cond_type)
+          error_type
+        else
+          (ctx && fit_alternatives_to_context([then_type, else_type], ctx)) ||
+            merge_if_branch_types(then_type, else_type, node_name, type_errors)
+        end
 
       # Union dependencies: condition + then + else (recursive nested deps included automatically)
       all_deps = (cond_typed.fetch("deps") + then_typed.fetch("deps") + else_typed.fetch("deps")).uniq
@@ -2989,6 +3134,17 @@ module IgniterLang
       )
     end
 
+    # R22 (Rule IF-v0 / Rule 5 under a written context): a set of branches or arms with a join keeps it
+    # (the boundary judges that type with its own owner); with no join, alternatives that all FIT the
+    # declared type give the expression that type. Otherwise nil: the expression's own owner
+    # (OOF-IF3 / OOF-KIND5, existing messages) reports the missing join. An error alternative is silent.
+    def fit_alternatives_to_context(types, ctx)
+      return nil if types.empty?
+      return error_type if types.any? { |t| error_bearing?(t) }
+
+      join_types(types) || (types.all? { |t| fit(t, ctx.type) == :yes } ? ctx.type : nil)
+    end
+
     def infer_binary(expr, symbol_types, type_errors, type_warnings, node_name)
       left = infer_expr(expr.fetch("left"), symbol_types, type_errors, type_warnings, node_name)
       right = infer_expr(expr.fetch("right"), symbol_types, type_errors, type_warnings, node_name)
@@ -2999,7 +3155,7 @@ module IgniterLang
         type_errors << oof("OOF-SR1",
           "SecretRef cannot be observed by operator `#{op}` — a reference only routes to a declared SecretRef sink",
           node_name)
-        return typed_expr("call", type_ir("Unknown"), [], "fn" => op, "args" => [])
+        return typed_error("call", [], "fn" => op, "args" => [])
       end
       operator, result_type = operator_type(op, left.fetch("resolved_type"), right.fetch("resolved_type"), type_errors, node_name)
       # R10: while a fold_stream callable body is typed, record the identity THIS owner selected for
@@ -3025,13 +3181,76 @@ module IgniterLang
 
     # LANG-CANON-BINARY-OPERATOR-PARITY-P1: one exact-comparison law owns both
     # == and != so future family admissions cannot drift between the operators.
+    # R22 (§3.3b): the family an operator / condition owner judges — an unnamed record family is the KNOWN
+    # non-scalar family `Record` (identically in Rust), never the permissive Unknown.
+    def owner_operand(t)
+      record_family?(t) ? type_ir("Record") : t
+    end
+
+    # R22 A1 (F3, ch3 §3.3b operators / ch2 §2.2): family admission precedes deferral. A hole or declared-open
+    # operand is permissive ONLY beside a family the operator already admits: `open + 1`, `open < 1.5`,
+    # `open && true`, `open ++ "tail"` and `open ++ [1]` stay admitted (in either operand order), while
+    # `open ++ 1`, `1 ++ open`, `open && 1`, `open + "s"` or `open < "s"` are refused by the operator's
+    # existing owner and text. `==` / `!=` keep their own admission table (equality_compatible?).
+    OPERATOR_ADMITTED_FAMILIES = {
+      "+" => %w[Integer Float Decimal], "-" => %w[Integer Float Decimal],
+      "*" => %w[Integer Float Decimal], "/" => %w[Integer Float Decimal],
+      "<" => %w[Integer Float Decimal], "<=" => %w[Integer Float Decimal],
+      ">" => %w[Integer Float Decimal], ">=" => %w[Integer Float Decimal],
+      "&&" => %w[Bool], "||" => %w[Bool],
+      "++" => %w[String Text Collection]
+    }.freeze
+
+    def open_operand_admitted?(op, left, right)
+      names = [type_name(left), type_name(right)]
+      return false unless names.include?("Unknown")
+
+      admitted = OPERATOR_ADMITTED_FAMILIES.fetch(op, nil)
+      names.reject { |n| n == "Unknown" }.all? { |n| admitted.nil? || admitted.include?(n) }
+    end
+
     def equality_compatible?(left_name, right_name)
-      left_name == "Unknown" || right_name == "Unknown" ||
-        %w[String Text].include?(left_name) && %w[String Text].include?(right_name) ||
+      # R22 (§3.3b / ch2 equality): an open or unsolved operand is permissive only beside a family equality
+      # admits; `==` over a collection, map, record or any other non-equality family stays refused.
+      admits = %w[Unknown String Text Integer Bool Float Decimal]
+      return admits.include?(left_name) && admits.include?(right_name) if left_name == "Unknown" || right_name == "Unknown"
+
+      %w[String Text].include?(left_name) && %w[String Text].include?(right_name) ||
         left_name == right_name && %w[Integer Bool Float Decimal].include?(left_name)
     end
 
+    # R22 (§3.3b operators / error carrier): operator-family admission and the §3.6 Decimal rules are
+    # unchanged (operator_type_core). An operand carrying an error at any depth makes the result the
+    # error with no further diagnostic; an operator that reports a diagnostic yields the error.
     def operator_type(op, left, right, type_errors, node_name)
+      if error_bearing?(left) || error_bearing?(right)
+        identity, _ = operator_type_core(op, left, right, [], node_name)
+        return [identity, error_type]
+      end
+      # An unnamed record family is the known family `Record` for the operator owners (never the permissive
+      # Unknown); `++` with a hole operand is typed from the other Collection/String operand.
+      left = owner_operand(left)
+      right = owner_operand(right)
+      if op == "++"
+        # A hole operand takes the other operand's family (a family `++` refuses is then its existing
+        # OOF-TY0); two holes give a hole back; only declared openness is open.
+        if hole?(left) && hole?(right)
+          identity, _ = operator_type_core(op, left, right, [], node_name)
+          return [identity, hole_type]
+        elsif hole?(left) && type_name(right) != "Unknown"
+          left = right
+        elsif hole?(right) && type_name(left) != "Unknown"
+          right = left
+        end
+      end
+
+      errors_before = type_errors.length
+      identity, result = operator_type_core(op, left, right, type_errors, node_name)
+      result = error_type if type_errors.length > errors_before
+      [identity, result]
+    end
+
+    def operator_type_core(op, left, right, type_errors, node_name)
       left_name = type_name(left)
       right_name = type_name(right)
 
@@ -3108,7 +3327,7 @@ module IgniterLang
 
       case op
       when "+"
-        unless unknown?(left, right) || left_name == "Integer" && right_name == "Integer"
+        unless open_operand_admitted?(op, left, right) || left_name == "Integer" && right_name == "Integer"
           # LANG-CONCAT-OPERATOR-DUAL-PARITY-P1: `+` is arithmetic-only. When both sides
           # are text-shaped, the refusal must route the developer to the accepted text
           # construction surface. Message text mirrors the Rust `+` arm byte-for-byte.
@@ -3127,54 +3346,56 @@ module IgniterLang
         # Collection[T] -> stdlib.collection.concat. Collection element mismatch refuses
         # through the existing collection concat law (OOF-COL7), same as the named
         # concat(...) call path in infer_concat_call.
-        if left_name == "String" && right_name == "String"
-          return ["stdlib.string.concat", type_ir("String")]
+        if %w[String Text].include?(left_name) && %w[String Text].include?(right_name)
+          # R22 (§3.3b): String ≡ Text is one scalar — the result is their join (Text unless both String).
+          return ["stdlib.string.concat", type_ir(left_name == "String" && right_name == "String" ? "String" : "Text")]
         end
         if left_name == "Collection" && right_name == "Collection"
-          elem1      = element_type_from_collection(left)
-          elem2      = element_type_from_collection(right)
-          elem1_name = type_name(elem1)
-          elem2_name = type_name(elem2)
-          unless elem1_name == "Unknown" || elem2_name == "Unknown" || elem1_name == elem2_name
+          # R22 (§3.3b): `++` needs a join of both element types (holes/openness permissive, also
+          # nested); no join is OOF-COL7 (existing message); the result element is the join.
+          elem1  = element_type_from_collection(left)
+          elem2  = element_type_from_collection(right)
+          joined = join_types([elem1, elem2])
+          if joined.nil?
             type_errors << oof("OOF-COL7",
-              "stdlib.collection.concat: element type mismatch — first collection contains #{elem1_name}, second contains #{elem2_name}",
+              "stdlib.collection.concat: element type mismatch — first collection contains #{type_name(elem1)}, second contains #{type_name(elem2)}",
               node_name)
+            return ["stdlib.collection.concat", error_type]
           end
-          result_elem = elem1_name == "Unknown" ? elem2 : elem1
-          return ["stdlib.collection.concat", collection_type_ir_from(result_elem)]
+          return ["stdlib.collection.concat", collection_type_ir_from(prefer_spelling(joined, elem1, elem2))]
         end
-        unless unknown?(left, right)
+        unless open_operand_admitted?(op, left, right)
           type_errors << oof("OOF-TY0",
             "Type mismatch: expected String/String or Collection/Collection, got #{left_name}++#{right_name}",
             node_name)
         end
         ["stdlib.unsupported.++", type_ir("Unknown")]
       when "-"
-        type_errors << type_mismatch(type_ir("Integer"), type_ir("#{left_name}-#{right_name}"), node_name) unless unknown?(left, right) || left_name == "Integer" && right_name == "Integer"
+        type_errors << type_mismatch(type_ir("Integer"), type_ir("#{left_name}-#{right_name}"), node_name) unless open_operand_admitted?(op, left, right) || left_name == "Integer" && right_name == "Integer"
         ["stdlib.integer.sub", type_ir("Integer")]
       when "*"
-        type_errors << type_mismatch(type_ir("Integer"), type_ir("#{left_name}*#{right_name}"), node_name) unless unknown?(left, right) || left_name == "Integer" && right_name == "Integer"
+        type_errors << type_mismatch(type_ir("Integer"), type_ir("#{left_name}*#{right_name}"), node_name) unless open_operand_admitted?(op, left, right) || left_name == "Integer" && right_name == "Integer"
         ["stdlib.integer.mul", type_ir("Integer")]
       when "/"
-        type_errors << type_mismatch(type_ir("Integer"), type_ir("#{left_name}/#{right_name}"), node_name) unless unknown?(left, right) || left_name == "Integer" && right_name == "Integer"
+        type_errors << type_mismatch(type_ir("Integer"), type_ir("#{left_name}/#{right_name}"), node_name) unless open_operand_admitted?(op, left, right) || left_name == "Integer" && right_name == "Integer"
         ["stdlib.integer.div", type_ir("Integer")]
       when ">"
-        type_errors << type_mismatch(type_ir("Integer"), type_ir("#{left_name}+#{right_name}"), node_name) unless unknown?(left, right) || left_name == "Integer" && right_name == "Integer"
+        type_errors << type_mismatch(type_ir("Integer"), type_ir("#{left_name}+#{right_name}"), node_name) unless open_operand_admitted?(op, left, right) || left_name == "Integer" && right_name == "Integer"
         ["stdlib.integer.gt", type_ir("Bool")]
       when "<"
-        type_errors << type_mismatch(type_ir("Integer"), type_ir("#{left_name}<#{right_name}"), node_name) unless unknown?(left, right) || left_name == "Integer" && right_name == "Integer"
+        type_errors << type_mismatch(type_ir("Integer"), type_ir("#{left_name}<#{right_name}"), node_name) unless open_operand_admitted?(op, left, right) || left_name == "Integer" && right_name == "Integer"
         ["stdlib.integer.lt", type_ir("Bool")]
       when "<="
-        type_errors << type_mismatch(type_ir("Integer"), type_ir("#{left_name}<=#{right_name}"), node_name) unless unknown?(left, right) || left_name == "Integer" && right_name == "Integer"
+        type_errors << type_mismatch(type_ir("Integer"), type_ir("#{left_name}<=#{right_name}"), node_name) unless open_operand_admitted?(op, left, right) || left_name == "Integer" && right_name == "Integer"
         ["stdlib.integer.lte", type_ir("Bool")]
       when ">="
-        type_errors << type_mismatch(type_ir("Integer"), type_ir("#{left_name}>=#{right_name}"), node_name) unless unknown?(left, right) || left_name == "Integer" && right_name == "Integer"
+        type_errors << type_mismatch(type_ir("Integer"), type_ir("#{left_name}>=#{right_name}"), node_name) unless open_operand_admitted?(op, left, right) || left_name == "Integer" && right_name == "Integer"
         ["stdlib.integer.gte", type_ir("Bool")]
       when "&&"
-        type_errors << type_mismatch(type_ir("Bool"), type_ir("#{left_name}+#{right_name}"), node_name) unless unknown?(left, right) || left_name == "Bool" && right_name == "Bool"
+        type_errors << type_mismatch(type_ir("Bool"), type_ir("#{left_name}+#{right_name}"), node_name) unless open_operand_admitted?(op, left, right) || left_name == "Bool" && right_name == "Bool"
         ["stdlib.bool.and", type_ir("Bool")]
       when "||"
-        type_errors << type_mismatch(type_ir("Bool"), type_ir("#{left_name}+#{right_name}"), node_name) unless unknown?(left, right) || left_name == "Bool" && right_name == "Bool"
+        type_errors << type_mismatch(type_ir("Bool"), type_ir("#{left_name}+#{right_name}"), node_name) unless open_operand_admitted?(op, left, right) || left_name == "Bool" && right_name == "Bool"
         ["stdlib.bool.or", type_ir("Bool")]
       when "==", "!="
         unless equality_compatible?(left_name, right_name)
@@ -3443,6 +3664,337 @@ module IgniterLang
       return false unless empty_collection_assignable?(typed_node.fetch("resolved_type"), normalized_expected)
       typed_node["resolved_type"] = normalized_expected
       true
+    end
+
+    # ── LANG-COLLECTION-EVIDENCE-JOIN-IMPLEMENTATION-R22 (ch3 §3.3b) ────────────────────────────
+    #
+    # ONE representation of the four inference carriers. Types stay {name, params} Hashes; the
+    # three non-family carriers and the unnamed record family keep the legacy name "Unknown" (so
+    # every pre-R22 "is Unknown" site is unchanged unless a law owner below changes it) and are told
+    # apart by one inference-only key, erased at the typechecker output boundary
+    # (erase_inference_carriers!) so SemanticIR spells a hole and declared openness exactly as
+    # before and an error never reaches it:
+    #   declared openness  {"name"=>"Unknown","params"=>[]}       (written Unknown, unmarked legacy)
+    #   hole               + "carrier"=>"hole"                     ([] element, none() payload, …)
+    #   error              + "carrier"=>"error"                    (value of a reported expression)
+    #   unnamed record     + "carrier"=>"record", "fields"=>{…}    (a record literal no shape names)
+    CARRIER_KEY = "carrier"
+
+    def hole_type
+      { "name" => "Unknown", "params" => [], CARRIER_KEY => "hole" }
+    end
+
+    def error_type
+      { "name" => "Unknown", "params" => [], CARRIER_KEY => "error" }
+    end
+
+    def open_type
+      { "name" => "Unknown", "params" => [] }
+    end
+
+    def record_family_type(fields)
+      { "name" => "Unknown", "params" => [], CARRIER_KEY => "record", "fields" => fields }
+    end
+
+    # R22 A1 (F2): there is no fifth carrier. A site that can justify none of the four (a dynamic
+    # `call_contract`, a callee with no single output, an unrefined `fold_stream` seed hole) is a
+    # diagnostic at that originating site and its value is the error carrier.
+    def carrier_of(t)
+      t.is_a?(Hash) ? t[CARRIER_KEY] : nil
+    end
+
+    def hole?(t) = carrier_of(t) == "hole"
+    def error_carrier?(t) = carrier_of(t) == "error"
+    def record_family?(t) = carrier_of(t) == "record"
+
+    def open_carrier?(t)
+      t.is_a?(Hash) && t["name"] == "Unknown" && carrier_of(t).nil?
+    end
+
+    # An error at ANY depth (params, record-family fields).
+    def error_bearing?(t)
+      return false unless t.is_a?(Hash)
+      return true if error_carrier?(t)
+      return t.fetch("fields", {}).values.any? { |f| error_bearing?(f) } if record_family?(t)
+
+      t.fetch("params", []).any? { |p| p.is_a?(Hash) && error_bearing?(p) }
+    end
+
+    def hole_bearing?(t)
+      return false unless t.is_a?(Hash)
+      return true if hole?(t)
+      return t.fetch("fields", {}).values.any? { |f| hole_bearing?(f) } if record_family?(t)
+
+      t.fetch("params", []).any? { |p| p.is_a?(Hash) && hole_bearing?(p) }
+    end
+
+    # No hole, openness, error or unnamed record family anywhere.
+    def carrier_free?(t)
+      !unknown_or_unknown_bearing?(type_ir(t))
+    end
+
+    # The value of an owner that reported a diagnostic, or that received an error: silent afterwards.
+    def typed_error(kind, deps, extra)
+      typed_expr(kind, error_type, deps, extra)
+    end
+
+    # §3.3b Join J over a WHOLE set of normalized types. Returns the joined type, or nil for NO_JOIN.
+    #  1. an error at any depth ⇒ the error (silent);
+    #  2. holes and declared-open members contribute nothing; the remaining known members must share
+    #     one family (String ≡ Text → "Text" when spellings differ; constructors position-wise;
+    #     unnamed record families with equal field-name sets field-wise; named records/variants by
+    #     name; a record family never joins a named type or a Map);
+    #  3. any top-level declared-open member makes the result open (never hiding a known conflict).
+    # Transitional residual (not law): Decimal[a] / Decimal[b] keep the FIRST member's scale.
+    def join_types(types)
+      types = types.map { |t| type_ir(t) }
+      return error_type if types.any? { |t| error_bearing?(t) }
+
+      known = types.reject { |t| open_carrier?(t) || hole?(t) }
+      any_open = types.any? { |t| open_carrier?(t) }
+      if known.empty?
+        return open_type if any_open
+        return hole_type
+      end
+
+      joined = join_known_types(known)
+      return nil if joined.nil?
+
+      any_open ? open_type : joined
+    end
+
+    def join_known_types(known)
+      if known.any? { |t| record_family?(t) }
+        return nil unless known.all? { |t| record_family?(t) }
+
+        names = known.first.fetch("fields").keys.sort
+        return nil unless known.all? { |t| t.fetch("fields").keys.sort == names }
+
+        fields = {}
+        known.first.fetch("fields").each_key do |fname|
+          jf = join_types(known.map { |t| t.fetch("fields").fetch(fname) })
+          return nil if jf.nil?
+
+          fields[fname] = jf
+        end
+        return record_family_type(fields)
+      end
+
+      canonical = known.map { |t| canonical_scalar_name(t) }.uniq
+      return nil unless canonical.length == 1
+      # Transitional (R21 pending): cross-scale Decimal keeps the first member's scale.
+      return known.first if canonical.first == "Decimal"
+
+      first = known.first
+      return first if known.all? { |t| t == first }
+
+      arity = first.fetch("params", []).length
+      return nil unless known.all? { |t| t.fetch("params", []).length == arity }
+
+      names = known.map { |t| type_name(t) }.uniq
+      name = names.length == 1 ? names.first : "Text"
+      params = (0...arity).map do |i|
+        jp = join_types(known.map { |t| t.fetch("params")[i] })
+        return nil if jp.nil?
+
+        jp
+      end
+      # Rebuilt exactly as the pre-R22 match join did ({name, params}); identical members keep their
+      # own hash (above), so an unchanged family keeps its pre-R22 SemanticIR bytes.
+      { "name" => name, "params" => params }
+    end
+
+    # SemanticIR-byte preservation (not a typing rule): when the join IS one of the owner's preferred
+    # operands' family — equal position-wise up to the parser's `kind` marker, with no carrier — the
+    # result keeps that operand's own hash (the owner's pre-R22 result: the unwrap_or payload, the
+    # collection / map element, the first concat operand, the first fully known literal member).
+    def prefer_spelling(joined, *preferred)
+      return joined if joined.nil? || !carrier_free?(joined)
+
+      preferred.find { |p| p.is_a?(Hash) && carrier_free?(p) && same_spelled_type?(p, joined) } || joined
+    end
+
+    def same_spelled_type?(a, b)
+      a = type_ir(a)
+      b = type_ir(b)
+      return false unless a["name"] == b["name"]
+
+      ap = a.fetch("params", [])
+      bp = b.fetch("params", [])
+      ap.length == bp.length && ap.zip(bp).all? { |x, y| same_spelled_type?(x, y) }
+    end
+
+    # Sorted distinct legacy displays of the KNOWN members of a set that has no join (DESIGN §6).
+    def join_conflict_display(types)
+      types.map { |t| type_ir(t) }
+           .reject { |t| open_carrier?(t) || hole?(t) || error_carrier?(t) }
+           .map { |t| type_display(t) }.uniq.sort.join(", ")
+    end
+
+    # §3.3b boundary fit (family before deferral): :yes | :no | :error. An error anywhere (actual or
+    # expected) is :error — the boundary reports nothing. An open or hole expected/actual position fits
+    # AT THAT POSITION only; the known outer family is always checked. A record family fits a record
+    # family with equal field names, a Map[K, V] when String fits K and every field fits V, or a
+    # declared named shape with exactly its fields (optional-field construction as in naming).
+    def fit(actual, expected)
+      a = type_ir(actual)
+      e = type_ir(expected)
+      return :error if error_bearing?(a) || error_bearing?(e)
+
+      fit_position?(a, e) ? :yes : :no
+    end
+
+    def fit_position?(a, e)
+      a = type_ir(a)
+      e = type_ir(e)
+      return true if open_carrier?(e) || hole?(e)
+      return true if open_carrier?(a) || hole?(a)
+      return record_family_fit?(a, e) if record_family?(a)
+      return false if record_family?(e)
+      return false if canonical_scalar_name(a) != canonical_scalar_name(e)
+
+      ap = a.fetch("params", [])
+      ep = e.fetch("params", [])
+      return false if ap.length != ep.length
+
+      ap.zip(ep).all? { |x, y| fit_position?(x, y) }
+    end
+
+    def record_family_fit?(a, e)
+      afields = a.fetch("fields", {})
+      if record_family?(e)
+        efields = e.fetch("fields", {})
+        return false unless afields.keys.sort == efields.keys.sort
+
+        return afields.all? { |fname, ft| fit_position?(ft, efields.fetch(fname)) }
+      end
+      if type_name(e) == "Map"
+        key_t, val_t = e.fetch("params", [])
+        return false if key_t && !fit_position?(type_ir("String"), key_t)
+
+        return afields.values.all? { |ft| val_t.nil? || fit_position?(ft, val_t) }
+      end
+      shape = @type_shapes && @type_shapes[type_name(e)]
+      return false unless shape
+
+      record_fields_fit_shape?(afields, shape)
+    end
+
+    # Exact field-name set (declared-optional fields may be omitted under the P3 gate) with every
+    # present field fitting; a present value for an optional field fits either T or Option[T].
+    def record_fields_fit_shape?(field_types, shape)
+      names = field_types.keys.sort
+      required = shape.reject { |_, t| optional_shape_field?(t) }.keys.sort
+      return false unless (required - names).empty? && (names - shape.keys).empty?
+
+      field_types.all? do |fname, ft|
+        exp = shape.fetch(fname)
+        if optional_shape_field?(exp)
+          type_name(type_ir(ft)) == "Option" || fit_position?(ft, optional_inner_type(exp)) ||
+            fit_position?(ft, exp)
+        else
+          fit_position?(ft, exp)
+        end
+      end
+    end
+
+    # §3.3b fold refinement: a pass may fill a hole only with a hole-free type (or make a position
+    # open) and never adds a hole; otherwise the structure is identical position- and field-wise.
+    def fills_only?(acc, nxt)
+      acc = type_ir(acc)
+      nxt = type_ir(nxt)
+      return true if hole?(acc) && (hole?(nxt) || open_carrier?(nxt) || !hole_bearing?(nxt))
+      return true if open_carrier?(nxt)
+      return false if hole?(acc) || open_carrier?(acc) || hole?(nxt)
+
+      if record_family?(acc) || record_family?(nxt)
+        return false unless record_family?(acc) && record_family?(nxt)
+
+        af = acc.fetch("fields")
+        nf = nxt.fetch("fields")
+        return false unless af.keys.sort == nf.keys.sort
+
+        return af.all? { |k, v| fills_only?(v, nf.fetch(k)) }
+      end
+      return false unless canonical_scalar_name(acc) == canonical_scalar_name(nxt)
+
+      ap = acc.fetch("params", [])
+      np = nxt.fetch("params", [])
+      return false unless ap.length == np.length
+
+      ap.zip(np).all? { |x, y| fills_only?(x, y) }
+    end
+
+    # Holes solved by a written context (SIR-preserving contextualization of the legacy seams): every
+    # hole position of `t` that the context `ctx` knows takes the context's position.
+    def fill_holes_from(t, ctx)
+      t = type_ir(t)
+      return t if ctx.nil?
+
+      ctx = type_ir(ctx)
+      return ctx if hole?(t) && !hole?(ctx)
+      return t if carrier_of(t) || carrier_of(ctx)
+      return t unless canonical_scalar_name(t) == canonical_scalar_name(ctx)
+
+      tp = t.fetch("params", [])
+      cp = ctx.fetch("params", [])
+      return t unless tp.length == cp.length && !tp.empty?
+
+      t.merge("params" => tp.zip(cp).map { |x, y| fill_holes_from(x, y) })
+    end
+
+    # A written type without the parser's `kind: type_ref` marker (the spelling a structurally named
+    # literal has always carried), used for member contexts so SemanticIR bytes stay pre-R22.
+    def strip_type_ref_kind(t)
+      return t unless t.is_a?(Hash)
+
+      t.reject { |k, _| k == "kind" }.merge("params" => t.fetch("params", []).map { |p| strip_type_ref_kind(p) })
+    end
+
+    # Identity-keyed written expected context (the annotated compute/output/argument reaching its own
+    # expression, its branches and its literal members/fields — never an earlier binding).
+    ExpectedContext = Struct.new(:type)
+
+    def set_expected_context(expr, type)
+      return unless expr.is_a?(Hash) && type.is_a?(Hash)
+      return if error_bearing?(type)
+
+      @expected_ctx ||= {}.compare_by_identity
+      @expected_ctx[expr] = ExpectedContext.new(type_ir(type))
+    end
+
+    def expected_context(expr)
+      @expected_ctx && expr.is_a?(Hash) ? @expected_ctx[expr] : nil
+    end
+
+    # Snapshot of every hint table a typing pass may touch (fold provisional passes restore it).
+    def snapshot_hint_tables
+      [@output_type_hints&.dup, @sealed_output_hints&.dup, @collection_output_hints&.dup]
+    end
+
+    def restore_hint_tables(snapshot)
+      @output_type_hints, @sealed_output_hints, @collection_output_hints = snapshot
+    end
+
+    # Output boundary of the typechecker: every carrier becomes the exact legacy Unknown spelling.
+    def erase_inference_carriers!(node)
+      case node
+      when Hash
+        node.each do |key, value|
+          node[key] = erased_carrier(value) if value.is_a?(Hash) && carrier_of(value).is_a?(String)
+          erase_inference_carriers!(node[key])
+        end
+      when Array
+        node.each_index do |i|
+          node[i] = erased_carrier(node[i]) if node[i].is_a?(Hash) && carrier_of(node[i]).is_a?(String)
+          erase_inference_carriers!(node[i])
+        end
+      end
+      node
+    end
+
+    def erased_carrier(value)
+      %w[hole error record].include?(value[CARRIER_KEY]) && value["name"] == "Unknown" ? open_type : value
     end
 
     def structural_mismatch(expected, actual, node)
@@ -3957,16 +4509,19 @@ module IgniterLang
         end
       end
       return_expr = body.fetch("return_expr", nil)
-      typed_return = return_expr &&
-                     infer_expr(return_expr, symbol_types, type_errors, type_warnings, fn_name)
       declared = type_ir(decl.fetch("return_type", "Unknown"))
-      actual = typed_return ? typed_return.fetch("resolved_type") : type_ir("Unit")
-      unless unknown_or_unknown_bearing?(declared) || unknown_or_unknown_bearing?(actual) ||
-             structurally_assignable?(actual, declared)
+      report_return = lambda do |actual_type|
         type_errors << function_oof("OOF-TY0",
-          "function '#{fn_name}': body type #{type_display(actual)} does not match declared return type #{type_display(declared)}",
+          "function '#{fn_name}': body type #{type_display(actual_type)} does not match declared return type #{type_display(declared)}",
           decl)
       end
+      # R22 (§3.3b): an annotated def return is the written context of its body expression.
+      set_expected_context(return_expr, declared) if return_expr && type_name(declared) != "Unknown"
+      typed_return = return_expr &&
+                     infer_expr(return_expr, symbol_types, type_errors, type_warnings, fn_name)
+      actual = typed_return ? typed_return.fetch("resolved_type") : type_ir("Unit")
+      # R22 (§3.3b boundaries): family before deferral; an error body is silent.
+      report_return.call(actual) if fit(actual, declared) == :no
       typed_body = { "stmts" => typed_stmts }
       typed_body["return_expr"] = typed_return if typed_return
       typed_body
@@ -4346,6 +4901,8 @@ module IgniterLang
     # LANG-TYPED-CALLABLE-REPRESENTATION-AND-ADMISSION-READINESS-R10: extracted from
     # infer_fold_call, which previously held it inline — the R10 stream check restated it and
     # dropped the text join, refusing a String/Text accumulator the ordinary route admits.
+    # R22 (ch3 §3.3b): since the collection-join law, this pre-R21 rule owns ONLY the fold_stream
+    # callable (ch6 §6.4.1, unchanged); ordinary `fold` uses the §3.3b J + fill-only refinement.
     def accumulator_result_compatible?(body_name, acc_name)
       text_names = %w[Text String].freeze
       text_compatible = text_names.include?(body_name) && text_names.include?(acc_name)
@@ -4459,6 +5016,14 @@ module IgniterLang
     def infer_text_call(fn, args, symbol_types, type_errors, type_warnings, node_name, typed: {})
       spec           = TEXT_STDLIB_FNS.fetch(fn)
       expected_count = spec[:arg_types].length
+      # R22 A1 (REVIEW RECHECK-1 F9, ch3 §3.3b): `join` is an A1 owner — when it reports, its value is the error carrier,
+      # never its return family typed past the refusal (a mismatching annotation or operator would add a derivative
+      # line). The other text owners keep the pre-R22 class (disclosed residual).
+      errors_before  = type_errors.length
+      nested_before  = r22_nested(type_errors)
+      # R22 A2 (RECHECK-1 F8): the arguments are inferred below, so the count is the nested-aware difference
+      # (a nested-scope diagnostic inside an argument's lambda is not this owner's report).
+      yields_error   = ->(t) { fn == "join" && ((type_errors.length - errors_before) - (r22_nested(type_errors) - nested_before)) > 0 ? error_type : t }
 
       # Arity check — early return with empty args if wrong
       if args.length != expected_count
@@ -4467,15 +5032,23 @@ module IgniterLang
           "stdlib.text.#{fn}: expected #{expected_count} argument(s), got #{args.length}",
           node_name
         )
-        return typed_expr("call", text_stdlib_return_type(spec[:return_type]), [],
+        return typed_expr("call", yields_error.call(text_stdlib_return_type(spec[:return_type])), [],
                           "fn" => "stdlib.text.#{fn}", "args" => [])
       end
 
       # Infer and validate each argument
       typed_args = args.each_with_index.map do |arg, idx|
         ta       = typed.fetch(idx) { infer_expr(arg, symbol_types, type_errors, type_warnings, node_name) }
-        actual   = type_name(ta.fetch("resolved_type"))
         expected = spec[:arg_types][idx]
+        # R22 A1 (F4 / REVIEW-1 F5): a Collection position (`join`) judges the gate name — an unnamed record family
+        # is the KNOWN family `Record`, never the permissive `Unknown` of its legacy spelling. The Text positions of
+        # the text owners keep the pre-R22 deferral (disclosed residual, REVIEW-1 F8); `concat`'s text route is
+        # closed at its own owner (`infer_concat_call`).
+        actual   = if expected == "Collection"
+                     collection_gate_name(ta.fetch("resolved_type"))
+                   else
+                     type_name(ta.fetch("resolved_type"))
+                   end
         unless actual == "Unknown" || text_arg_compatible?(actual, expected)
           type_errors << oof(
             "OOF-TY0",
@@ -4487,7 +5060,7 @@ module IgniterLang
       end
 
       deps = typed_args.flat_map { |ta| ta.fetch("deps") }.uniq
-      typed_expr("call", text_stdlib_return_type(spec[:return_type]), deps,
+      typed_expr("call", yields_error.call(text_stdlib_return_type(spec[:return_type])), deps,
                  "fn" => "stdlib.text.#{fn}", "args" => typed_args)
     end
 
@@ -4873,10 +5446,28 @@ module IgniterLang
 
     # ── PROP-039 gate 8: loop body helpers ─────────────────────────────────────
 
+    # R22 A1 (F4, ch3 §3.3b HOF / boundaries): the family name a collection owner's existing gate judges.
+    # An unnamed record family is the KNOWN non-collection family `Record` (never the permissive `Unknown`
+    # its legacy spelling would suggest), so every existing `Collection`-or-`Unknown` gate refuses it with
+    # its own OOF-COL2 (OOF-L1 for a loop source); a hole or declared openness stays `Unknown` (permissive);
+    # any other type is its own name.
+    def collection_gate_name(t)
+      return "Record" if t.is_a?(Hash) && record_family?(t)
+
+      t.is_a?(Hash) ? t.fetch("name", "Unknown") : "Unknown"
+    end
+
     # Return element type T from a Collection[T] type_ir value.
     # Returns type_ir("Unknown") for non-parameterised or non-Collection types.
     def element_type_from_collection(collection_type)
       return type_ir("Unknown") unless collection_type.is_a?(Hash)
+      # R22 (§3.3b HOF element): the carrier's ONE element keeps its carrier — an erroneous
+      # carrier gives an error element (the callback is silent), a hole value a hole element.
+      return error_type if error_carrier?(collection_type)
+      return hole_type if hole?(collection_type)
+      # Inference never produces openness: an unnamed record family read as a collection is that known
+      # family (never open); R22 A1 (F4) its collection owners refuse it before this element is used.
+      return collection_type if record_family?(collection_type)
       params = collection_type.fetch("params", [])
       first  = params.first
       return type_ir("Unknown") unless first
@@ -5222,26 +5813,67 @@ module IgniterLang
 
       map_arg = infer_expr(args[0], symbol_types, type_errors, type_warnings, node_name)
       key_arg = infer_expr(args[1], symbol_types, type_errors, type_warnings, node_name)
+      deps = (map_arg.fetch("deps", []) + key_arg.fetch("deps", [])).uniq
+      extra = { "fn" => "stdlib.map.get", "args" => [map_arg, key_arg] }
 
       map_type = map_arg.fetch("resolved_type")
+      key_type = key_arg.fetch("resolved_type")
+      # R22 (§3.3b Maps): an erroneous operand is silent; the key must JOIN the map's key family.
+      return typed_error("call", deps, extra) if error_bearing?(map_type) || error_bearing?(key_type)
+
       unless type_name(map_type) == "Map" || type_name(map_type) == "Unknown"
         type_errors << oof(
           "OOF-TY0",
           "map_get: first argument must be Map[String,V], got #{type_name(map_type)}",
           node_name
         )
+        return typed_error("call", deps, extra)
       end
 
-      value_type = if type_name(map_type) == "Map"
-        params = map_type.fetch("params", [])
-        params.length >= 2 ? params[1] : type_ir("Unknown")
-      else
-        type_ir("Unknown")
+      key_family, value_type = map_key_value_families("map_get", map_type, node_name, type_errors)
+      return typed_error("call", deps, extra) if value_type.nil?
+
+      if key_family && join_types([key_type, key_family]).nil?
+        type_errors << oof(
+          "OOF-TY0",
+          "stdlib.map.get arg 2: expected #{type_display(key_family)} key, got #{type_display(key_type)}",
+          node_name
+        )
+        return typed_error("call", deps, extra)
       end
 
-      deps = (map_arg.fetch("deps", []) + key_arg.fetch("deps", [])).uniq
-      typed_expr("call", option_type_ir(value_type), deps,
-                 "fn" => "stdlib.map.get", "args" => [map_arg, key_arg])
+      typed_expr("call", option_type_ir(value_type), deps, extra)
+    end
+
+    # R22 (§3.3b Maps): the key and value families a map-shaped operand offers. A Map[K, V] offers
+    # K and V; a record literal used as a map (an unnamed record family) offers key String and the
+    # JOIN of its fields (no join: OOF-TY0, record fields have no common value family); a
+    # declared-open operand offers no key constraint and an open value (pre-R22 behavior); a hole offers a
+    # hole value.
+    # Returns [key_family_or_nil, value_type_or_nil]; a nil value means a diagnostic was reported.
+    def map_key_value_families(owner, map_type, node_name, type_errors)
+      if record_family?(map_type)
+        field_types = map_type.fetch("fields", {}).values
+        value = join_types(field_types)
+        if value.nil?
+          type_errors << oof(
+            "OOF-TY0",
+            "#{owner}: record fields have no common value family: #{join_conflict_display(field_types)}",
+            node_name
+          )
+          return [nil, nil]
+        end
+        return [type_ir("String"), value]
+      end
+      # A hole read as a map has a hole value: inference never produces openness. Only a declared-open (or
+      # legacy Unknown) operand offers an open value.
+      return [nil, hole_type] if hole?(map_type)
+      return [nil, type_ir("Unknown")] unless type_name(map_type) == "Map"
+
+      params = map_type.fetch("params", [])
+      key = params[0] ? type_ir(params[0]) : nil
+      value = params.length >= 2 ? params[1] : type_ir("Unknown")
+      [key, value]
     end
 
     # Rule MAP-HAS-KEY: map_has_key(Map[String,V], String) → Bool
@@ -5377,7 +6009,9 @@ module IgniterLang
         return typed_expr("call", type_ir("Unknown"), [], "fn" => "stdlib.map.empty", "args" => [])
       end
 
-      typed_expr("call", map_type_ir("String", "Unknown"), [],
+      # R22 (§3.3b): map_empty() is the Map seed — its value family is a HOLE (solved by joins and
+      # map_put values; spelled Unknown in SemanticIR exactly as before).
+      typed_expr("call", map_type_ir("String", hole_type), [],
                  "fn" => "stdlib.map.empty", "args" => [],
                  "note" => "empty-type-context-inference-deferred-v1")
     end
@@ -5401,8 +6035,16 @@ module IgniterLang
       key_arg = infer_expr(args[1], symbol_types, type_errors, type_warnings, node_name)
       val_arg = infer_expr(args[2], symbol_types, type_errors, type_warnings, node_name)
       typed_args = [map_arg, key_arg, val_arg]
+      deps = typed_args.flat_map { |arg| arg.fetch("deps", []) }.uniq
+      extra = { "fn" => qualified, "args" => typed_args }
       map_type = map_arg.fetch("resolved_type")
       map_name = type_name(map_type)
+      key_type = key_arg.fetch("resolved_type")
+      actual_value_type = val_arg.fetch("resolved_type")
+      # R22 (§3.3b error carrier): an erroneous operand makes the call an error, silently.
+      if typed_args.any? { |arg| error_bearing?(arg.fetch("resolved_type")) }
+        return typed_error("call", deps, extra)
+      end
 
       unless map_name == "Map" || map_name == "Unknown"
         type_errors << oof(
@@ -5410,14 +6052,7 @@ module IgniterLang
           "#{qualified} arg 1: expected Map[String, V], got #{map_name}",
           node_name
         )
-        deps = typed_args.flat_map { |arg| arg.fetch("deps", []) }.uniq
-        return typed_expr("call", type_ir("Unknown"), deps, "fn" => qualified, "args" => typed_args)
-      end
-
-      result_type = if map_name == "Map"
-        map_type
-      else
-        map_type_ir("String", "Unknown")
+        return typed_error("call", deps, extra)
       end
 
       if map_name == "Map"
@@ -5429,39 +6064,79 @@ module IgniterLang
             "#{qualified} arg 1: expected Map[String, V], got #{type_display(map_type)}",
             node_name
           )
-          deps = typed_args.flat_map { |arg| arg.fetch("deps", []) }.uniq
-          return typed_expr("call", type_ir("Unknown"), deps, "fn" => qualified, "args" => typed_args)
+          return typed_error("call", deps, extra)
         end
       end
 
-      key_name = type_name(key_arg.fetch("resolved_type"))
-      unless %w[String Text Unknown].include?(key_name)
+      # R22 (§3.3b Maps): the key JOINS the map's key family (the pre-R22 String-only gate is
+      # replaced, not extended: an Integer key into a declared Map[Unknown, V] is admitted) and the
+      # value JOINS the value family; the result is Map[J(K, k), J(V, v)] so a map_empty() hole
+      # value fills and a declared-open position keeps only openness. A record literal used as a
+      # map offers key String and the join of its fields.
+      key_family, value_family = map_key_value_families("map_put", map_type, node_name, type_errors)
+      return typed_error("call", deps, extra) if value_family.nil?
+
+      key_family ||= hole_type
+      joined_key = join_types([key_family, key_type])
+      if joined_key.nil?
         type_errors << oof(
           "OOF-TY0",
-          "#{qualified} arg 2: expected String key, got #{key_name}",
+          "#{qualified} arg 2: expected #{type_display(key_family)} key, got #{type_display(key_type)}",
           node_name
         )
+        return typed_error("call", deps, extra)
       end
 
-      value_type = if map_name == "Map"
-        params = map_type.fetch("params", [])
-        params.length >= 2 ? type_ir(params[1]) : type_ir("Unknown")
+      value_family = type_ir(value_family)
+      joined_value = join_types([value_family, actual_value_type])
+      if joined_value.nil?
+        type_errors << oof(
+          "OOF-TY0",
+          "#{qualified} arg 3: expected #{type_display(value_family)}, got #{type_display(actual_value_type)}",
+          node_name
+        )
+        return typed_error("call", deps, extra)
+      end
+
+      result_type =
+        if map_name == "Map" && !record_family?(map_type)
+          # The first argument owns a fully known K / V spelling; when the join leaves both unchanged
+          # the result IS the map's own type (the pre-R22 result, byte-identical).
+          result_key = owned_or_joined(key_family, joined_key)
+          result_value = owned_or_joined(value_family, joined_value)
+          map_params = map_type.fetch("params", [])
+          if map_params.length == 2 && result_key == type_ir(map_params[0]) && result_value == type_ir(map_params[1])
+            map_type
+          else
+            map_type_ir(result_key, result_value)
+          end
+        else
+          map_type_ir(joined_key, joined_value)
+        end
+      typed_expr("call", result_type, deps, extra)
+    end
+
+    # R22: an operand that OWNS the family (the map / collection argument) keeps its own spelling
+    # whenever the join is exactly that family; any hole/open position takes the join.
+    def owned_or_joined(owned, joined)
+      owned_ir = type_ir(owned)
+      joined_ir = type_ir(joined)
+      if carrier_free?(owned_ir)
+        carrier_free?(joined_ir) && fit(joined_ir, owned_ir) == :yes ? owned : joined
       else
-        type_ir("Unknown")
+        same_type_modulo_kind?(owned_ir, joined_ir) ? owned : joined
       end
-      actual_value_type = val_arg.fetch("resolved_type")
-      unless unknown_or_unknown_bearing?(value_type) ||
-             unknown_or_unknown_bearing?(actual_value_type) ||
-             structurally_assignable?(actual_value_type, value_type)
-        type_errors << oof(
-          "OOF-TY0",
-          "#{qualified} arg 3: expected #{type_display(value_type)}, got #{type_display(actual_value_type)}",
-          node_name
-        )
-      end
+    end
 
-      deps = typed_args.flat_map { |arg| arg.fetch("deps", []) }.uniq
-      typed_expr("call", result_type, deps, "fn" => qualified, "args" => typed_args)
+    def same_type_modulo_kind?(a, b)
+      strip = lambda do |t|
+        next t unless t.is_a?(Hash)
+
+        t.reject { |k, _| k == "kind" }.transform_values do |v|
+          v.is_a?(Array) ? v.map { |x| strip.call(type_ir(x)) } : (v.is_a?(Hash) ? v.transform_values { |f| strip.call(f) } : v)
+        end
+      end
+      strip.call(type_ir(a)) == strip.call(type_ir(b))
     end
 
     # ── LANG-STDLIB-OUTCOME-PROP-P3: stdlib.outcome helpers ─────────────────────
@@ -5719,7 +6394,7 @@ module IgniterLang
 
       # ── Infer collection argument ─────────────────────────────────────────────
       collection_arg ||= infer_expr(args[0], symbol_types, type_errors, type_warnings, node_name)
-      col_type_name  = type_name(collection_arg.fetch("resolved_type"))
+      col_type_name  = collection_gate_name(collection_arg.fetch("resolved_type"))
 
       # ── OOF-COL2: first arg must be Collection or Unknown ─────────────────────
       unless col_type_name == "Collection" || col_type_name == "Unknown"
@@ -5783,17 +6458,23 @@ module IgniterLang
         # LANG-STDLIB-COLLECTION-FLATMAP-P3: ONE-LEVEL unwrap. The lambda body is `Collection[B]`,
         # and the result is that SAME `Collection[B]` - NOT `collection_type_ir_from(body_type)`,
         # which would wrap it again as `Collection[Collection[B]]`.
-        case type_name(body_type)
-        when "Collection"
-          body_type                                   # Collection[B] (or Collection[Unknown]) as-is
-        when "Unknown"
-          collection_type_ir_from(type_ir("Unknown")) # body fully Unknown -> permissive Collection[Unknown]
+        # R22 A2 (REVIEW-1 F4, ch3 §3.3b): the callback VALUE flows through the owner — an erroneous
+        # body makes the call the error, never a re-wrapped open Collection[Unknown].
+        if error_bearing?(body_type)
+          error_type
         else
-          # -- OOF-COL9: flat_map lambda body must itself be a collection --------------------------
-          type_errors << oof("OOF-COL9",
-            "#{qualified}: lambda body must return Collection[B], got #{type_name(body_type)}",
-            node_name)
-          collection_type_ir_from(type_ir("Unknown")) # recover as Collection[Unknown]
+          case type_name(body_type)
+          when "Collection"
+            body_type                                   # Collection[B] (or Collection[Unknown]) as-is
+          when "Unknown"
+            collection_type_ir_from(type_ir("Unknown")) # body fully Unknown -> permissive Collection[Unknown]
+          else
+            # -- OOF-COL9: flat_map lambda body must itself be a collection --------------------------
+            type_errors << oof("OOF-COL9",
+              "#{qualified}: lambda body must return Collection[B], got #{type_name(body_type)}",
+              node_name)
+            collection_type_ir_from(type_ir("Unknown")) # recover as Collection[Unknown]
+          end
         end
       end
 
@@ -5803,6 +6484,9 @@ module IgniterLang
         "body" => body_typed,
         "resolved_type" => body_type
       }
+      # R22 (§3.3b HOF element): an erroneous carrier (e.g. an OOF-COL13 literal) makes the call an
+      # error; its callback was typed with an error element and stayed silent.
+      output_type = error_type if error_bearing?(collection_arg.fetch("resolved_type"))
 
       typed_expr("call", output_type, all_deps,
                  "fn" => qualified, "args" => [collection_arg, lambda_typed])
@@ -5828,7 +6512,7 @@ module IgniterLang
 
       # ── Infer collection argument ─────────────────────────────────────────────
       collection_arg = infer_expr(args[0], symbol_types, type_errors, type_warnings, node_name)
-      col_type_name  = type_name(collection_arg.fetch("resolved_type"))
+      col_type_name  = collection_gate_name(collection_arg.fetch("resolved_type"))
 
       # ── OOF-COL2: first arg must be Collection or Unknown ─────────────────────
       unless col_type_name == "Collection" || col_type_name == "Unknown"
@@ -5913,7 +6597,7 @@ module IgniterLang
 
       # ── Infer collection argument ─────────────────────────────────────────────
       collection_arg = infer_expr(args[0], symbol_types, type_errors, type_warnings, node_name)
-      col_type_name  = type_name(collection_arg.fetch("resolved_type"))
+      col_type_name  = collection_gate_name(collection_arg.fetch("resolved_type"))
 
       # ── OOF-COL2: first arg must be Collection or Unknown ─────────────────────
       unless col_type_name == "Collection" || col_type_name == "Unknown"
@@ -6001,7 +6685,7 @@ module IgniterLang
 
       # ── Infer collection argument ─────────────────────────────────────────────
       collection_arg = infer_expr(args[0], symbol_types, type_errors, type_warnings, node_name)
-      col_type_name  = type_name(collection_arg.fetch("resolved_type"))
+      col_type_name  = collection_gate_name(collection_arg.fetch("resolved_type"))
 
       # ── OOF-COL2: first arg must be Collection or Unknown ─────────────────────
       unless col_type_name == "Collection" || col_type_name == "Unknown"
@@ -6048,7 +6732,7 @@ module IgniterLang
     # (@collection_output_hints, route B2). While inferring the callback body, the
     # expected Option[U] is temp-installed as a sealed hint so none()/some() resolve
     # against U. SIR mirrors map per-toolchain: qualified fn, lambda dropped from args.
-    def infer_filter_map_call(args, symbol_types, type_errors, type_warnings, node_name)
+    def infer_filter_map_call(args, symbol_types, type_errors, type_warnings, node_name, context: nil)
       qualified = "stdlib.collection.filter_map"
 
       # ── OOF-COL1: arity must be exactly 2 ────────────────────────────────────
@@ -6060,7 +6744,7 @@ module IgniterLang
 
       # ── Infer collection argument ────────────────────────────────────────────
       collection_arg = infer_expr(args[0], symbol_types, type_errors, type_warnings, node_name)
-      col_type_name  = type_name(collection_arg.fetch("resolved_type"))
+      col_type_name  = collection_gate_name(collection_arg.fetch("resolved_type"))
 
       # ── OOF-COL2: first arg must be Collection or Unknown ────────────────────
       unless col_type_name == "Collection" || col_type_name == "Unknown"
@@ -6085,7 +6769,12 @@ module IgniterLang
       local_symbols = lambda_params.each_with_object(symbol_types.dup) { |p, acc| acc[p] = elem_type }
 
       # ── Route B2: U from Collection[U] output context; install Option[U] hint ─
-      ctx_u     = (@collection_output_hints || {})[node_name]
+      # R22 (§3.3b): the context is THIS call's written expected type (the annotated compute/output/
+      # argument reaching it), never the declaration's annotation leaking into a nested callback.
+      ctx_u =
+        if context && type_name(context.type) == "Collection" && context.type.fetch("params", []).length == 1
+          type_ir(context.type.fetch("params").first)
+        end
       temp_hint = false
       if ctx_u.is_a?(Hash) && type_name(ctx_u) != "Unknown" && !@sealed_output_hints.key?(node_name)
         @sealed_output_hints[node_name] = option_type_ir(ctx_u)
@@ -6112,8 +6801,10 @@ module IgniterLang
           body_inner
         elsif ctx_u.is_a?(Hash) && type_name(ctx_u) != "Unknown"
           ctx_u
+        elsif body_inner.is_a?(Hash)
+          body_inner # R22: an undetermined U stays the callback's hole / openness / error
         else
-          type_ir("Unknown")
+          hole_type
         end
 
       all_deps = (collection_arg.fetch("deps", []) + body_typed.fetch("deps", [])).uniq
@@ -6438,7 +7129,7 @@ module IgniterLang
       end
 
       col_resolved = typed_args[0].fetch("resolved_type", {})
-      col_name     = col_resolved.is_a?(Hash) ? col_resolved.fetch("name", "Unknown") : "Unknown"
+      col_name     = collection_gate_name(col_resolved)
       unless %w[Collection Unknown].include?(col_name)
         type_errors << oof("OOF-COL2",
           "#{qualified}: first argument must be Collection[T], got #{col_name}",
@@ -6507,7 +7198,7 @@ module IgniterLang
       deps = typed_args.flat_map { |arg| arg.fetch("deps", []) }.uniq
 
       collection_type = collection_arg.fetch("resolved_type")
-      collection_name = type_name(collection_type)
+      collection_name = collection_gate_name(collection_type)
       unless %w[Collection Unknown].include?(collection_name)
         type_errors << oof(
           "OOF-COL2",
@@ -6528,20 +7219,33 @@ module IgniterLang
 
       element_type = element_type_from_collection(collection_type)
       replacement_type = replacement_arg.fetch("resolved_type")
-      unless unknown_or_unknown_bearing?(element_type) ||
-             unknown_or_unknown_bearing?(replacement_type) ||
-             structurally_assignable?(replacement_type, element_type)
+      # R22 (§3.3b): set_at needs a join of the element type and the item (holes/openness
+      # permissive at their own positions only); no join is OOF-COL6 (existing message); the result
+      # element is that join. An erroneous operand is silent.
+      if typed_args.any? { |arg| error_bearing?(arg.fetch("resolved_type")) }
+        return typed_error("call", deps, "fn" => qualified, "args" => typed_args)
+      end
+      # R22 A1 (F4): a reported COL2 / COL10 above makes the call an error with no further (COL6) cascade.
+      unless %w[Collection Unknown].include?(collection_name) && %w[Integer Unknown].include?(index_name)
+        return typed_error("call", deps, "fn" => qualified, "args" => typed_args)
+      end
+      joined_element = join_types([element_type, replacement_type])
+      if joined_element.nil?
         type_errors << oof(
           "OOF-COL6",
           "#{qualified}: replacement type #{type_display(replacement_type)} " \
           "does not match collection element type #{type_display(element_type)}",
           node_name
         )
+        return typed_error("call", deps, "fn" => qualified, "args" => typed_args)
       end
-
+      # A hole carrier keeps the computed join (never inferred openness); only a declared-open carrier
+      # stays Collection[Unknown]. (A record family never reaches here: OOF-COL2 above, R22 A1 F4.)
       result_collection =
         if collection_name == "Collection"
-          collection_type_ir_from(element_type)
+          collection_type_ir_from(owned_or_joined(element_type, joined_element))
+        elsif hole?(collection_type)
+          collection_type_ir_from(joined_element)
         else
           unknown_collection
         end
@@ -6574,7 +7278,7 @@ module IgniterLang
 
       inners = typed_args.map do |typed|
         resolved = typed.fetch("resolved_type", {})
-        arg_name = resolved.is_a?(Hash) ? resolved.fetch("name", "Unknown") : "Unknown"
+        arg_name = collection_gate_name(resolved)
         unless %w[Collection Unknown].include?(arg_name)
           type_errors << oof("OOF-COL2",
             "#{qualified}: expected Collection argument, got #{arg_name}",
@@ -6634,7 +7338,7 @@ module IgniterLang
 
       # ── Infer collection argument ────────────────────────────────────────────
       collection_arg = infer_expr(args[0], symbol_types, type_errors, type_warnings, node_name)
-      col_type_name  = type_name(collection_arg.fetch("resolved_type"))
+      col_type_name  = collection_gate_name(collection_arg.fetch("resolved_type"))
 
       # ── OOF-COL2: first arg must be Collection or Unknown ───────────────────
       unless col_type_name == "Collection" || col_type_name == "Unknown"
@@ -6702,7 +7406,28 @@ module IgniterLang
     # ordinary route silently read the OUTER binding (rv12g: 2 for 3). A statement-less block is its
     # final expression, byte-identical to before. `deps` are the block's FREE names: a name read after
     # its own `let` is the local, not a dependency of the node.
+    # R22 A2 (C2): diagnostics emitted inside lambda bodies / branch blocks, per diagnostic sink (keyed by the sink's
+    # object id, so a provisional pass's scratch sink never mixes with the live one); `infer_call` excludes them from
+    # a call's own report.
+    def r22_nested(sink)
+      (@r22_nested_diags ||= {}).fetch(sink.object_id, 0)
+    end
+
+    def r22_note_nested(sink, mark_len, mark_nested)
+      inner = r22_nested(sink) - mark_nested
+      add = (sink.length - mark_len) - inner
+      (@r22_nested_diags ||= {})[sink.object_id] = r22_nested(sink) + add if add > 0
+    end
+
     def infer_lambda_body(body, local_symbols, type_errors, type_warnings, node_name)
+      mark_len = type_errors.length
+      mark_nested = r22_nested(type_errors)
+      infer_lambda_body_inner(body, local_symbols, type_errors, type_warnings, node_name)
+    ensure
+      r22_note_nested(type_errors, mark_len, mark_nested)
+    end
+
+    def infer_lambda_body_inner(body, local_symbols, type_errors, type_warnings, node_name)
       if body.is_a?(Hash) && body.fetch("kind", nil) == "block"
         stmts       = body.fetch("stmts", [])
         return_expr = body.fetch("return_expr", nil)
@@ -6750,7 +7475,7 @@ module IgniterLang
       end
 
       collection_typed = infer_expr(args[0], symbol_types, type_errors, type_warnings, node_name)
-      col_type_name    = type_name(collection_typed.fetch("resolved_type"))
+      col_type_name    = collection_gate_name(collection_typed.fetch("resolved_type"))
 
       unless col_type_name == "Collection" || col_type_name == "Unknown"
         type_errors << oof("OOF-COL4",
@@ -6784,34 +7509,101 @@ module IgniterLang
                           "args" => [collection_typed, seed_typed])
       end
 
-      elem_type     = element_type_from_collection(collection_typed.fetch("resolved_type"))
-      local_symbols = symbol_types.merge(lambda_params[0] => acc_type, lambda_params[1] => elem_type)
-
+      elem_type   = element_type_from_collection(collection_typed.fetch("resolved_type"))
       lambda_body = lambda_node.fetch("body")
+      seed_type   = acc_type
+
+      # R22 (ch3 §3.3b fold): the accumulator is ONE value typed J(seed, body) at its least fixed
+      # point. Provisional passes type the body into a SCRATCH sink (hint tables snapshotted and
+      # restored) and report nothing; the first refinement J(seed, body(seed)) is free; later passes
+      # may only fill a hole with a hole-free type (or make a position open). No join, a later pass
+      # that gains a new hole, or no settle within FOLD_REFINEMENT_LIMIT passes is OOF-COL4. The
+      # verdict and the lowering come from ONE real pass with the final accumulator, which reports
+      # only the body's own diagnostics (an unused bad statement never manufactures OOF-COL4). A body
+      # that is an error stops refinement silently; its owning diagnostic comes from the real pass.
+      status = nil
+      failing_next = nil
+      failing_body = nil
+      if error_bearing?(seed_type) || error_bearing?(elem_type)
+        status = :error
+      else
+        first_refinement = true
+        FOLD_REFINEMENT_LIMIT.times do
+          body_type = provisional_lambda_body_type(lambda_body, symbol_types, lambda_params, acc_type,
+                                                   elem_type, node_name)
+          if error_bearing?(body_type)
+            status = :error
+            break
+          end
+          nxt = prefer_spelling(join_types([acc_type, body_type]), acc_type, body_type)
+          if nxt.nil?
+            status = :no_join
+            failing_body = body_type
+            break
+          end
+          if !first_refinement && !fills_only?(acc_type, nxt)
+            status = :new_hole
+            failing_next = nxt
+            break
+          end
+          if nxt == acc_type
+            status = :settled
+            break
+          end
+          acc_type = nxt
+          first_refinement = false
+        end
+        status ||= :no_settle
+      end
+
+      local_symbols = symbol_types.merge(lambda_params[0] => acc_type, lambda_params[1] => elem_type)
       body_typed  = infer_lambda_body(lambda_body, local_symbols, type_errors, type_warnings, node_name)
       body_type   = body_typed.fetch("resolved_type")
 
-      body_name = type_name(body_type)
-      acc_name  = type_name(acc_type)
-      # LANG-STRING-TEXT-FOLD-ACCUMULATOR-PARITY-P1: extend the ratified String≡Text
-      # alias-compatibility (LANG-STRING-TEXT-CANONICALIZE-RUBY-P2 line) to the fold
-      # accumulator join — a String seed ("" literal) with a Text-returning lambda
-      # (concat/int_to_text/...) is the same runtime text value; Rust is already
-      # permissive here. Non-text types keep the exact-match rule.
-      unless accumulator_result_compatible?(body_name, acc_name)
-        type_errors << oof("OOF-COL4",
-          "#{qualified}: lambda return type #{body_name} does not match accumulator type #{acc_name}",
-          node_name)
-      end
+      result_type =
+        case status
+        when :settled
+          error_bearing?(body_type) ? error_type : acc_type
+        when :error
+          error_type
+        when :no_join
+          # Existing owner text (a divergence from Rust is recorded, not forced).
+          type_errors << oof("OOF-COL4",
+            "#{qualified}: lambda return type #{type_name(failing_body)} does not match accumulator type #{type_name(acc_type)}",
+            node_name)
+          error_type
+        when :new_hole
+          type_errors << oof("OOF-COL4",
+            "#{qualified}: accumulator gains a new hole after its first refinement: " \
+            "#{type_display(acc_type)} -> #{type_display(failing_next)}",
+            node_name)
+          error_type
+        else
+          type_errors << oof("OOF-COL4", "#{qualified}: accumulator does not settle", node_name)
+          error_type
+        end
 
       all_deps = (collection_typed.fetch("deps", []) + seed_typed.fetch("deps", []) + body_typed.fetch("deps", [])).uniq
       lambda_typed = {
         "kind" => "lambda",
         "params" => lambda_params,
         "body" => body_typed,
-        "resolved_type" => acc_type
+        "resolved_type" => error_bearing?(result_type) ? acc_type : result_type
       }
-      typed_expr("call", acc_type, all_deps, "fn" => qualified, "args" => [collection_typed, seed_typed, lambda_typed])
+      typed_expr("call", result_type, all_deps, "fn" => qualified, "args" => [collection_typed, seed_typed, lambda_typed])
+    end
+
+    FOLD_REFINEMENT_LIMIT = 32
+
+    # R22 (§3.3b): a provisional fold pass — the body typed with the candidate accumulator into a
+    # scratch diagnostic sink, with every hint table restored afterwards. It yields no exported type
+    # other than the body type the refinement consumes; the owning real pass re-derives everything.
+    def provisional_lambda_body_type(lambda_body, symbol_types, lambda_params, acc_type, elem_type, node_name)
+      snapshot = snapshot_hint_tables
+      local_symbols = symbol_types.merge(lambda_params[0] => acc_type, lambda_params[1] => elem_type)
+      infer_lambda_body(lambda_body, local_symbols, [], [], node_name).fetch("resolved_type")
+    ensure
+      restore_hint_tables(snapshot)
     end
 
     # LANG-STDLIB-COLLECTION-APPEND-PROP-P3: stdlib.collection.append
@@ -6833,7 +7625,7 @@ module IgniterLang
 
       # ── Infer collection arg ──────────────────────────────────────────────────
       collection_arg = infer_expr(args[0], symbol_types, type_errors, type_warnings, node_name)
-      col_type_name  = type_name(collection_arg.fetch("resolved_type"))
+      col_type_name  = collection_gate_name(collection_arg.fetch("resolved_type"))
 
       # ── OOF-COL2: first arg must be Collection or Unknown ─────────────────────
       unless col_type_name == "Collection" || col_type_name == "Unknown"
@@ -6848,18 +7640,27 @@ module IgniterLang
       item_arg  = infer_expr(args[1], symbol_types, type_errors, type_warnings, node_name)
       elem_type = element_type_from_collection(collection_arg.fetch("resolved_type"))
       elem_name = type_name(elem_type)
-      item_name = type_name(item_arg.fetch("resolved_type"))
+      item_type = item_arg.fetch("resolved_type")
+      item_name = type_name(item_type)
+      all_deps = (collection_arg.fetch("deps", []) + item_arg.fetch("deps", [])).uniq
+      extra = { "fn" => qualified, "args" => [collection_arg, item_arg] }
 
-      # ── OOF-COL6: concrete type mismatch (Unknown permissive on both sides) ───
-      unless elem_name == "Unknown" || item_name == "Unknown" || elem_name == item_name
+      # ── R22 (§3.3b): append needs a join of the element type and the item ─────
+      # Holes and openness are permissive at their own positions (a hole element takes the item's
+      # family); a nested conflict has no join; no join is OOF-COL6 (existing message) and the call is
+      # an error; the result element is the join. An erroneous operand is silent.
+      if error_bearing?(collection_arg.fetch("resolved_type")) || error_bearing?(item_type)
+        return typed_error("call", all_deps, extra)
+      end
+      joined = join_types([elem_type, item_type])
+      if joined.nil?
         type_errors << oof("OOF-COL6",
           "#{qualified}: item type #{item_name} does not match collection element type #{elem_name}",
           node_name)
+        return typed_error("call", all_deps, extra)
       end
 
-      all_deps = (collection_arg.fetch("deps", []) + item_arg.fetch("deps", [])).uniq
-      typed_expr("call", collection_type_ir_from(elem_type), all_deps,
-                 "fn" => qualified, "args" => [collection_arg, item_arg])
+      typed_expr("call", collection_type_ir_from(owned_or_joined(elem_type, joined)), all_deps, extra)
     end
 
     # LANG-STDLIB-IS-EMPTY-PROP-P3: stdlib.collection.is_empty + stdlib.collection.non_empty
@@ -6880,7 +7681,7 @@ module IgniterLang
 
       # ── Infer collection arg ──────────────────────────────────────────────────
       collection_typed = infer_expr(args[0], symbol_types, type_errors, type_warnings, node_name)
-      col_type_name    = type_name(collection_typed.fetch("resolved_type"))
+      col_type_name    = collection_gate_name(collection_typed.fetch("resolved_type"))
 
       # ── OOF-COL2: first arg must be Collection or Unknown ─────────────────────
       unless col_type_name == "Collection" || col_type_name == "Unknown"
@@ -7062,21 +7863,39 @@ module IgniterLang
       end
 
       first_arg       = infer_expr(args[0], symbol_types, type_errors, type_warnings, node_name)
-      first_type_name = type_name(first_arg.fetch("resolved_type"))
+      first_type_name = collection_gate_name(first_arg.fetch("resolved_type"))
+
+      # R22 A1 (ch3 §3.3b error carrier): an erroneous first argument yields the error BEFORE routing — it must never
+      # select the collection route by its legacy `Unknown` name and then gate the other argument (a cascade
+      # `second argument must be Collection[T], got Text` after an unresolved field in an interpolation).
+      if error_bearing?(first_arg.fetch("resolved_type"))
+        rest = args[1..].map { |a| infer_expr(a, symbol_types, type_errors, type_warnings, node_name) }
+        return typed_error("call", ([first_arg] + rest).flat_map { |a| a.fetch("deps", []) }.uniq,
+                           "fn" => qualified, "args" => [first_arg] + rest)
+      end
 
       # Text/String/other concrete → delegate to stdlib.text.concat.
       # LANG-STRING-TEXT-ALIAS-P2: when both args are String, route to stdlib.string.concat → String.
       # String literals and String-typed refs both have type_name "String".
-      unless first_type_name == "Collection" || first_type_name == "Unknown"
+      # R22 A1 (F4): an unnamed record family is a KNOWN non-collection, non-text family — it takes the
+      # collection path and is refused there by the collection owner (OOF-COL2), never routed to text.
+      unless first_type_name == "Collection" || first_type_name == "Unknown" || first_type_name == "Record"
         typed = { 0 => first_arg }
-        if first_type_name == "String" && args.length == 2
+        if args.length == 2
           second_arg       = infer_expr(args[1], symbol_types, type_errors, type_warnings, node_name)
           second_type_name = type_name(second_arg.fetch("resolved_type"))
           typed[1] = second_arg
-          if second_type_name == "String"
-            deps = (first_arg.fetch("deps", []) + second_arg.fetch("deps", [])).uniq
+          deps = (first_arg.fetch("deps", []) + second_arg.fetch("deps", [])).uniq
+          if first_type_name == "String" && second_type_name == "String"
             return typed_expr("call", type_ir("String"), deps,
                               "fn" => "stdlib.string.concat", "args" => [first_arg, second_arg])
+          end
+          # R22 A1 (F4 / REVIEW-1 F5): on the text route the second argument is judged by the gate name too — an
+          # unnamed record family is the KNOWN family `Record`, refused by the text owner's existing OOF-TY0 text
+          # (Rust's concat arm: the same text), never deferred as openness; the reported owner's value is the error.
+          if collection_gate_name(second_arg.fetch("resolved_type")) == "Record"
+            type_errors << oof("OOF-TY0", "stdlib.text.concat arg 2: expected Text, got Record", node_name)
+            return typed_error("call", deps, "fn" => "stdlib.text.concat", "args" => [first_arg, second_arg])
           end
         end
         return infer_text_call(fn, args, symbol_types, type_errors, type_warnings, node_name, typed: typed)
@@ -7090,9 +7909,18 @@ module IgniterLang
                           "fn" => qualified, "args" => [first_arg])
       end
 
+      # ── R22 A1 (F4) OOF-COL2: a record-family first arg is a known non-collection ─────
+      if first_type_name == "Record"
+        type_errors << oof("OOF-COL2",
+          "#{qualified}: first argument must be Collection[T], got Record", node_name)
+        second_arg = infer_expr(args[1], symbol_types, type_errors, type_warnings, node_name)
+        return typed_error("call", (first_arg.fetch("deps", []) + second_arg.fetch("deps", [])).uniq,
+                           "fn" => qualified, "args" => [first_arg, second_arg])
+      end
+
       # ── Infer second arg ──────────────────────────────────────────────────────
       second_arg       = infer_expr(args[1], symbol_types, type_errors, type_warnings, node_name)
-      second_type_name = type_name(second_arg.fetch("resolved_type"))
+      second_type_name = collection_gate_name(second_arg.fetch("resolved_type"))
 
       # ── OOF-COL2: second arg must be Collection or Unknown ────────────────────
       unless second_type_name == "Collection" || second_type_name == "Unknown"
@@ -7108,20 +7936,25 @@ module IgniterLang
       elem2      = element_type_from_collection(second_arg.fetch("resolved_type"))
       elem1_name = type_name(elem1)
       elem2_name = type_name(elem2)
+      all_deps = (first_arg.fetch("deps", []) + second_arg.fetch("deps", [])).uniq
+      extra = { "fn" => qualified, "args" => [first_arg, second_arg] }
 
-      # ── OOF-COL7: element type mismatch (first activation) ───────────────────
-      # Only when both element types are concrete and different (Unknown permissive).
-      unless elem1_name == "Unknown" || elem2_name == "Unknown" || elem1_name == elem2_name
+      # ── R22 (§3.3b): concat needs a join of both element types ───────────────
+      # Holes/openness permissive at their own positions (also nested); a nested conflict has no
+      # join; no join is OOF-COL7 (existing message) and the call is an error; the result element is
+      # the join (commutative — the `++` operator path uses the same join). An error is silent.
+      if error_bearing?(first_arg.fetch("resolved_type")) || error_bearing?(second_arg.fetch("resolved_type"))
+        return typed_error("call", all_deps, extra)
+      end
+      result_elem = join_types([elem1, elem2])
+      if result_elem.nil?
         type_errors << oof("OOF-COL7",
           "#{qualified}: element type mismatch — first collection contains #{elem1_name}, second contains #{elem2_name}",
           node_name)
+        return typed_error("call", all_deps, extra)
       end
 
-      # Result type: prefer first arg's element type; fall back to second's if Unknown
-      result_elem = elem1_name == "Unknown" ? elem2 : elem1
-      all_deps = (first_arg.fetch("deps", []) + second_arg.fetch("deps", [])).uniq
-      typed_expr("call", collection_type_ir_from(result_elem), all_deps,
-                 "fn" => qualified, "args" => [first_arg, second_arg])
+      typed_expr("call", collection_type_ir_from(prefer_spelling(result_elem, elem1, elem2)), all_deps, extra)
     end
 
     # Rule OR-ELSE: or_else(Option[V], V) → V. The historical Result[T,E]
@@ -7139,7 +7972,19 @@ module IgniterLang
 
       opt_type = opt_arg.fetch("resolved_type")
       opt_name = type_name(opt_type)
-      inner_type = case opt_name
+      sir_fn = opt_name == "Result" ? "result_unwrap_or" : "or_else"
+      deps = (opt_arg.fetch("deps", []) + default_arg.fetch("deps", [])).uniq
+      extra = { "fn" => sir_fn, "args" => [opt_arg, default_arg] }
+      default_type = default_arg.fetch("resolved_type")
+      if error_bearing?(opt_type) || error_bearing?(default_type)
+        return typed_error("call", deps, extra)
+      end
+
+      # R22 A2 (C1, ch3 §3.3b boundaries / §3.2a): the receiver's FAMILY is judged before the payload join — an
+      # unnamed record family is the KNOWN family `Record` (never the permissive `Unknown` of its legacy spelling);
+      # only declared openness and a hole stay permissive. (The accepted base refused `or_else(rec, 1)` at the output
+      # port; R22 / A1 admitted it — a real new admission, closed here at the owner.)
+      inner_type = case collection_gate_name(opt_type)
       when "Option", "Result"
         params = opt_type.fetch("params", [])
         params.length >= 1 ? params[0] : type_ir("Unknown")
@@ -7148,16 +7993,24 @@ module IgniterLang
       else
         type_errors << oof(
           "OOF-TY0",
-          "or_else requires Option[V] or Result[V,E], got #{opt_name}",
+          "or_else requires Option[V] or Result[V,E], got #{collection_gate_name(opt_type)}",
           node_name
         )
-        type_ir("Unknown")
+        return typed_error("call", deps, extra)
       end
-      sir_fn = opt_name == "Result" ? "result_unwrap_or" : "or_else"
 
-      deps = (opt_arg.fetch("deps", []) + default_arg.fetch("deps", [])).uniq
-      typed_expr("call", inner_type, deps,
-                 "fn" => sir_fn, "args" => [opt_arg, default_arg])
+      # R22 (§3.3b): or_else is J(payload, fallback); no join is OOF-TY0 (DESIGN §6 text).
+      joined = join_types([inner_type, default_type])
+      if joined.nil?
+        type_errors << oof(
+          "OOF-TY0",
+          "or_else: payload #{type_display(inner_type)} and fallback #{type_display(default_type)} have no common family",
+          node_name
+        )
+        return typed_error("call", deps, extra)
+      end
+
+      typed_expr("call", prefer_spelling(joined, inner_type, default_type), deps, extra)
     end
 
     # LANG-SUMTYPE-CONSTRUCT-MATCH-P3: sealed built-in constructors.
@@ -7181,7 +8034,7 @@ module IgniterLang
           # accidentally manufacture Option[Option[Option[T]]].
           previous_hint = @sealed_output_hints[node_name]
           @sealed_output_hints[node_name] =
-            hint.fetch("params", []).fetch(0, type_ir("Unknown"))
+            hint.fetch("params", []).fetch(0, hole_type)
           begin
             args.map { |a| infer_expr(a, symbol_types, type_errors, type_warnings, node_name) }
           ensure
@@ -7251,9 +8104,11 @@ module IgniterLang
     def sealed_arity(fn) = fn == "none" ? 0 : 1
 
     # Recover param[idx] from an expected-type hint of the given family, else Unknown.
+    # R22 (§3.3b): a param no argument or context determines (none() payload, the missing side of
+    # ok/err) is a HOLE, spelled Unknown in SemanticIR exactly as before.
     def hint_param(hint, family, idx)
-      return type_ir("Unknown") unless hint && type_name(hint) == family
-      hint.fetch("params", []).fetch(idx, type_ir("Unknown"))
+      return hole_type unless hint && type_name(hint) == family
+      hint.fetch("params", []).fetch(idx, hole_type)
     end
 
     def build_sealed_construct(arm, variant, typed_fields, resolved_type, deps)
@@ -7285,24 +8140,47 @@ module IgniterLang
 
       out_type = outcome_arg.fetch("resolved_type")
       out_name = type_name(out_type)
-      inner_type = if %w[Option Result].include?(out_name)
+      default_type = default_arg.fetch("resolved_type")
+      sir_fn = out_name == "Result" ? "result_unwrap_or" : "unwrap_or"
+      deps = (outcome_arg.fetch("deps", []) + default_arg.fetch("deps", [])).uniq
+      extra = { "fn" => sir_fn, "args" => [outcome_arg, default_arg] }
+      # R22 (§3.3b error carrier): an erroneous operand is silent and the call is an error.
+      if error_bearing?(out_type) || error_bearing?(default_type)
+        return typed_error("call", deps, extra)
+      end
+
+      # R22 A2 (C1, ch3 §3.3b boundaries / §3.2a): the receiver's FAMILY is judged before the payload join — an
+      # unnamed record family is the KNOWN family `Record` (never the permissive `Unknown` of its legacy spelling), so
+      # it is refused below by the owner's existing text like a scalar or a named record; only declared openness and
+      # a hole stay permissive.
+      out_gate = collection_gate_name(out_type)
+      if %w[Option Result].include?(out_name)
         params = out_type.fetch("params", [])
-        params.length >= 1 ? params[0] : default_arg.fetch("resolved_type")
-      elsif out_name == "Unknown"
-        default_arg.fetch("resolved_type")
-      else
+        payload = params.length >= 1 ? params[0] : hole_type
+        # R22 (§3.3b): unwrap_or is J(payload, fallback) — a hole payload takes the fallback's
+        # family, a declared-open payload keeps openness; no join is OOF-TY0 (DESIGN §6 text).
+        joined = join_types([payload, default_type])
+        if joined.nil?
+          type_errors << oof(
+            "OOF-TY0",
+            "unwrap_or: payload #{type_display(payload)} and fallback #{type_display(default_type)} have no common family",
+            node_name
+          )
+          return typed_error("call", deps, extra)
+        end
+        return typed_expr("call", prefer_spelling(joined, payload, default_type), deps, extra)
+      elsif out_gate != "Unknown"
         type_errors << oof(
           "OOF-TY0",
-          "unwrap_or requires Option[T] or Result[T,E], got #{out_name}",
+          "unwrap_or requires Option[T] or Result[T,E], got #{out_gate}",
           node_name
         )
-        default_arg.fetch("resolved_type")
+        return typed_error("call", deps, extra)
       end
-      sir_fn = out_name == "Result" ? "result_unwrap_or" : "unwrap_or"
 
-      deps = (outcome_arg.fetch("deps", []) + default_arg.fetch("deps", [])).uniq
-      typed_expr("call", inner_type, deps,
-                 "fn" => sir_fn, "args" => [outcome_arg, default_arg])
+      # A declared-open outcome's payload is declared open (J keeps openness); a hole outcome keeps
+      # the pre-R22 fallback typing (an unnamed record outcome is refused above since A2).
+      typed_expr("call", open_carrier?(out_type) ? open_type : default_type, deps, extra)
     end
 
     # LANG-SUMTYPE-CONSTRUCT-MATCH-P3: and_then(Result[T,E], (T -> Result[U,E])) -> Result[U,E].
@@ -7322,14 +8200,28 @@ module IgniterLang
 
       result_arg ||= infer_expr(args[0], symbol_types, type_errors, type_warnings, node_name)
       res_type   = result_arg.fetch("resolved_type")
-      unless %w[Result Unknown].include?(type_name(res_type))
+      # R22 A1 (ch3 §3.3b error carrier): an erroneous receiver yields the error and reports nothing further — the
+      # Result-return check below depends on the receiver's family and would be a cascade; the lambda body is still
+      # typed for its own diagnostics.
+      if error_bearing?(res_type)
+        lambda_node = args[1]
+        if lambda_node.is_a?(Hash) && lambda_node.fetch("kind", nil) == "lambda"
+          local_symbols = lambda_node.fetch("params", []).each_with_object(symbol_types.dup) { |p, acc| acc[p] = error_type }
+          infer_lambda_body(lambda_node.fetch("body"), local_symbols, type_errors, type_warnings, node_name)
+        end
+        return typed_error("call", result_arg.fetch("deps", []), "fn" => "stdlib.result.and_then", "args" => [result_arg])
+      end
+      # R22 A1 (F4 / REVIEW-1 F6): the receiver gate judges the gate name — an unnamed record family is the KNOWN
+      # family `Record` (Rust refuses it at its own `and_then` gate), never the permissive `Unknown` of its legacy
+      # spelling; the reported owner's value is the error.
+      unless %w[Result Unknown].include?(collection_gate_name(res_type))
         type_errors << oof(
           "OOF-TY0",
-          "and_then is admitted for Result[T,E], not #{type_name(res_type)}",
+          "and_then is admitted for Result[T,E], not #{collection_gate_name(res_type)}",
           node_name
         )
-        return typed_expr("call", type_ir("Unknown"), result_arg.fetch("deps", []),
-                          "fn" => "stdlib.result.and_then", "args" => [result_arg])
+        return typed_error("call", result_arg.fetch("deps", []),
+                           "fn" => "stdlib.result.and_then", "args" => [result_arg])
       end
       res_params = res_type.fetch("params", [])
       t_type     = res_params.fetch(0, type_ir("Unknown"))
@@ -7373,30 +8265,55 @@ module IgniterLang
                  "fn" => "stdlib.result.and_then", "args" => [result_arg, lambda_typed])
     end
 
-    # array_literal: infers Collection[T] from the first non-Unknown element type.
-    # Empty array: Collection[Unknown]. Required for map_from_pairs pair arrays.
+    # array_literal (R22, ch3 §3.3b Collections): `[]` is Collection[hole]; `[e1, …, en]` is
+    # Collection[J(e1, …, en)] — the whole-set join, order-free, a record-literal member named first
+    # (by its own naming owner). Members with no join are refused OOF-COL13 unless the literal's own
+    # written expected element type is declared open (the annotated compute/port/field/parameter
+    # context reaching this expression, its branches and literal members — never an earlier
+    # binding), which types it Collection[Unknown]. An erroneous member makes the literal an error,
+    # silently. Holes left by the join are then solved by the written element context (and, for the
+    # pre-R22 SemanticIR spelling, the legacy per-declaration element hint).
     def infer_array_literal(expr, symbol_types, type_errors, type_warnings, node_name)
       items = expr.fetch("items", [])
       if items.empty?
-        return typed_expr("array_literal", collection_type_ir_from(type_ir("Unknown")), [], "items" => [])
+        return typed_expr("array_literal", collection_type_ir_from(hole_type), [], "items" => [])
       end
 
+      ctx = expected_context(expr)
+      ctx_elem =
+        if ctx && type_name(ctx.type) == "Collection" && ctx.type.fetch("params", []).length == 1
+          type_ir(ctx.type.fetch("params").first)
+        end
+      items.each { |item| set_expected_context(item, strip_type_ref_kind(ctx_elem)) } if ctx_elem
+
       typed_items = items.map { |item| infer_expr(item, symbol_types, type_errors, type_warnings, node_name) }
-      # A zero-argument `none()` cannot infer T from its own syntax. Prefer a
-      # concrete sibling element, then the declared Collection[T] boundary.
-      # Keep a concrete mismatching sibling authoritative so the binding check
-      # still refuses it instead of allowing expected-type context to hide it.
-      expected_element = @collection_output_hints&.fetch(node_name, nil)
-      elem_type = typed_items.map { |ti| ti.fetch("resolved_type") }
-                             .find { |type| !unknown_or_unknown_bearing?(type) } ||
-        expected_element ||
-        typed_items.map { |ti| ti.fetch("resolved_type") }
-                   .find { |type| type_name(type) != "Unknown" } ||
-        type_ir("Unknown")
+      deps = typed_items.flat_map { |ti| ti.fetch("deps", []) }.uniq
+      member_types = typed_items.map { |ti| ti.fetch("resolved_type") }
+
+      elem_type = join_types(member_types)
+      if elem_type.nil?
+        if ctx_elem && open_carrier?(ctx_elem)
+          elem_type = open_type
+        else
+          type_errors << oof("OOF-COL13",
+            "collection literal members have no common family: #{join_conflict_display(member_types)}",
+            node_name)
+          return typed_error("array_literal", deps, "items" => typed_items)
+        end
+      end
+      return typed_error("array_literal", deps, "items" => typed_items) if error_bearing?(elem_type)
+
+      elem_type = prefer_spelling(elem_type, *member_types)
+
+      # A zero-argument `none()` (or any member hole) cannot infer T from its own syntax: the join
+      # solves it from siblings; a hole the join leaves is solved by the declared element context.
+      expected_element = ctx_elem || @collection_output_hints&.fetch(node_name, nil)
+      if hole_bearing?(elem_type) && expected_element && fit(elem_type, expected_element) == :yes
+        elem_type = open_carrier?(expected_element) ? open_type : fill_holes_from(elem_type, expected_element)
+      end
       typed_items.each do |item|
         contextualize_option_value_construct!(item, elem_type)
       end
-      deps = typed_items.flat_map { |ti| ti.fetch("deps", []) }.uniq
       typed_expr("array_literal", collection_type_ir_from(elem_type), deps, "items" => typed_items)
     end
 
@@ -7414,18 +8331,36 @@ module IgniterLang
       contextualize_option_value_construct!(value, expected_inner) if value
     end
 
-    # record_literal: resolves to named Record type via @output_type_hints if available.
-    # Validates field presence, no extra fields, and type_name compatibility.
-    # Falls back to Unknown if no hint or on field mismatch.
+    # record_literal (R22, ch3 §3.3b record naming — R13 as amended by R21). Naming happens once,
+    # innermost first, BEFORE any join:
+    #   * a hint names it — its own written expected named record type (the identity-keyed context of
+    #     an annotated compute/output/argument/field/element, or the legacy per-declaration hint),
+    #     which also reaches a literal written in a field of that shape. A failing hint is refused
+    #     OOF-TY0 (existing field messages) and never retried; the literal is then an error;
+    #   * a Map[K, V] or declared-open expected type SUPPRESSES structural naming (the literal meets
+    #     it by fit at the boundary);
+    #   * otherwise the one declared shape with exactly its field names whose fields each FIT (holes
+    #     and openness permissive at any depth; an unnamed inner literal judged by its record family;
+    #     optional-field construction unchanged) names it; several are ambiguous (OOF-TY0, sorted);
+    #     none keeps the literal's own unnamed record family.
+    # An erroneous field value makes the literal an error, silently.
     def infer_record_literal(expr, symbol_types, type_errors, type_warnings, node_name)
       fields = expr.fetch("fields", {})
-      hint_type = @output_type_hints&.fetch(node_name, nil)
-      expected_fields_for_hint =
-        if hint_type && type_name(hint_type) != "Unknown"
-          @type_shapes.fetch(type_name(hint_type), {})
-        else
-          {}
+      ctx = expected_context(expr)
+      ctx_type = ctx&.type
+      suppress_naming = false
+      hint_type =
+        if ctx_type && @type_shapes.key?(type_name(ctx_type))
+          ctx_type
+        elsif ctx_type && (type_name(ctx_type) == "Map" || open_carrier?(ctx_type))
+          suppress_naming = true
+          nil
         end
+      # R22 (§3.3b naming, REVIEW-1-VERIFY V3): a hint is only the literal's own written context. The pre-R22
+      # node-keyed @output_type_hints fallback also reached literals nested in calls and fold seeds and suppressed
+      # their ambiguity; it names nothing here any more.
+      hint_type = nil if hint_type && type_name(hint_type) == "Unknown"
+      expected_fields_for_hint = hint_type ? @type_shapes.fetch(type_name(hint_type), {}) : {}
 
       typed_fields = fields.each_with_object({}) do |(fname, val_expr), acc|
         field_node_name = record_literal_field_node_name(node_name, fname)
@@ -7437,42 +8372,24 @@ module IgniterLang
           inner = optional_inner_type(expected_field_type)
           expected_field_type = inner if @type_shapes.key?(type_name(inner))
         end
-
-        if val_expr.is_a?(Hash) &&
-           val_expr.fetch("kind", nil) == "record_literal" &&
-           expected_field_type &&
-           @type_shapes.key?(type_name(expected_field_type))
-          had_previous_hint = @output_type_hints.key?(field_node_name)
-          previous_hint = @output_type_hints[field_node_name]
-          @output_type_hints[field_node_name] = expected_field_type
-          begin
-            acc[fname] = infer_expr(val_expr, symbol_types, type_errors, type_warnings, field_node_name)
-          ensure
-            if had_previous_hint
-              @output_type_hints[field_node_name] = previous_hint
-            else
-              @output_type_hints.delete(field_node_name)
-            end
-          end
-        else
-          acc[fname] = infer_expr(val_expr, symbol_types, type_errors, type_warnings, field_node_name)
-        end
+        # R22: the hinted shape's declared field type is the written context of the field value (a
+        # nested literal is named by it, a nested collection literal may be declared open by it).
+        set_expected_context(val_expr, expected_field_type) if expected_field_type
+        acc[fname] = infer_expr(val_expr, symbol_types, type_errors, type_warnings, field_node_name)
       end
       deps = typed_fields.values.flat_map { |tf| tf.fetch("deps", []) }.uniq
+      field_error = typed_fields.values.any? { |tf| error_bearing?(tf.fetch("resolved_type")) }
 
-      if hint_type && type_name(hint_type) != "Unknown"
-        type_name_str   = type_name(hint_type)
+      if hint_type
         expected_fields = expected_fields_for_hint
         field_errors    = []
 
         expected_fields.each do |fname, expected_type|
           if typed_fields.key?(fname)
             # LANG-EMPTY-COLLECTION-TYPE-PARITY-P1: a required Collection[T] field is
-            # an exact expected type — contextualize an empty literal BEFORE the strict
-            # structural check so `field: []` passes AND the typed field carries T
-            # (previously refused as "expected Collection, got Collection").
-            # Declared-optional fields keep P3 semantics untouched (their branch below
-            # already admits the empty literal via empty_collection_assignable?).
+            # an exact expected type — contextualize an empty literal BEFORE the
+            # structural check so `field: []` passes AND the typed field carries T.
+            # Declared-optional fields keep P3 semantics untouched.
             unless optional_shape_field?(expected_type)
               contextualize_empty_collection_node!(typed_fields[fname], expected_type)
             end
@@ -7500,11 +8417,10 @@ module IgniterLang
                 )
               end
             else
-              unless type_name(actual_type) == "Unknown" ||
-                     structurally_assignable?(actual_type, expected_type)
-                # LANG-EMPTY-COLLECTION-TYPE-PARITY-P1: display FULL parameterised
-                # types — the outer-name-only rendering produced the misleading
-                # "expected Collection, got Collection" for element mismatches.
+              # R22 (§3.3b boundaries): family before deferral — a hole/open position fits only
+              # at that position, an unnamed inner literal by its record family, an error silently.
+              if fit(actual_type, expected_type) == :no
+                # LANG-EMPTY-COLLECTION-TYPE-PARITY-P1: display FULL parameterised types.
                 field_errors << oof(
                   "OOF-TY0",
                   "record literal field '#{fname}': expected #{type_display(expected_type)}, " \
@@ -7527,66 +8443,65 @@ module IgniterLang
           end
         end
 
-        if field_errors.empty?
+        type_errors.concat(field_errors)
+        if field_errors.empty? && !field_error
           return typed_expr("record_literal", hint_type, deps, "fields" => typed_fields)
-        else
-          type_errors.concat(field_errors)
-          return typed_expr("record_literal", type_ir("Unknown"), deps, "fields" => typed_fields)
         end
+        return typed_error("record_literal", deps, "fields" => typed_fields)
       end
 
-      # P3: structural field-set matching against @type_shapes when no hint was available.
-      # Finds all type shapes whose field names exactly equal the literal's field names and
-      # whose field types are compatible (Unknown literal values are permissive).
+      return typed_error("record_literal", deps, "fields" => typed_fields) if field_error
+
       literal_field_names = typed_fields.keys.sort
-      candidates = @type_shapes.select do |tn, shape_fields|
-        if @optional_fields && shape_fields.any? { |_, t| optional_shape_field?(t) }
-          # LANG-OPTIONAL-FIELD-PARTIAL-RECORD-P3 (gate ON, shape has optional
-          # fields): the literal may omit ONLY declared-optional fields —
-          # required ⊆ literal ⊆ all — and present optional values match
-          # against inner T or Option[T].
-          optional_aware_structural_match?(shape_fields, typed_fields, literal_field_names)
-        else
-          shape_fields.keys.sort == literal_field_names &&
-            shape_fields.all? do |fname, exp_type|
-              act_type = typed_fields[fname].fetch("resolved_type")
-              type_name(act_type) == "Unknown" ||
-                structurally_assignable?(act_type, exp_type) ||
-                empty_collection_assignable?(act_type, exp_type)
-            end
+      field_types = typed_fields.transform_values { |tf| tf.fetch("resolved_type") }
+      unless suppress_naming
+        # P3: structural field-set matching against @type_shapes when no hint was available.
+        candidates = @type_shapes.select do |_tn, shape_fields|
+          if @optional_fields && shape_fields.any? { |_, t| optional_shape_field?(t) }
+            # LANG-OPTIONAL-FIELD-PARTIAL-RECORD-P3 (gate ON, shape has optional
+            # fields): the literal may omit ONLY declared-optional fields —
+            # required ⊆ literal ⊆ all — and present optional values match
+            # against inner T or Option[T].
+            optional_aware_structural_match?(shape_fields, typed_fields, literal_field_names)
+          else
+            shape_fields.keys.sort == literal_field_names &&
+              shape_fields.all? { |fname, exp_type| fit(field_types.fetch(fname), exp_type) == :yes }
+          end
+        end
+
+        if candidates.length == 1
+          matched_name, matched_fields = candidates.first
+          # P3: rectangular lowering for the structurally-matched shape too —
+          # inject None for omitted optional fields, auto-wrap present raw-T values.
+          apply_optional_construction!(typed_fields, matched_fields) if @optional_fields
+          # LANG-EMPTY-COLLECTION-TYPE-PARITY-P1: the uniquely-matched shape's
+          # Collection[T] fields are exact expected types — an empty literal
+          # now also CARRIES T in the typed field. Optional fields keep P3 semantics.
+          matched_fields.each do |fname, exp_type|
+            next if optional_shape_field?(exp_type)
+            next unless typed_fields.key?(fname)
+            contextualize_empty_collection_node!(typed_fields[fname], exp_type)
+          end
+          return typed_expr("record_literal", type_ir(matched_name), deps, "fields" => typed_fields)
+        elsif candidates.length > 1
+          type_errors << oof(
+            "OOF-TY0",
+            "Ambiguous record literal type: fields {#{literal_field_names.join(", ")}} match #{candidates.keys.sort.join(", ")}",
+            node_name
+          )
+          return typed_error("record_literal", deps, "fields" => typed_fields)
         end
       end
 
-      if candidates.length == 1
-        matched_name, matched_fields = candidates.first
-        # P3: rectangular lowering for the structurally-matched shape too —
-        # inject None for omitted optional fields, auto-wrap present raw-T values.
-        apply_optional_construction!(typed_fields, matched_fields) if @optional_fields
-        # LANG-EMPTY-COLLECTION-TYPE-PARITY-P1: the uniquely-matched shape's
-        # Collection[T] fields are exact expected types — an empty literal admitted
-        # by empty_collection_assignable? above now also CARRIES T in the typed
-        # field (previously it stayed Collection[Unknown] in the emitted SIR).
-        # Declared-optional fields keep P3 semantics untouched.
-        matched_fields.each do |fname, exp_type|
-          next if optional_shape_field?(exp_type)
-          next unless typed_fields.key?(fname)
-          contextualize_empty_collection_node!(typed_fields[fname], exp_type)
-        end
-        return typed_expr("record_literal", type_ir(matched_name), deps, "fields" => typed_fields)
-      elsif candidates.length > 1
-        type_errors << oof(
-          "OOF-TY0",
-          "Ambiguous record literal type: fields {#{literal_field_names.join(", ")}} match #{candidates.keys.join(", ")}",
-          node_name
-        )
-      end
-
-      typed_expr("record_literal", type_ir("Unknown"), deps, "fields" => typed_fields)
+      # No shape names it: the literal keeps its own unnamed record family (never openness).
+      typed_expr("record_literal", record_family_type(field_types), deps, "fields" => typed_fields)
     end
 
     # LANG-OPTIONAL-FIELD-PARTIAL-RECORD-P3: structural candidate matching when the
     # shape declares optional fields (gate ON only — flags never appear otherwise).
     # required ⊆ literal ⊆ all; present optional values match inner T or Option[T].
+    # R22: present values are judged by the §3.3b fit (holes/openness permissive at any depth, an
+    # unnamed inner literal by its record family); the construction law itself is unchanged.
     def optional_aware_structural_match?(shape_fields, typed_fields, literal_field_names)
       required = shape_fields.reject { |_, t| optional_shape_field?(t) }.keys.sort
       all_names = shape_fields.keys.sort
@@ -7595,15 +8510,11 @@ module IgniterLang
       shape_fields.all? do |fname, exp_type|
         next true unless typed_fields.key?(fname)
         act_type = typed_fields[fname].fetch("resolved_type")
-        next true if type_name(act_type) == "Unknown"
         if optional_shape_field?(exp_type)
           inner = optional_inner_type(exp_type)
-          type_name(act_type) == "Option" ||
-            structurally_assignable?(act_type, inner) ||
-            empty_collection_assignable?(act_type, inner)
+          type_name(act_type) == "Option" || fit(act_type, inner) == :yes || fit(act_type, exp_type) == :yes
         else
-          structurally_assignable?(act_type, exp_type) ||
-            empty_collection_assignable?(act_type, exp_type)
+          fit(act_type, exp_type) == :yes
         end
       end
     end
@@ -7638,9 +8549,12 @@ module IgniterLang
 
       variant_name = resolve_variant_construct_owner(expr, type_errors, node_name)
       if variant_name.nil?
-        return typed_expr("variant_construct", type_ir("Unknown"), [],
-                          "arm" => arm_name, "variant" => nil, "typed_fields" => {})
+        # R22 (§3.3b error carrier): an owner-resolution refusal (OOF-KIND8) is an error.
+        return typed_error("variant_construct", [],
+                           "arm" => arm_name, "variant" => nil, "typed_fields" => {})
       end
+      errors_before = type_errors.length
+      nested_before = r22_nested(type_errors)
 
       arm_fields   = @variant_shapes[variant_name][arm_name]
       typed_fields = {}
@@ -7653,25 +8567,9 @@ module IgniterLang
         # literal must be inferred with the same nominal hint used by typed record
         # boundaries; without it the literal stays Unknown and its inner fields
         # evade structural validation. The hint is scoped to this one expression.
-        if expected &&
-           fexpr.is_a?(Hash) &&
-           fexpr.fetch("kind", nil) == "record_literal" &&
-           @type_shapes.key?(type_name(expected))
-          had_previous_hint = @output_type_hints.key?(node_name)
-          previous_hint = @output_type_hints[node_name]
-          @output_type_hints[node_name] = expected
-          begin
-            typed_f = infer_expr(fexpr, symbol_types, type_errors, type_warnings, node_name)
-          ensure
-            if had_previous_hint
-              @output_type_hints[node_name] = previous_hint
-            else
-              @output_type_hints.delete(node_name)
-            end
-          end
-        else
-          typed_f = infer_expr(fexpr, symbol_types, type_errors, type_warnings, node_name)
-        end
+        # R22 (§3.3b): the declared arm field type is the written context of the field value.
+        set_expected_context(fexpr, expected) if expected
+        typed_f = infer_expr(fexpr, symbol_types, type_errors, type_warnings, node_name)
 
         if expected
           # Reuse the exact empty-literal contextualization law from
@@ -7693,9 +8591,10 @@ module IgniterLang
           # Collection[String] cannot cross Collection[Integer] merely because
           # their outer names match. Either literal Unknown direction retains
           # the established open-boundary behavior at this call site.
-          unless type_name(actual) == "Unknown" ||
-                 type_name(expected) == "Unknown" ||
-                 structurally_assignable?(actual, expected)
+          # R22 (§3.3b boundaries): family before deferral — an open/hole position fits only at
+          # that position (a nested Unknown no longer defers the known outer family), an unnamed
+          # record by its family, an erroneous value silently. Owner stays OOF-KIND2.
+          if fit(actual, expected) == :no
             type_errors << oof("OOF-KIND2",
               "#{variant_name}::#{arm_name} field '#{fname}': " \
               "expected #{type_display(expected)}, got #{type_display(actual)}",
@@ -7718,7 +8617,17 @@ module IgniterLang
         end
       end
 
-      typed_expr("variant_construct", type_ir(variant_name), field_deps.uniq,
+      # R22 A2 (RECHECK-1 F7): the construct's OWN report excludes nested-scope diagnostics inside its field expressions
+      # (an unused bad statement in a field's lambda), exactly like `infer_call`.
+      own_reports = (type_errors.length - errors_before) - (r22_nested(type_errors) - nested_before)
+      construct_type =
+        if own_reports > 0 ||
+           typed_fields.values.any? { |tf| error_bearing?(tf.fetch("resolved_type")) }
+          error_type
+        else
+          type_ir(variant_name)
+        end
+      typed_expr("variant_construct", construct_type, field_deps.uniq,
                  "arm" => arm_name, "variant" => variant_name, "typed_fields" => typed_fields)
     end
 
@@ -7730,8 +8639,11 @@ module IgniterLang
                                 type_errors, type_warnings, node_name)
       subject_type = type_name(subject_node.fetch("resolved_type"))
 
-      # Non-variant subject — OOF-KIND4 (suppress if already Unknown from prior error)
-      unless variant_type?(subject_type) || subject_type == "Unknown"
+      # R22 A1 (F1, ch3 §3.3b boundaries / Rule 5): the subject must be KNOWN to be a variant. Declared
+      # openness is not a variant and a hole subject never exists, so an open, hole, unnamed-record or
+      # any other non-variant subject is refused by the existing OOF-KIND4 owner (no degraded mode, no
+      # SemanticIR). Only an erroneous subject is silent (the error carrier).
+      unless variant_type?(subject_type) || error_bearing?(subject_node.fetch("resolved_type"))
         type_errors << oof("OOF-KIND4",
           "match subject has type '#{subject_type}' which is not a variant type",
           node_name)
@@ -7739,7 +8651,7 @@ module IgniterLang
                                         type_errors, type_warnings, node_name)
       end
 
-      # Unknown subject: degraded mode without OOF-KIND4 (upstream error already explains it)
+      # Erroneous subject: the arms are typed for their own diagnostics; the match is the error.
       unless variant_type?(subject_type)
         return infer_match_expr_degraded(expr, subject_node, symbol_types,
                                         type_errors, type_warnings, node_name)
@@ -7752,6 +8664,12 @@ module IgniterLang
       has_wildcard  = false
       arm_types     = []
       typed_arms    = []
+
+      # R22 (§3.3b / Rule 5): the written expected context reaches every arm result.
+      ctx = expected_context(expr)
+      if ctx
+        expr.fetch("arms").each { |arm| set_expected_context(arm.fetch("body", nil), ctx.type) }
+      end
 
       expr.fetch("arms").each_with_index do |arm, idx|
         pattern = arm.fetch("pattern")
@@ -7812,7 +8730,7 @@ module IgniterLang
             type_errors << oof("OOF-KIND2",
               "binding '#{binding}' is not a field of #{subject_type}::#{arm_name}",
               node_name)
-            arm_bindings[binding] = type_ir("Unknown")
+            arm_bindings[binding] = error_type
           end
         end
 
@@ -7832,7 +8750,8 @@ module IgniterLang
           node_name)
       end
 
-      result_type  = unify_match_arm_types(arm_types, subject_type, node_name, type_errors)
+      result_type  = (ctx && fit_alternatives_to_context(arm_types, ctx)) ||
+                     unify_match_arm_types(arm_types, subject_type, node_name, type_errors)
       subject_deps = subject_node.fetch("deps", [])
       arm_deps     = typed_arms.flat_map { |a| a.fetch("body", {}).fetch("deps", []) }
 
@@ -7849,9 +8768,18 @@ module IgniterLang
 
     def infer_match_expr_degraded(expr, subject_node, symbol_types, type_errors, type_warnings, node_name)
       expr.fetch("arms").each do |arm|
-        infer_expr(arm.fetch("body"), symbol_types, type_errors, type_warnings, node_name)
+        # R22 A1 (REVIEW-1 F4): the arms are typed for their OWN diagnostics only. A pattern binding's type depends
+        # on the refused / erroneous subject, so it is bound to the error carrier — never left unbound (that
+        # manufactured `OOF-P1 Unresolved symbol: <binding>` out of the subject's error).
+        pattern   = arm.fetch("pattern", {})
+        bindings  = pattern.fetch("wildcard", false) ? [] : pattern.fetch("bindings", [])
+        arm_scope = bindings.each_with_object(symbol_types.dup) { |b, acc| acc[b] = error_type }
+        infer_expr(arm.fetch("body"), arm_scope, type_errors, type_warnings, node_name)
       end
-      typed_expr("match_expr", type_ir("Unknown"), subject_node.fetch("deps", []),
+      # R22 A1 (F1): every match that reaches this path was refused (OOF-KIND4) or received an
+      # erroneous subject — its value is the error carrier, never openness, so no SemanticIR is
+      # emitted for it and the emitter never meets a degraded match.
+      typed_expr("match_expr", error_type, subject_node.fetch("deps", []),
                  "subject" => subject_node, "arms" => [], "exhaustive" => false,
                  "has_wildcard" => false)
     end
@@ -7859,7 +8787,11 @@ module IgniterLang
     def infer_unary_op(expr, symbol_types, type_errors, type_warnings, node_name)
       op      = expr.fetch("op")
       operand = infer_expr(expr.fetch("operand"), symbol_types, type_errors, type_warnings, node_name)
-      op_type = type_name(operand.fetch("resolved_type"))
+      op_type = type_name(owner_operand(operand.fetch("resolved_type")))
+      errors_before = type_errors.length
+      # R22 (§3.3b error carrier): an erroneous operand makes the result the error, silently.
+      operand_error = error_bearing?(operand.fetch("resolved_type"))
+      op_type = "Unknown" if operand_error
 
       typed =
         case op
@@ -7883,7 +8815,9 @@ module IgniterLang
             typed_expr("call", operand.fetch("resolved_type"), operand.fetch("deps"),
                        "fn" => "stdlib.decimal.neg", "args" => [operand])
           when "Integer", "Unknown"
-            typed_expr("call", type_ir("Integer"), operand.fetch("deps"),
+            # R22: a hole operand gives the hole back (never a guessed Integer).
+            neg_type = hole?(operand.fetch("resolved_type")) ? operand.fetch("resolved_type") : type_ir("Integer")
+            typed_expr("call", neg_type, operand.fetch("deps"),
                        "fn" => "stdlib.integer.neg", "args" => [operand])
           else
             type_errors << oof("OOF-TY0",
@@ -7898,82 +8832,40 @@ module IgniterLang
         end
       # R10: same identity trace as `infer_binary` (see there).
       @callable_operator_trace[expr] = typed.fetch("fn") if @callable_operator_trace
+      typed["resolved_type"] = error_type if operand_error || type_errors.length > errors_before
       typed
     end
 
+    # R22 (Rule 5 / §3.3b): U = J(arm types) over the whole arm set — order-free, String ≡ Text,
+    # a hole arm contributes nothing, a declared-open arm keeps its position open, an error arm makes
+    # the match an error silently. No join (including a nested parameter conflict) is OOF-KIND5 with
+    # the existing message; the result is never degraded to a bare family name.
     def unify_match_arm_types(arm_types, subject_type, node_name, type_errors)
       return type_ir("Unknown") if arm_types.empty?
 
-      # Top-level Unknown arms contribute nothing to the join (legacy behavior).
-      present = arm_types.reject { |t| type_name(t) == "Unknown" }
-      return type_ir("Unknown") if present.empty?
-
-      names = present.map { |t| type_name(t) }.uniq
-      if names.length > 1
-        type_errors << oof("OOF-KIND5",
-          "match on '#{subject_type}' has divergent arm result types: #{names.sort.join(", ")}",
-          node_name)
-        return type_ir("Unknown")
-      end
-
-      # LANG-MATCH-ARM-PARAM-UNIFICATION-P2 (route A): preserve type params when all
-      # arms share the parametric family, via a position-wise structural join.
-      # PURE precision widening — every case that previously dropped params still
-      # returns the byte-identical legacy `type_ir(name)`; params are preserved only
-      # when the join yields a non-empty, fully-resolved (not Unknown-bearing) result.
-      name   = names.first
-      joined = present.reduce { |acc, t| join_match_param_types(acc, t) }
-      if joined && !joined.fetch("params", []).empty? && !unknown_or_unknown_bearing?(joined)
-        return joined
-      end
-      type_ir(name)
-    end
-
-    # Position-wise structural join of two arm result types. `Unknown` is the join
-    # bottom: join(Unknown, X) = X. Identical structures are preserved as-is (keeps
-    # any extra keys, e.g. OLAPPoint dims). Arity or concrete-name conflict at any
-    # depth returns nil ⇒ the caller degrades to the legacy bare family result.
-    # No diagnostic is emitted here (P2 reserves OOF-KIND7 for a future strictness
-    # card; OOF-KIND6 is already taken by PROP-044-P9 reserved-field-name checks).
-    def join_match_param_types(a, b)
-      return nil if a.nil? || b.nil?
-      na = type_name(a)
-      nb = type_name(b)
-      return b if na == "Unknown"
-      return a if nb == "Unknown"
-      return nil if canonical_scalar_name(a) != canonical_scalar_name(b)
-      return a if a == b   # identical — preserve all keys, zero change
-
-      pa = a.fetch("params", [])
-      pb = b.fetch("params", [])
-      return nil if pa.length != pb.length
-
-      joined_params = []
-      pa.zip(pb).each do |x, y|
-        jp = join_match_param_types(x, y)
-        return nil if jp.nil?
-        joined_params << jp
-      end
-      { "name" => na, "params" => joined_params }
-    end
-
-    def merge_if_branch_types(then_type, else_type, node_name, type_errors)
-      return else_type if type_name(then_type) == "Unknown"
-      return then_type if type_name(else_type) == "Unknown"
-
-      joined = join_match_param_types(then_type, else_type)
+      joined = join_types(arm_types)
       return joined if joined
 
-      if canonical_scalar_name(then_type) != canonical_scalar_name(else_type)
-        type_errors << oof(
-          "OOF-IF3",
-          "if_expr branch types must match: then=#{type_name(then_type)}, else=#{type_name(else_type)}",
-          node_name
-        )
-        return type_ir("Unknown")
-      end
+      names = arm_types.reject { |t| type_name(t) == "Unknown" }.map { |t| type_name(t) }.uniq
+      type_errors << oof("OOF-KIND5",
+        "match on '#{subject_type}' has divergent arm result types: #{names.sort.join(", ")}",
+        node_name)
+      error_type
+    end
 
-      then_type
+    # R22 (Rule IF-v0 / §3.3b): T = J(then, else) — commutative, whole-set, nested conflicts
+    # included. No join is OOF-IF3 (existing message) and the expression is an error; an error branch
+    # makes the expression an error silently.
+    def merge_if_branch_types(then_type, else_type, node_name, type_errors)
+      joined = join_types([then_type, else_type])
+      return joined if joined
+
+      type_errors << oof(
+        "OOF-IF3",
+        "if_expr branch types must match: then=#{type_name(then_type)}, else=#{type_name(else_type)}",
+        node_name
+      )
+      error_type
     end
 
     # check_map_annotation: validates a single type_annotation for Map constraint violations.
