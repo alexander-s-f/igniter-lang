@@ -3,10 +3,15 @@
 Version: 1.1 — Stage 3 R26 extension
 Maintainer: `[Igniter-Lang Meta Expert]`
 Status: living document
-Last updated: 2026-05-10
+Last updated: 2026-09-30 (navigation and implementation-status reconciliation)
 
 > Source of truth for each section is the cited PROP.
 > This document is the readable synthesis — not the decision record.
+
+Chapter status is not a whole-toolchain conformance score. A proposed chapter
+can contain separately admitted and implemented subsections; an accepted
+chapter can retain explicit runtime or interoperability limits. Read the scope
+notes and dated evidence in the chapter, not its badge alone.
 
 > Package/project policy (`igniter.toml`, `[dependencies]`, `[exports]` sealing, `igniter.lock`, `.igpkg`) is **project tooling, not language semantics** — see Covenant §CR-004; a flat-list compile that succeeds validates language resolution only, it is not a package-policy verdict.
 
@@ -26,13 +31,18 @@ Last updated: 2026-05-10
 | [8](ch8-stdlib.md) | Stdlib | accepted |
 | [9](ch9-stage2-reserved.md) | Stage 2 Reserved Primitives | deferred |
 | [10](ch10-contract-modifiers.md) | Contract Modifiers | proposed · PROP-031 |
-| [11](ch11-profile-system.md) | Profile System | accepted (scoped) · binding + policy-restriction set OOF-M7/M8 + OOF-PROF1–6 (PROP-033/040/048/049, Ruby-canon) · obligations / stdlib profiles / Rust parity HELD |
-| [12](ch12-effect-surface.md) | Effect Surface | proposed · PROP-035 experiment-pass; six of seven fields parse dual-toolchain (`effect_surface_v1`; reversibility open — ledger D-009) |
+| [11](ch11-profile-system.md) | Profile System | accepted (scoped) · binding + policy/service checks OOF-M7/M8 + OOF-PROF1–8; Rust parity P54-P58 implemented · non-service obligations / stdlib profiles remain held |
+| [12](ch12-effect-surface.md) | Effect Surface | proposed · all seven fields parse dual-toolchain as `effect_surface_v1`; metadata and scoped checks do not grant runtime authority |
 | [13](ch13-managed-recursion.md) | Managed Recursion and Service Loops | proposed · Stage 4 |
 
 ---
 
 ## Implementation Coverage Matrix
+
+The rows below retain their original experiment results. They are selected
+historical evidence, not a current exhaustive matrix, current test counts or
+a declaration that every listed feature is available on every execution route.
+Later chapter addenda supersede earlier implementation-gap descriptions.
 
 | Spec Section | PROP | Experiment | Status |
 |---|---|---|---|

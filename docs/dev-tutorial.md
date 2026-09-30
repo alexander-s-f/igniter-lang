@@ -1,309 +1,207 @@
-# Igniter — Compact Dev Tutorial
+# Igniter: First Programs
 
-> Status: living document, kept in sync with the **implemented** dual-toolchain
-> surface (Ruby canon TC + Rust lab TC). Everything in §1–§9 compiles **dual-clean
-> today**. §10 lists proposed/partial surfaces that do NOT yet compile in both
-> toolchains — do not use them in apps yet.
-> Last verified: 2026-06-14 against `igniter-lang/lib` + `igniter-lab/igniter-compiler`.
+Status: bounded tutorial; examples rechecked 2026-09-30.
 
-Igniter programs are graphs of **pure contracts**. You declare data (`type`),
-declare computations (`contract`), wire contracts together by name, and name one
-**entry point**. Definition and execution are separate: the compiler builds the
-graph; a tool runs the chosen entrypoint.
+Igniter makes contracts the unit of a program. A **pure** contract transforms
+inputs into a value; observed and effectful contracts have additional rules
+for interacting with the world. This introduction starts with pure computation.
+It does not describe every language feature or certify every application.
 
-Worked examples live in `igniter-lab/igniter-apps/` — this tutorial draws from
-`trade_robot`, `air_combat`, `lead_router`, `call_router`.
+Each code block below is a complete, separate source file. The positive examples
+were checked by the Ruby and Rust frontends and executed through the Lab Standard
+Runtime. Dual source acceptance alone does not prove identical artifacts or
+runtime behavior. See the [Lab learning path](../../igniter-lab/lab-docs/tutorial/README.md)
+for commands, tool prerequisites and the dated verification record.
 
----
+## 1. A Contract And Its Entry
 
-## 1. Program shape: module, contract, entrypoint
+```igniter title="hello.ig"
+module Tutorial.Hello
 
-```igniter
-module Hello
-import stdlib.collection.{ map }     -- import only the stdlib HOFs you use
+pure contract Double(n: Integer) -> (result: Integer) = n + n
 
-pure contract Double {
-  input n : Integer
-  compute r = n + n
-  output r : Integer
+pure contract Main {
+  compute result = Double(21)
+  output result: Integer
 }
 
-entrypoint Double                    -- names the program's start contract
+entrypoint Main
 ```
 
-- `module Name` — one per file; the namespace.
-- `contract` — the unit of computation (inputs → computes → outputs).
-- `entrypoint Contract` — the source-level "start here" anchor (parsed,
-  typechecked, carried into the manifest). It is a **selector**, not a `main`: it
-  picks which contract a tool runs. At most one bare entrypoint per program.
+Result: `42`. `Double(21)` is a statically resolved pure-contract call.
+`call_contract("Double", 21)` is the explicit spelling; a runtime string is not
+a general dynamic dispatcher. `entrypoint Main` selects the default contract;
+it does not execute it during compilation.
 
-**Mental model — the entrypoint is the control surface, not a reorderer.** You
-control a program by choosing *which* contract is the entry and *what* you observe;
-the internal evaluation order is pure dataflow (dependency-driven), not line order.
+The signature/expression form is shorthand for declared inputs, a compute
+binding and one named output. `compute` names a graph value, not mutable state.
+A value-returning contract has one output; use a record for several fields.
 
-A pure contract may also be written **signature-bound** — the same `Double` as:
+From the Lab checkout, for a file at `hello.ig`:
 
-```igniter
-pure contract Double(n: Integer) -> (r: Integer) {
-  r = n + n
+```sh
+bin/igniter source check hello.ig --toolchain both --json
+bin/igniter run hello.ig
+```
+
+The first command checks source without emitting an artifact. The second
+compiles and activates one entry using the maintained compiler/runtime pair.
+Neither command builds missing tools automatically.
+
+## 2. Numbers And Math
+
+```igniter title="numbers.ig"
+module Tutorial.Numbers
+
+pure contract Main {
+  compute result = sqrt(9.0) + abs(0.0 - 2.0)
+  output result: Float
 }
+
+entrypoint Main
 ```
 
-This is pure parse-time sugar (dual-toolchain): signature inputs desugar to
-`input` decls, each bare `name [: Type] = expr` body binding to a `compute`, and
-signature outputs to `output` decls — identical AST/SIR to the explicit form.
-Every declared output must be bound exactly once; an output binding may omit its
-type (inherited from the signature); intermediates follow the normal `compute`
-typing. The one-output law applies unchanged
-(LANG-SIGNATURE-BOUND-CONTRACT-CANON-PARITY-P1).
+Result: `5.0`. **Float exists**; floating literals such as `9.0` are not Decimal.
+`Integer`, `Float` and scale-aware `Decimal[N]` have distinct arithmetic rules.
+There is no implicit Integer/Float/Decimal conversion. `sqrt` takes a Float;
+scalar `abs` supports Integer or Float. See [math and numeric boundaries](spec/ch8-stdlib.md).
 
-When a pure signature has exactly one explicitly named output, the body may be
-the expression directly:
+Fixed-point Integer is an application choice, not a workaround for missing
+floating-point support. Decimal has an explicit construction API and is useful
+when a decimal scale matters. Floating-point arithmetic is not exact real
+arithmetic; not every math operation has a cross-platform bitwise guarantee.
 
-```igniter
-pure contract Double(n: Integer) -> (r: Integer) = n + n
-```
+This deliberately invalid program mixes numeric families:
 
-This lowers to exactly the same `input` / `compute r` / `output r` graph as the
-signature block above and the fully explicit form. It does not infer an output
-name, does not introduce `-> Type` shorthand, and is unavailable to effect/read
-contracts. Calls remain `Double(args...)` for pure contracts and
-`invoke result = Contract(args...) using capability` for effectful contracts
-(LANG-PURE-CONTRACT-EXPRESSION-BODY-P1).
-
----
-
-## 2. Types and records
-
-```igniter
-type Vec2 { x : Integer, y : Integer }
-
-type Plane {
-  id   : Integer
-  team : Integer
-  pos  : Vec2          -- records nest
-  vel  : Vec2
+```igniter title="mixed-numbers.ig"
+module Tutorial.MixedNumbers
+pure contract Main {
+  compute result = 1 + 2.0
+  output result: Float
 }
+entrypoint Main
 ```
 
-Scalars: `Integer`, `String`, `Bool`, `Decimal`. Collections: `Collection[T]`.
-There is no float — money/coordinates use **fixed-point Integer** (e.g. scale 100,
-`1.00 == 100`); see §6.
+Source checking refuses it with `OOF-TY0`. Refusal is the expected result, not a
+request to coerce or silently change the expression.
 
-A **record literal** `{ x: 1, y: 2 }` infers to the named type whose field set it
-matches. ⚠️ See the factory gotcha in §8.
+## 3. Records And Branches
 
-A field whose value is a same-named in-scope binding may be **punned**: `{ title }`
-is pure parse-time sugar for `{ title: title }`, and punned/explicit fields mix
-freely (`{ field: "zip", value }`). Dotted punning (`{ a.b }`) is rejected at parse
-(LANG-RECORD-FIELD-PUNNING-CANON-PARITY-P1, dual-toolchain).
+```igniter title="records.ig"
+module Tutorial.Records
+type Reading { value: Integer, valid: Bool }
 
----
-
-## 3. Compute and contract calls
-
-`compute name = expr` binds a value inside a contract body (a node in the graph).
-Call another contract by **string literal name** with `call_contract`:
-
-```igniter
-pure contract Advance {
-  input p : Plane
-  compute moved = call_contract("VAdd", p.pos, p.vel)   -- Tier-1 static call
-  compute np = {
-    id: p.id, team: p.team, pos: moved, vel: p.vel
+pure contract Main {
+  compute reading: Reading = if true {
+    { value: 7, valid: true }
+  } else {
+    { value: 0, valid: false }
   }
-  output np : Plane
+  compute result = reading.value
+  output result: Integer
 }
+
+entrypoint Main
 ```
 
-- The callee must be a **string literal** (Tier 1, statically resolved). A variable
-  callee (`call_contract(name, …)`) returns `Unknown` and is fail-closed — see §8.
-- Field access: `p.pos.x` (chains).
-- `compute` is the body binding (graph node). `let` exists for local bindings
-  inside an expression; prefer `compute` for named graph values.
+Result: `7`. Records in branches are supported; a factory contract is not
+generally required to read their fields. Record naming depends on declared
+shapes and type context. Ambiguous or unnamed record families still have
+restrictions; consult the [type-system rules](spec/ch3-type-system.md).
 
----
+`if` is an expression and requires `else`. Fields with same-named bindings can
+be punned (`{ value, valid }`). Use a space after `:` in examples to avoid
+confusing a field value with a Symbol literal.
 
-## 4. Collections
+## 4. Collections And Local Functions
 
-```igniter
-import stdlib.collection.{ map, filter, count, fold }
+```igniter title="collections.ig"
+module Tutorial.Collections
 
-pure contract AliveCount {
-  input planes : Collection[Plane]
-  compute living = filter(planes, p -> if p.alive > 0 { true } else { false })
-  compute n = count(living)
-  output n : Integer
+def twice(x: Integer) -> Integer { x + x }
+
+pure contract Main {
+  compute doubled = map([1, 2, 3], x -> twice(x))
+  compute result = fold(doubled, 0, (acc, x) -> acc + x)
+  output result: Integer
 }
 
-pure contract SumX {
-  input planes : Collection[Plane]
-  compute total = fold(planes, 0, (acc, p) -> acc + p.pos.x)
-  output total : Integer
-}
+entrypoint Main
 ```
 
-- `map(coll, x -> …)`, `filter(coll, x -> bool)`, `count(coll)`, `concat(a, b)`,
-  `fold(coll, seed, (acc, x) -> acc')`, array literals `[a, b]`.
-- `fold` supports scalar accumulators and named-record accumulators **dual-clean**.
-  For record accumulators, give the fold result an expected named type through the
-  output or a compute annotation:
+Result: `12`. `map` transforms elements; `fold` combines them with an explicit
+seed. A `def` is a typed local function, not a second contract or an IO escape.
+Lambda types come from their collection and accumulator context.
 
-```igniter
-type Stats { sum : Integer, count : Integer }
+Collection joins reject incompatible known element families. Empty collections
+and open types have their own rules; successful inference in one example is
+not permission to mix unrelated types. `fold_stream` has separate callable and
+resource rules; this ordinary `fold` example does not qualify stream behavior.
 
-pure contract Summarize {
-  input xs : Collection[Integer]
-  compute stats : Stats = fold(xs, { sum: 0, count: 0 },
-    (acc, x) -> ({ sum: acc.sum + x, count: acc.count + 1 }))
-  output stats : Stats
-}
-```
+## 5. Option And Match
 
-Unannotated intermediate record folds can still infer as `Unknown` if you read
-fields downstream; annotate the compute or output the fold result as the named
-record type.
+```igniter title="option.ig"
+module Tutorial.Option
 
----
-
-## 5. Variant + match (result types & state machines)
-
-`variant` declares a sum type; `match` dispatches exhaustively. This is the
-idiomatic way to write a `Result`/railway or a state machine. **Dual-clean.**
-
-```igniter
-variant Pipe {
-  Proceed { ctx : Ctx }
-  Reject  { stage : String, message : String }
-}
-
-pure contract FindVendor {
-  input prev : Pipe
-  input vendor_found : Integer
-  input vendor : Vendor
-  compute r = match prev {
-    Reject  { stage, message } => Reject { stage: stage, message: message }   -- carry
-    Proceed { ctx } => if vendor_found == 1 {
-      Proceed { ctx: call_contract("CtxWithVendor", ctx, vendor) }
-    } else {
-      Reject { stage: "find_vendor", message: "Vendor not found" }
-    }
+pure contract Main {
+  compute chosen = first([7, 8])
+  compute result = match chosen {
+    Some { value } => value
+    None => 0
   }
-  output r : Pipe
+  output result: Integer
 }
+
+entrypoint Main
 ```
 
-- Arms are `Pattern { fields } => expr`, newline-separated, `=>` (not `->`).
-- Variant **constructors** (`Proceed { … }`) are fine inside `if/else` and match
-  arms — unlike plain record literals (§8).
-- `_` is a wildcard arm.
-- `Option[T]` is **not** a matchable variant; don't `match` on it (§8).
-  > **NB (verify-first, 2026-06-16):** both toolchains *currently* typecheck `match` over
-  > `Option`/`Result` as sealed built-in variants (proven dual, 109/109). This guidance encodes the
-  > canon stance (PROP-044: `or_else` is the idiomatic Option handler); the doc-vs-implementation
-  > reconciliation is pending — see `.agents/work/cards/lang/LANG-SUMTYPE-OPTION-RESULT-SURFACE-P1.md`
-  > and the proposed `LANG-SUMTYPE-CANON-RECONCILE-P1` gate. Until reconciled, prefer `or_else`.
+Result: `7`. `first` returns `Option[T]`; an empty collection produces `None`.
+Option and Result are matchable sealed families, not ordinary records.
+Source construction uses `some(value)`, `none()`, `ok(value)` and `err(error)`;
+PascalCase arm patterns are not constructor syntax.
 
-Patterns: `lead_router` models the whole eligibility railway this way;
-`call_router` models the telephony state machine (`NoCall`/`Ringing`/`CallConnected`).
+`or_else(chosen, 0)` or `unwrap_or(chosen, 0)` is a simpler fallback when no
+branch-specific behavior is needed. A record does not become an Option because
+its keys resemble the internal carrier. User-defined variants use `variant`
+declarations and exhaustive `match`; qualified `Variant::Arm` disambiguates arms.
 
----
+## 6. Profiles Do Not Grant Host Authority
 
-## 6. Control flow & fixed-point arithmetic
+```igniter title="profile.ig"
+module Tutorial.Profile
+profile Calculation { authority: pure }
 
-```igniter
-compute trend = if d1 > 0 {
-  if d2 > 0 { "GROWING" } else { "RECOVERING" }
-} else {
-  if d1 == 0 { "STABLE" } else { "DECLINING" }
+pure contract Main via Calculation {
+  compute result = 42
+  output result: Integer
 }
+
+entrypoint Main
 ```
 
-- `if cond { … } else { … }` is an **expression**; nest for multi-way.
-- No unary minus: write `0 - x`. No `abs`: `if x < 0 { 0 - x } else { x }`.
-- Fixed-point multiply/divide keep the scale: `(a * b) / 100` at scale 100.
-- No `sqrt` — keep magnitudes squared and compare squared (`air_combat/vec.ig`).
+Result: `42`. Profile declarations and `via` are supported by both frontends.
+They express compile-time restrictions, not host credentials or permission to
+perform an effect. The [profile chapter](spec/ch11-profile-system.md) names the
+accepted policy checks and the still-unimplemented obligations separately.
 
----
+Observed, effect, privileged and irreversible contracts are not all pure.
+Effectful composition uses `invoke ... using ...`; a successful compile does
+not supply the operator binding, adapter or external system. Those belong to
+the runtime/host boundary. See [contract modifiers](spec/ch10-contract-modifiers.md)
+and [effects](spec/ch12-effect-surface.md) before introducing IO.
 
-## 7. Contract modifiers (effect character)
+## What To Learn Next
 
-A contract's modifier declares how much it touches the world. `pure` is the
-default; `observed` is dual-clean:
+- [Source surface](spec/ch2-source-surface.md): declarations, calls, branches,
+  records, constructors, functions and operators.
+- [Type system](spec/ch3-type-system.md): named records, variants, collection
+  joins and error propagation.
+- [Stdlib](spec/ch8-stdlib.md): admitted signatures and their individual limits.
+- [Managed recursion](spec/ch13-managed-recursion.md): explicit loop classes and
+  bounds; not a blanket guarantee of termination or realtime response.
 
-```igniter
-pure     contract ScoreRisk { … }     -- deterministic, no IO (default)
-observed contract ReadFlag  { … }     -- read-only external observation
-```
-
-`effect` / `privileged` / `irreversible` + `capability` + `effect … using …` are
-the **IO membrane** — but they are **not dual-clean yet** (Rust pending). See §10.
-
----
-
-## 8. Gotchas (current dual-clean reality)
-
-1. **Branch/arm record literals infer to `Unknown` in the Rust TC.** An inline
-   record built in an `if/else` branch or a `match` arm — or an intermediate
-   `compute params = { … }` whose fields you later read — fails Rust with
-   `OOF-TY1 …got Unknown` / `OOF-P1 Unresolved field`. **Fix: a factory contract.**
-   ```igniter
-   pure contract MakeParams {
-     input trade : String  input zip : String
-     compute p = { trade: trade, zip: zip }
-     output p : Params                       -- typed output pins the record type
-   }
-   ```
-   This is the `MakeXxx` pattern across the fleet (`MakeSignal`, `MakePlane`,
-   `MakeBehavior`, `MakeParams`).
-
-2. **Record folds need a named-type context.** `fold(xs, {…}, …)` is dual-clean
-   when the accumulator is pinned by output or compute annotation. If you bind an
-   unannotated intermediate and then read `acc.field` downstream, you may still
-   get `Unknown`; annotate the compute.
-
-3. **Dynamic dispatch is blocked.** `call_contract(variable, …)` → `Unknown`,
-   fail-closed. Select behaviour by a literal name in `if/else` (static dispatch).
-
-4. **No fuzzy strings.** `concat`, `char_at`, `substring` exist; **no `contains`/
-   `ends_with`** — exact equality only for matching.
-
-5. **`first`/`last` are Rust-only and return `Option[T]`**, and `Option` isn't
-   matchable — don't rely on them for dual-clean code; inject the picked value.
-
----
-
-## 9. Putting it together (the shape of an app)
-
-A typical app is: `types.ig` (types + variants) → domain modules (pure contracts
-composed by `call_contract`) → an `example.ig` with a root contract + `entrypoint`.
-DB reads / clock / RNG are **injected as inputs** — the pure core never does IO.
-
-```
-types.ig      → type + variant declarations
-*.ig          → pure contracts, composed by call_contract; match for branching
-example.ig    → Demo* factories, a Run* root contract, `entrypoint Run*`
-```
-
-See `lead_router` (request/reply railway), `call_router` (correlation + state
-machine), `air_combat` (tick simulation) as full worked baselines.
-
----
-
-## 10. Proposed / not yet dual-clean (do NOT use in apps yet)
-
-These are designed/accepted-as-direction but **not implemented in both toolchains**.
-Verified non-working on 2026-06-14:
-
-| Surface | Intended syntax | Current state |
-|---|---|---|
-| **Effect surface** | `effect contract C { capability c: IO.X  effect e using c }` | **Dual-clean for ANY well-formed effect name** (LANG-EFFECT-NAME-PARITY-P2, 2026-06-16 — Rust no longer limits effect names; `e` is a label, not an authority selector). `capability`-binding diagnostics still fire (undeclared/unbound). IO membrane is host-side, not a language primitive. (PROP-031/035) |
-| **Profiles** | `profile P { authority: effect }` + `contract C via P { … }` | Rust parser → `OOF-G1` (unknown). Ruby-only. (PROP-033/040) |
-| **Rich entrypoint** | `entrypoint plan { contract: C  output: o  args: {…}  default: true }` + named profiles + `section` | Only the **bare** `entrypoint C` is implemented. (PROP-029) |
-| **Form vocabulary** | `vocabulary V { submit -> Validate }` + `speaks V` → call as `submit(x)` | Not implemented; substrate `uses ContractName` IS implemented. (LANG-FORM-VOCABULARY) |
-| **Composition algebra** | `A >> B`, `A \|\| B`, `embed` | Proposal; compose by `call_contract` today. (PROP-002) |
-| **entity / compose** | `entity Robot { state … action … }` | Readiness only; thread state by hand today. (LANG-COMPOSE-ENTITY) |
-| **Reactions** | `on <observation/stream> -> Contract` | No proposal yet — genuinely new. |
-
-When any of these lands dual-clean, move it from §10 into the body and add a worked
-example. Fold-to-struct moved into §4 after LANG-FOLD-STRUCT-ACCUMULATOR-P3/P4.
+Do not use an old absence list as a current language reference. Vocabulary,
+entity syntax and a proposed contract-composition algebra need their own
+admission; ordinary contracts and explicit state already support many examples.
+The [Covenant](language-covenant.md) gives design commitments, not proof that
+every compiler, host or application implements every commitment.

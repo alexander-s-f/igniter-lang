@@ -28,6 +28,11 @@ pass that emits ParsedProgram. It does not own evaluation, lifecycle, or runtime
 
 ## 2.2 Grammar Kernel v0 BNF (PROP-015 §Part 4)
 
+This is the historical grammar kernel, not the complete current source grammar.
+Later sections below define admitted extensions and their restrictions; use the
+[EBNF appendix](ch2-appendix-ebnf-grammar.md) alongside them. Absence from this
+summary is not evidence that a construct is unimplemented.
+
 ```text
 SourceFile    := ModuleDecl? ImportDecl* TopDecl*
 

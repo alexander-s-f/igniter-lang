@@ -6,7 +6,10 @@ Proof: experiments/stdlib_execution_kernel_stage1/ — PASS (12 cases):
   integer/float/decimal.add, fold, map, filter, count, or_else (Some + None),
   numeric.add rejected (pre-resolution boundary enforced),
   RuntimeMachine igapp-style evaluate with stdlib.integer.add
-Note: stdlib not yet connected to the full RuntimeMachine evaluate path via .igapp/ (pending Slice A)
+The kernel proof above is historical, not a current integration-status claim.
+Admitted stdlib operations execute from compiled artifacts in the Lab VM and
+Standard Runtime. Availability remains operation- and route-specific; the
+sections below define the admitted surface, not blanket runtime conformance.
 
 **String core update (2026-06-08):**
 §8.1 `string.ig` surface is superseded by `stdlib.text.*` (§8.10).

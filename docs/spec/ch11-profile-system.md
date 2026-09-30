@@ -1,7 +1,7 @@
 # Chapter 11: Profile System
 
 Status: accepted (profile binding + policy-restriction surface: OOF-M7/M8,
-  OOF-PROF1–6) — obligation-side + stdlib profiles + Rust parity remain
+  OOF-PROF1–8) — non-service obligation-side + stdlib profiles remain
   HELD/target (see scope note)
 Stage: 3 (Phase 2)
 Source PROPs: PROP-033 (via profile binding) + PROP-040 (profile declarations +
@@ -9,10 +9,11 @@ Source PROPs: PROP-033 (via profile binding) + PROP-040 (profile declarations +
   PROP-048 (retry / max_reversibility / allowed_effects / loop) +
   PROP-049 (requires_authority)
 Governance: META-EXPERT-013
-Last updated: 2026-07-08
+Last updated: 2026-09-30 (implementation-status correction; policy law unchanged)
 
 > **Accepted — scoped.** The **declaration + policy-restriction** surface is
-> conformant and regression-locked (Ruby-canon):
+> implemented and regression-locked in Ruby-canon and the Rust Lab compiler
+> (P54-P58; shared profile-diagnostic golden fixtures):
 > - `via` profile binding (PROP-033) and v0 profile declarations;
 > - the authority min-modifier floor — **OOF-M7** (modifier below profile
 >   authority) / **OOF-M8** (unknown profile) — dual-proven
@@ -40,8 +41,11 @@ Last updated: 2026-07-08
 >   (ch12 §12.3, P12–P20);
 > - the aspirational loop spelling `finite_loop` (use `finite`); `convergent`
 >   (P46) and `service` (P50) are now LIVE loop classes;
-> - **Rust lab-compiler parity** — profiles are Ruby-canon-only (P33 HOLD until
->   this scoped acceptance is a stable target).
+>
+> The earlier P33 hold on Rust parity is historical: P54-P58 landed parser,
+> diagnostics, contract-side service obligations, malformed-field validation
+> and shared golden checks on 2026-07-08. This does not implement the HELD items
+> above or grant runtime authority.
 >
 > Each HELD item advances this Status further when its own slice lands and
 > regression-locks. (Historical note: this chapter originally cited "PROP-034",
@@ -72,9 +76,10 @@ effect contract ChargeCustomer(customer_id: String, amount: Decimal[2])
 }
 ```
 
-The compiler validates that the contract body satisfies the profile's obligations
-and does not exceed its restrictions. A contract without `via` uses the implicit
-`default` profile, which imposes no additional constraints.
+The compiler validates the admitted restrictions and service obligations listed
+above. This introductory `audited_billing` sketch includes unimplemented fields;
+it is not a runnable example. A contract without `via` has no additional named
+profile restrictions. No host authority is supplied by a profile declaration.
 
 ---
 

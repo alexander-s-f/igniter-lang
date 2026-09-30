@@ -9,6 +9,12 @@ Last updated: 2026-05-10
 > **Proposed.** This chapter describes the contract modifier extension.
 > Status advances to `accepted` when PROP-031 regression suite passes.
 
+**Implementation reading note (2026-09-30):** the chapter-wide proposal label
+is not an absence claim. Both frontends recognize contract modifiers and perform
+scoped purity/capability checks; chapters 11/12 describe later admitted rules.
+The signatures with ellipses below are design sketches, not complete runnable
+programs. This clarification does not promote the entire chapter or grant IO.
+
 ---
 
 ## § 10.1 Overview

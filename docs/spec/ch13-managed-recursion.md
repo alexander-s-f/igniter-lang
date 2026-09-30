@@ -14,6 +14,14 @@ Last updated: 2026-06-08
 > or later. Service-loop liveness maps through PROP-037 progression descriptors.
 > PROP-036 is reserved for `compiler_profile_id` manifest identity.
 
+**Implementation reading note (2026-09-30):** the Stage-4 paragraph above is
+the original chapter-wide proposal context, not the current absence of all
+loop support. Later subsections record admitted finite, structural, convergent
+and service surfaces with their individual restrictions. The universal claim
+in the overview is a design target, not a proof of termination or liveness for
+every current runtime. Examples explicitly marked aspirational are not runnable
+v0 source; use the v0-compatible examples and their stated limits.
+
 ---
 
 ## § 13.1 Overview
